@@ -87,13 +87,13 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     const targetNode = nodes.find((n) => n.id === connection.target)
     if (!targetNode) return false
     
+    const sourceNode = nodes.find((n) => n.id === connection.source)
+    if (!sourceNode) return false
+    
     if (targetNode.data.blockType !== 'concat') {
       const hasExistingInput = edges.some((e) => e.target === connection.target)
       if (hasExistingInput) return false
     }
-    
-    const sourceNode = nodes.find((n) => n.id === connection.source)
-    if (!sourceNode) return false
     
     if (!sourceNode.data.outputShape) return true
     

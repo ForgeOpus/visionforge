@@ -135,7 +135,7 @@ function FlowCanvas() {
 
       const edge = {
         ...connection,
-        id: `e${connection.source}-${connection.target}`,
+        id: `e${connection.source}-${connection.target}-${Date.now()}`,
         animated: true,
         style: { stroke: 'var(--color-accent)', strokeWidth: 2 }
       }
