@@ -36,6 +36,15 @@ export default function ConfigPanel() {
     })
   }
 
+  const isValidTensorShape = (shapeStr: string): boolean => {
+    try {
+      const dims = JSON.parse(shapeStr)
+      return Array.isArray(dims) && dims.length > 0 && dims.every(d => typeof d === 'number' && d > 0)
+    } catch {
+      return false
+    }
+  }
+
   const handleDelete = () => {
     removeNode(selectedNode.id)
   }
@@ -68,6 +77,60 @@ export default function ConfigPanel() {
 
                 {field.description && (
                   <p className="text-xs text-muted-foreground">{field.description}</p>
+                )}
+
+                {field.type === 'text' && (
+                  <div className="space-y-2">
+                    <Input
+                      type="text"
+                      value={String(selectedNode.data.config[field.name] ?? field.default ?? '')}
+                      onChange={(e) => handleConfigChange(field.name, e.target.value)}
+                      placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
+                      className={`font-mono text-sm ${
+                        field.name === 'shape' && selectedNode.data.config[field.name] && !isValidTensorShape(String(selectedNode.data.config[field.name]))
+                          ? 'border-destructive focus-visible:ring-destructive'
+                          : ''
+                      }`}
+                    />
+                    {field.name === 'shape' && selectedNode.data.config[field.name] && !isValidTensorShape(String(selectedNode.data.config[field.name])) && (
+                      <p className="text-xs text-destructive">Invalid shape format. Use JSON array like [1, 3, 224, 224]</p>
+                    )}
+                    {field.name === 'shape' && (
+                      <div className="space-y-1 mt-3">
+                        <p className="text-xs font-medium text-muted-foreground">Quick Presets:</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleConfigChange(field.name, '[1, 3, 224, 224]')}
+                            className="text-xs px-2 py-1 rounded bg-secondary hover:bg-secondary/80 font-mono"
+                          >
+                            Image
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleConfigChange(field.name, '[32, 512, 768]')}
+                            className="text-xs px-2 py-1 rounded bg-secondary hover:bg-secondary/80 font-mono"
+                          >
+                            Text
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleConfigChange(field.name, '[16, 1, 16000]')}
+                            className="text-xs px-2 py-1 rounded bg-secondary hover:bg-secondary/80 font-mono"
+                          >
+                            Audio
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleConfigChange(field.name, '[8, 100, 13]')}
+                            className="text-xs px-2 py-1 rounded bg-secondary hover:bg-secondary/80 font-mono"
+                          >
+                            Tabular
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {field.type === 'number' && (

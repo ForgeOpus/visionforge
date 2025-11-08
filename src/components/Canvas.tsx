@@ -72,15 +72,6 @@ function FlowCanvas() {
         }
       })
 
-      if (definition.type === 'input') {
-        newNode.data.config = {
-          batch_size: 1,
-          channels: 3,
-          height: 224,
-          width: 224
-        }
-      }
-
       addNode(newNode)
 
       setTimeout(() => {

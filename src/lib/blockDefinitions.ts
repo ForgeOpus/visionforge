@@ -7,50 +7,33 @@ export const blockDefinitions: Record<string, BlockDefinition> = {
     category: 'input',
     color: 'var(--color-teal)',
     icon: 'ArrowDown',
-    description: 'Define model input specifications',
+    description: 'Define input tensor shape for any modality (text, image, audio, etc.)',
     configSchema: [
       {
-        name: 'batch_size',
-        label: 'Batch Size',
-        type: 'number',
-        default: 1,
-        min: 1,
-        description: 'Number of samples per batch'
-      },
-      {
-        name: 'channels',
-        label: 'Channels',
-        type: 'number',
-        default: 3,
-        min: 1,
-        description: 'Number of input channels (e.g., 3 for RGB)'
-      },
-      {
-        name: 'height',
-        label: 'Height',
-        type: 'number',
-        default: 224,
-        min: 1,
-        description: 'Input height dimension'
-      },
-      {
-        name: 'width',
-        label: 'Width',
-        type: 'number',
-        default: 224,
-        min: 1,
-        description: 'Input width dimension'
+        name: 'shape',
+        label: 'Tensor Shape',
+        type: 'text',
+        default: '[1, 3, 224, 224]',
+        required: true,
+        placeholder: '[batch, channels, height, width]',
+        description: 'Input tensor dimensions as JSON array. Examples: [1, 3, 224, 224] for images, [32, 512, 768] for text, [16, 1, 16000] for audio'
       }
     ],
-    computeOutputShape: (_, config) => ({
-      dims: [
-        config.batch_size as number,
-        config.channels as number,
-        config.height as number,
-        config.width as number
-      ],
-      description: 'Input tensor'
-    })
+    computeOutputShape: (_, config) => {
+      const shapeStr = String(config.shape || '[1]')
+      try {
+        const dims = JSON.parse(shapeStr)
+        if (Array.isArray(dims) && dims.length > 0 && dims.every(d => typeof d === 'number' && d > 0)) {
+          return {
+            dims,
+            description: 'Input tensor'
+          }
+        }
+      } catch {
+        return undefined
+      }
+      return undefined
+    }
   },
 
   linear: {

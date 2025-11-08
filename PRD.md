@@ -20,18 +20,18 @@ This is a specialized design tool with persistent state management, real-time va
 **Success criteria**: Users can create complex multi-layer architectures in under 2 minutes; invalid connections prevented with clear explanations
 
 ### Real-Time Dimension Inference
-**Functionality**: Automatically compute tensor shapes as blocks connect, propagating dimensions through the entire graph
-**Purpose**: Eliminate manual dimension calculation errors and provide instant feedback on architecture validity
+**Functionality**: Automatically compute tensor shapes as blocks connect, propagating dimensions through the entire graph; supports multi-modal inputs defined as generalized tensor shapes
+**Purpose**: Eliminate manual dimension calculation errors and provide instant feedback on architecture validity; enable flexibility for any data modality (text, image, audio, video, tabular)
 **Trigger**: Connection created between two blocks or block parameter changed
 **Progression**: Connection made → System traces back to input → Computes output shape based on layer parameters → Updates all downstream blocks → Visual display refreshes
-**Success criteria**: All shape calculations complete within 100ms; users never see dimension mismatch errors at export time
+**Success criteria**: All shape calculations complete within 100ms; users never see dimension mismatch errors at export time; supports arbitrary tensor dimensions for any modality
 
 ### Intelligent Block Configuration
-**Functionality**: Context-aware parameter panels that show only relevant settings with smart defaults and inline validation
-**Purpose**: Guide users to correct configurations while allowing expert customization
+**Functionality**: Context-aware parameter panels that show only relevant settings with smart defaults, inline validation, and quick presets for common modalities
+**Purpose**: Guide users to correct configurations while allowing expert customization; provide quick-start templates for different data types
 **Trigger**: User selects a block on canvas
-**Progression**: Click block → Side panel opens → Display block-specific parameters → User modifies value → Real-time validation → Dimensions update → Visual feedback
-**Success criteria**: Required parameters clearly indicated; impossible values prevented; helpful tooltips on hover
+**Progression**: Click block → Side panel opens → Display block-specific parameters → User modifies value or selects preset (Image/Text/Audio/Tabular) → Real-time validation → Dimensions update → Visual feedback
+**Success criteria**: Required parameters clearly indicated; impossible values prevented; helpful tooltips on hover; one-click presets for common use cases
 
 ### Multi-Framework Code Export
 **Functionality**: Generate complete, runnable PyTorch or TensorFlow model code with training boilerplate

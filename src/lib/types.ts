@@ -45,13 +45,14 @@ export interface BlockDefinition {
 export interface ConfigField {
   name: string
   label: string
-  type: 'number' | 'select' | 'boolean' | 'tuple'
+  type: 'number' | 'select' | 'boolean' | 'tuple' | 'text'
   required?: boolean
   default?: number | string | boolean | number[]
   min?: number
   max?: number
   options?: { value: string | number; label: string }[]
   description?: string
+  placeholder?: string
 }
 
 export interface Project {
