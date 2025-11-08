@@ -91,11 +91,11 @@ function FlowCanvas() {
         const sourceNode = nodes.find((n) => n.id === connection.source)
         const targetNode = nodes.find((n) => n.id === connection.target)
 
-        if (targetNode?.data.blockType !== 'concat') {
+        if (targetNode?.data.blockType !== 'concat' && targetNode?.data.blockType !== 'add') {
           const hasInput = edges.some((e) => e.target === connection.target)
           if (hasInput) {
             toast.error('Block already has an input connection', {
-              description: 'Use a Concatenate block for multiple inputs'
+              description: 'Use a Concatenate or Add block for multiple inputs'
             })
             return
           }
@@ -118,6 +118,13 @@ function FlowCanvas() {
             })
             return
           }
+
+          if (targetType === 'add') {
+            toast.error('Shape incompatible for addition', {
+              description: 'All inputs to Add must have the same shape'
+            })
+            return
+          }
         }
 
         toast.error('Connection not allowed')
@@ -132,6 +139,10 @@ function FlowCanvas() {
       }
 
       addEdge(edge)
+      
+      toast.success('Connection created', {
+        description: 'Input shape automatically configured'
+      })
     },
     [validateConnection, addEdge, nodes, edges]
   )

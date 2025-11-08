@@ -12,7 +12,7 @@ interface BlockNodeProps {
   id: string
 }
 
-const BlockNode = memo(({ data, selected }: BlockNodeProps) => {
+const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
   const definition = getBlockDefinition(data.blockType)
   if (!definition) return null
 
@@ -25,7 +25,7 @@ const BlockNode = memo(({ data, selected }: BlockNodeProps) => {
 
   return (
     <Card
-      className="min-w-[200px] transition-all"
+      className="min-w-[200px] transition-all relative"
       style={{
         borderColor: selected ? 'var(--color-accent)' : definition.color,
         borderWidth: selected ? 3 : 2,
@@ -33,11 +33,23 @@ const BlockNode = memo(({ data, selected }: BlockNodeProps) => {
       }}
     >
       {data.blockType !== 'input' && (
-        <Handle
-          type="target"
-          position={Position.Left}
-          className="w-3 h-3 !bg-accent"
-        />
+        <>
+          <Handle
+            type="target"
+            position={Position.Left}
+            className="w-3 h-3 !bg-accent transition-all"
+            style={{
+              left: -6,
+              zIndex: 10
+            }}
+          />
+          {selected && (
+            <div
+              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full border-2 border-accent bg-accent/20 animate-pulse pointer-events-none"
+              style={{ left: -6 }}
+            />
+          )}
+        </>
       )}
 
       <div className="p-3 space-y-2">
@@ -84,8 +96,18 @@ const BlockNode = memo(({ data, selected }: BlockNodeProps) => {
       <Handle
         type="source"
         position={Position.Right}
-        className="w-3 h-3 !bg-accent"
+        className="w-3 h-3 !bg-accent transition-all"
+        style={{
+          right: -6,
+          zIndex: 10
+        }}
       />
+      {selected && (
+        <div
+          className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-6 h-6 rounded-full border-2 border-accent bg-accent/20 animate-pulse pointer-events-none"
+          style={{ right: -6 }}
+        />
+      )}
     </Card>
   )
 })

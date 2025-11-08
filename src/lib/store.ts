@@ -70,6 +70,69 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
       edges: [...state.edges, edge]
     }))
     
+    const { nodes, edges } = get()
+    const targetNode = nodes.find((n) => n.id === edge.target)
+    const sourceNode = nodes.find((n) => n.id === edge.source)
+    
+    if (targetNode && sourceNode?.data.outputShape) {
+      const targetDef = getBlockDefinition(targetNode.data.blockType)
+      const sourceShape = sourceNode.data.outputShape
+      
+      if (targetNode.data.blockType === 'linear' && sourceShape.dims.length !== 2) {
+        const updatedNodes = nodes.map((node) => {
+          if (node.id === targetNode.id && sourceShape.dims.length > 2) {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                config: {
+                  ...node.data.config
+                }
+              }
+            }
+          }
+          return node
+        })
+        set({ nodes: updatedNodes })
+      }
+      
+      if (targetNode.data.blockType === 'conv2d' && !targetNode.data.config.out_channels) {
+        const updatedNodes = nodes.map((node) => {
+          if (node.id === targetNode.id) {
+            const inferredChannels = sourceShape.dims.length >= 2 ? sourceShape.dims[1] : 64
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                config: {
+                  ...node.data.config,
+                  out_channels: inferredChannels
+                }
+              }
+            }
+          }
+          return node
+        })
+        set({ nodes: updatedNodes })
+      }
+      
+      if (!targetNode.data.inputShape) {
+        const updatedNodes = nodes.map((node) => {
+          if (node.id === targetNode.id) {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                inputShape: sourceShape
+              }
+            }
+          }
+          return node
+        })
+        set({ nodes: updatedNodes })
+      }
+    }
+    
     setTimeout(() => get().inferDimensions(), 0)
   },
 
@@ -90,7 +153,7 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     const sourceNode = nodes.find((n) => n.id === connection.source)
     if (!sourceNode) return false
     
-    if (targetNode.data.blockType !== 'concat') {
+    if (targetNode.data.blockType !== 'concat' && targetNode.data.blockType !== 'add') {
       const hasExistingInput = edges.some((e) => e.target === connection.target)
       if (hasExistingInput) return false
     }
@@ -102,12 +165,17 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     
     const sourceShape = sourceNode.data.outputShape
     
-    if (targetNode.data.blockType === 'linear' && sourceShape.dims.length !== 2) {
-      return false
-    }
-    
-    if (targetNode.data.blockType === 'conv2d' && sourceShape.dims.length !== 4) {
-      return false
+    if (targetNode.data.blockType === 'add') {
+      const incomingEdges = edges.filter((e) => e.target === connection.target)
+      if (incomingEdges.length > 0) {
+        const firstSourceNode = nodes.find((n) => n.id === incomingEdges[0].source)
+        if (firstSourceNode?.data.outputShape) {
+          const firstShape = firstSourceNode.data.outputShape
+          if (firstShape.dims.length !== sourceShape.dims.length) {
+            return false
+          }
+        }
+      }
     }
     
     return true

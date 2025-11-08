@@ -327,6 +327,72 @@ export const blockDefinitions: Record<string, BlockDefinition> = {
     computeOutputShape: () => undefined
   },
 
+  add: {
+    type: 'add',
+    label: 'Add',
+    category: 'merge',
+    color: 'var(--color-accent)',
+    icon: 'Plus',
+    description: 'Element-wise addition of tensors',
+    configSchema: [],
+    computeOutputShape: (inputShape) => {
+      if (!inputShape) return undefined
+      return {
+        ...inputShape,
+        description: 'Element-wise sum'
+      }
+    }
+  },
+
+  custom: {
+    type: 'custom',
+    label: 'Custom Layer',
+    category: 'advanced',
+    color: 'var(--color-primary)',
+    icon: 'Code',
+    description: 'Custom layer with user-defined operations',
+    configSchema: [
+      {
+        name: 'name',
+        label: 'Layer Name',
+        type: 'text',
+        required: true,
+        placeholder: 'my_custom_layer',
+        description: 'Name for your custom layer'
+      },
+      {
+        name: 'output_shape',
+        label: 'Output Shape',
+        type: 'text',
+        placeholder: '[batch, features]',
+        description: 'Expected output shape (optional, leave empty to match input)'
+      },
+      {
+        name: 'description',
+        label: 'Description',
+        type: 'text',
+        placeholder: 'Describe what this layer does',
+        description: 'Brief description of the layer functionality'
+      }
+    ],
+    computeOutputShape: (inputShape, config) => {
+      if (config.output_shape) {
+        try {
+          const dims = JSON.parse(String(config.output_shape))
+          if (Array.isArray(dims) && dims.length > 0) {
+            return {
+              dims,
+              description: String(config.description || 'Custom output')
+            }
+          }
+        } catch {
+          return inputShape
+        }
+      }
+      return inputShape
+    }
+  },
+
   softmax: {
     type: 'softmax',
     label: 'Softmax',

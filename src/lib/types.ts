@@ -10,6 +10,8 @@ export type BlockType =
   | 'attention'
   | 'concat'
   | 'softmax'
+  | 'add'
+  | 'custom'
 
 export type BlockCategory = 'input' | 'basic' | 'advanced' | 'merge'
 
