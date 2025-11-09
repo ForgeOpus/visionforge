@@ -273,8 +273,8 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     const sourceNode = nodes.find((n) => n.id === connection.source)
     if (!sourceNode) return false
     
-    // Check if target allows multiple inputs (concat and add blocks)
-    const allowsMultiple = targetNode.data.blockType === 'concat' || targetNode.data.blockType === 'add'
+    // Check if target allows multiple inputs (concat, add, and loss blocks)
+    const allowsMultiple = targetNode.data.blockType === 'concat' || targetNode.data.blockType === 'add' || targetNode.data.blockType === 'loss'
     if (!allowsMultiple) {
       const hasExistingInput = edges.some((e) => e.target === connection.target)
       if (hasExistingInput) return false
@@ -362,6 +362,23 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
             })
           }
         })
+      }
+      
+      // Special validation for loss nodes - check input count matches loss type
+      if (node.data.blockType === 'loss') {
+        const lossNodeDef = nodeDef as any
+        if (lossNodeDef?.getInputPorts) {
+          const requiredPorts = lossNodeDef.getInputPorts(node.data.config)
+          const incomingEdges = edges.filter((e) => e.target === node.id)
+          
+          if (incomingEdges.length !== requiredPorts.length) {
+            errors.push({
+              nodeId: node.id,
+              message: `Loss function "${node.data.config.loss_type || 'cross_entropy'}" requires ${requiredPorts.length} inputs (${requiredPorts.map((p: any) => p.label).join(', ')}), but has ${incomingEdges.length}`,
+              type: 'error'
+            })
+          }
+        }
       }
     })
     
