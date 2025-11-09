@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { Node, Edge, Connection } from '@xyflow/react'
-import { BlockData, Project, ValidationError, TensorShape } from './types'
-import { getBlockDefinition, validateBlockConnection, allowsMultipleInputs } from './blockDefinitions'
+import { BlockData, Project, ValidationError, TensorShape, BlockType } from './types'
 import { getNodeDefinition, BackendFramework } from './nodes/registry'
 
 interface HistoryState {
@@ -145,7 +144,10 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     const sourceNode = nodes.find((n) => n.id === edge.source)
     
     if (targetNode && sourceNode?.data.outputShape) {
-      const targetDef = getBlockDefinition(targetNode.data.blockType)
+      const targetNodeDef = getNodeDefinition(
+        targetNode.data.blockType as BlockType,
+        BackendFramework.PyTorch
+      )
       const sourceShape = sourceNode.data.outputShape
       
       if (targetNode.data.blockType === 'linear' && sourceShape.dims.length !== 2) {
@@ -227,17 +229,25 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     const sourceNode = nodes.find((n) => n.id === connection.source)
     if (!sourceNode) return false
     
-    // Check if target allows multiple inputs
-    if (!allowsMultipleInputs(targetNode.data.blockType)) {
+    // Check if target allows multiple inputs (concat and add blocks)
+    const allowsMultiple = targetNode.data.blockType === 'concat' || targetNode.data.blockType === 'add'
+    if (!allowsMultiple) {
       const hasExistingInput = edges.some((e) => e.target === connection.target)
       if (hasExistingInput) return false
     }
     
-    // Use the new validation function
-    const validationError = validateBlockConnection(
-      sourceNode.data.blockType,
-      targetNode.data.blockType,
-      sourceNode.data.outputShape
+    // Use the node definition validation method
+    const targetNodeDef = getNodeDefinition(
+      targetNode.data.blockType as BlockType,
+      BackendFramework.PyTorch
+    )
+    
+    if (!targetNodeDef) return false
+    
+    const validationError = targetNodeDef.validateIncomingConnection(
+      sourceNode.data.blockType as BlockType,
+      sourceNode.data.outputShape,
+      targetNode.data.config
     )
     
     if (validationError) {
@@ -296,9 +306,9 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
         })
       }
       
-      const def = getBlockDefinition(node.data.blockType)
-      if (def) {
-        const requiredFields = def.configSchema.filter((f) => f.required)
+      const nodeDef = getNodeDefinition(node.data.blockType as BlockType, BackendFramework.PyTorch)
+      if (nodeDef) {
+        const requiredFields = nodeDef.configSchema.filter((f) => f.required)
         requiredFields.forEach((field) => {
           if (!node.data.config[field.name]) {
             errors.push({
@@ -341,13 +351,6 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
           // Use new registry method
           const outputShape = nodeDef.computeOutputShape(undefined, node.data.config)
           node.data.outputShape = outputShape
-        } else {
-          // Fall back to legacy adapter
-          const def = getBlockDefinition(node.data.blockType)
-          if (def) {
-            const outputShape = def.computeOutputShape(undefined, node.data.config)
-            node.data.outputShape = outputShape
-          }
         }
       } else {
         if (incomingEdges.length > 0) {
@@ -360,13 +363,6 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
               // Use new registry method
               const outputShape = nodeDef.computeOutputShape(node.data.inputShape, node.data.config)
               node.data.outputShape = outputShape
-            } else {
-              // Fall back to legacy adapter
-              const def = getBlockDefinition(node.data.blockType)
-              if (def) {
-                const outputShape = def.computeOutputShape(node.data.inputShape, node.data.config)
-                node.data.outputShape = outputShape
-              }
             }
           }
         }

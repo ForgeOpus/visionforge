@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Download, FloppyDisk, CaretDown, Code, Flask, CheckCircle, GitBranch, Upload, FileCode, FilePy } from '@phosphor-icons/react'
 import { toast } from 'sonner'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { generatePyTorchCode } from '@/lib/codeGenerator'
 import { validateModel } from '@/lib/api'
 import { exportToJSON, importFromJSON, downloadJSON, readJSONFile } from '@/lib/exportImport'
@@ -432,6 +433,8 @@ export default function Header() {
       </div>
 
       <div className="flex items-center gap-2">
+        <ThemeToggle />
+        
         {/* Hidden file input for JSON import */}
         <input
           ref={fileInputRef}

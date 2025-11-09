@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import { Handle, Position, NodeProps } from '@xyflow/react'
-import { BlockData } from '@/lib/types'
-import { getBlockDefinition } from '@/lib/blockDefinitions'
+import { BlockData, BlockType } from '@/lib/types'
+import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
 import { useModelBuilderStore } from '@/lib/store'
 import * as Icons from '@phosphor-icons/react'
 import { Card } from '@/components/ui/card'
@@ -14,11 +14,12 @@ interface BlockNodeProps {
 }
 
 const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
-  const definition = getBlockDefinition(data.blockType)
+  const nodeDef = getNodeDefinition(data.blockType as BlockType, BackendFramework.PyTorch)
   const validationErrors = useModelBuilderStore((state) => state.validationErrors)
 
-  if (!definition) return null
+  if (!nodeDef) return null
 
+  const definition = nodeDef.metadata
   const IconComponent = (Icons as any)[definition.icon] || Icons.Cube
 
   // Check if this node has any validation errors

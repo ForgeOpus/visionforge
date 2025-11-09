@@ -1,6 +1,7 @@
 import { ConnectionLineComponentProps } from '@xyflow/react'
 import { useModelBuilderStore } from '@/lib/store'
-import { validateBlockConnection } from '@/lib/blockDefinitions'
+import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
+import { BlockType } from '@/lib/types'
 
 export default function CustomConnectionLine({
   fromX,
@@ -38,15 +39,22 @@ export default function CustomConnectionLine({
   
   // Validate connection if we have both nodes
   if (sourceNode && targetNode) {
-    const validationError = validateBlockConnection(
-      sourceNode.data.blockType,
-      targetNode.data.blockType,
-      sourceNode.data.outputShape
+    const targetNodeDef = getNodeDefinition(
+      targetNode.data.blockType as BlockType,
+      BackendFramework.PyTorch
     )
     
-    if (validationError) {
-      strokeColor = 'var(--color-destructive)'
-      errorMessage = validationError
+    if (targetNodeDef) {
+      const validationError = targetNodeDef.validateIncomingConnection(
+        sourceNode.data.blockType as BlockType,
+        sourceNode.data.outputShape,
+        targetNode.data.config
+      )
+      
+      if (validationError) {
+        strokeColor = 'var(--color-destructive)'
+        errorMessage = validationError
+      }
     }
   }
   

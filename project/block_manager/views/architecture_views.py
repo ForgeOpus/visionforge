@@ -59,8 +59,9 @@ def save_architecture(request, project_id):
         edge_id = edge.get('id')
         source_id = edge.get('source')
         target_id = edge.get('target')
-        source_handle = edge.get('sourceHandle', '')
-        target_handle = edge.get('targetHandle', '')
+        # Ensure handles are never None, always use empty string as default
+        source_handle = edge.get('sourceHandle') or ''
+        target_handle = edge.get('targetHandle') or ''
         
         if source_id in node_id_to_block and target_id in node_id_to_block:
             Connection.objects.create(
@@ -146,3 +147,88 @@ def load_architecture(request, project_id):
         'nodes': nodes,
         'edges': edges,
     })
+
+
+@api_view(['GET'])
+def get_node_definitions(request):
+    """
+    Get available node definitions for a specific framework
+    Returns node metadata and configuration schemas
+    """
+    from block_manager.services.nodes.registry import (
+        get_all_node_definitions,
+        Framework
+    )
+    
+    # Get framework from query params, default to PyTorch
+    framework_param = request.query_params.get('framework', 'pytorch').lower()
+    
+    try:
+        framework = Framework(framework_param)
+    except ValueError:
+        return Response(
+            {'success': False, 'error': f'Invalid framework: {framework_param}. Must be pytorch or tensorflow'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Get all node definitions for the framework
+    node_definitions = get_all_node_definitions(framework)
+    
+    # Serialize to dict format
+    definitions_data = []
+    for node_def in node_definitions:
+        try:
+            definitions_data.append(node_def.to_dict())
+        except Exception as e:
+            # Skip nodes that fail to serialize
+            print(f"Error serializing node {node_def.metadata.type}: {e}")
+            continue
+    
+    return Response({
+        'success': True,
+        'framework': framework.value,
+        'definitions': definitions_data,
+        'count': len(definitions_data)
+    })
+
+
+@api_view(['GET'])
+def get_node_definition(request, node_type):
+    """
+    Get a specific node definition by type
+    """
+    from block_manager.services.nodes.registry import (
+        get_node_definition as get_node_def,
+        Framework
+    )
+    
+    # Get framework from query params, default to PyTorch
+    framework_param = request.query_params.get('framework', 'pytorch').lower()
+    
+    try:
+        framework = Framework(framework_param)
+    except ValueError:
+        return Response(
+            {'success': False, 'error': f'Invalid framework: {framework_param}'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # Get the node definition
+    node_def = get_node_def(node_type, framework)
+    
+    if not node_def:
+        return Response(
+            {'success': False, 'error': f'Node type "{node_type}" not found for framework {framework.value}'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    try:
+        return Response({
+            'success': True,
+            'definition': node_def.to_dict()
+        })
+    except Exception as e:
+        return Response(
+            {'success': False, 'error': f'Error serializing node definition: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

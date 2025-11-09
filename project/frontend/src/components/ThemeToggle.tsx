@@ -1,6 +1,6 @@
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
-import { Sun, Moon } from "lucide-react";
+import { Sun, Moon } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 
 export function ThemeToggle() {
@@ -33,13 +33,18 @@ export function ThemeToggle() {
       onClick={handleToggle}
       className="h-9 w-9 rounded-md relative"
       aria-label="Toggle theme"
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
     >
       <Sun
-        className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0"
+        size={20}
+        weight="fill"
+        className="rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0 text-foreground"
         aria-hidden="true"
       />
       <Moon
-        className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100"
+        size={20}
+        weight="fill"
+        className="absolute rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 text-foreground"
         aria-hidden="true"
       />
       <span className="sr-only">Toggle theme</span>

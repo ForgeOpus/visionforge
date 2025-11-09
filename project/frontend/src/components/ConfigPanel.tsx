@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useModelBuilderStore } from '@/lib/store'
-import { getBlockDefinition } from '@/lib/blockDefinitions'
 import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -71,8 +70,14 @@ export default function ConfigPanel() {
     )
   }
 
-  const definition = getBlockDefinition(selectedNode.data.blockType)
-  if (!definition) return null
+  const nodeDef = getNodeDefinition(selectedNode.data.blockType, BackendFramework.PyTorch)
+  if (!nodeDef) return null
+  
+  const definition = {
+    label: nodeDef.metadata.label,
+    description: nodeDef.metadata.description,
+    configSchema: nodeDef.configSchema
+  }
 
   const handleConfigChange = (fieldName: string, value: any) => {
     updateNode(selectedNode.id, {
