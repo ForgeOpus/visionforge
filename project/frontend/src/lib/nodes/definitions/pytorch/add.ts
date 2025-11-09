@@ -25,6 +25,35 @@ export class AddNode extends MergeNodeDefinition {
   }
 
   /**
+   * Special method for computing output shape with multiple inputs
+   * All inputs must have the same shape for element-wise addition
+   */
+  computeMultiInputShape(inputShapes: TensorShape[], config: BlockConfig): TensorShape | undefined {
+    if (inputShapes.length === 0) {
+      return undefined
+    }
+
+    if (inputShapes.length === 1) {
+      return inputShapes[0]
+    }
+
+    const firstShape = inputShapes[0]
+    
+    // Validate all shapes match exactly
+    const allMatch = inputShapes.every(shape => this.shapesMatch(firstShape, shape))
+    
+    if (!allMatch) {
+      return undefined
+    }
+
+    // All shapes match, return the first shape
+    return {
+      dims: firstShape.dims,
+      description: `Element-wise sum of ${inputShapes.length} tensors`
+    }
+  }
+
+  /**
    * Special method for validating multiple inputs have matching shapes
    */
   validateMultipleInputs(inputShapes: TensorShape[]): string | undefined {

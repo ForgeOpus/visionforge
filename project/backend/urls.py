@@ -30,8 +30,10 @@ class ReactAppView(TemplateView):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('block_manager.urls')),
-    # Serve assets directory (React build files)
+    # Serve assets directory (React build files - CSS, JS)
     re_path(r'^assets/(?P<path>.*)$', serve, {'document_root': settings.BASE_DIR / 'frontend_build' / 'assets'}),
+    # Serve static files from frontend_build root (logos, favicon, videos, etc.)
+    re_path(r'^(?P<path>.*\.(png|jpg|jpeg|gif|svg|ico|webp|mp4|webm|mov|avi))$', serve, {'document_root': settings.BASE_DIR / 'frontend_build'}),
     # Catch-all: Serve React app for all other routes
     # Must be LAST - only matches routes not already matched above
     re_path(r'^', ReactAppView.as_view(), name='react-app'),
