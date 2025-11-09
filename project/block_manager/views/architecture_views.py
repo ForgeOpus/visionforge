@@ -235,41 +235,46 @@ def get_node_definition(request, node_type):
 @api_view(['POST'])
 def render_node_code(request):
     """
-    Render code for a node given its type, framework, and config.
-    
+    Render professional class-based code for a single node.
+
     Request body:
     {
         "node_type": "conv2d",
         "framework": "pytorch",
         "config": {"out_channels": 64, "kernel_size": 3, ...},
-        "metadata": {"node_id": "node_1", ...}  # optional
+        "metadata": {
+            "node_id": "node_1",
+            "inputShape": {"dims": [1, 3, 224, 224]},
+            "outputShape": {"dims": [1, 64, 112, 112]}
+        }
     }
-    
+
     Returns:
     {
         "success": true,
-        "code": "nn.Conv2d(3, 64, 3, ...)",
-        "spec_hash": "abc123...",
-        "node_type": "conv2d"
+        "code": "class Conv2dLayer_64ch_3x3(nn.Module): ...",
+        "node_type": "conv2d",
+        "framework": "pytorch",
+        "format": "class"
     }
     """
     from block_manager.services.nodes.specs.registry import get_node_spec
-    from block_manager.services.nodes.specs.serialization import compute_spec_hash
-    from block_manager.services.nodes.templates.renderer import render_node_template
     from block_manager.services.nodes.specs import Framework
-    
+    from block_manager.services.pytorch_codegen import generate_single_layer_class as pytorch_generate_class
+    from block_manager.services.tensorflow_codegen import generate_single_layer_class as tensorflow_generate_class
+
     # Validate request data
     node_type = request.data.get('node_type')
     framework_param = request.data.get('framework', 'pytorch').lower()
     config = request.data.get('config', {})
     metadata = request.data.get('metadata', {})
-    
+
     if not node_type:
         return Response(
             {'success': False, 'error': 'node_type is required'},
             status=status.HTTP_400_BAD_REQUEST
         )
-    
+
     try:
         framework = Framework(framework_param)
     except ValueError:
@@ -277,38 +282,47 @@ def render_node_code(request):
             {'success': False, 'error': f'Invalid framework: {framework_param}'},
             status=status.HTTP_400_BAD_REQUEST
         )
-    
-    # Get the node spec
+
+    # Get the node spec (for validation)
     node_spec = get_node_spec(node_type, framework)
-    
+
     if not node_spec:
         return Response(
             {'success': False, 'error': f'Node type "{node_type}" not found for framework {framework.value}'},
             status=status.HTTP_404_NOT_FOUND
         )
-    
-    # Render the template
+
+    # Generate professional class-based code
     try:
-        rendered = render_node_template(node_spec, config, metadata)
-        
-        # Compute hash from serialized spec
-        from block_manager.services.nodes.specs.serialization import spec_to_dict
-        spec_dict = spec_to_dict(node_spec)
-        spec_hash = compute_spec_hash(spec_dict)
-        
+        # Construct node dictionary from request data
+        node = {
+            'id': metadata.get('node_id', 'preview_node'),
+            'data': {
+                'blockType': node_type,
+                'config': config,
+                'inputShape': metadata.get('inputShape'),
+                'outputShape': metadata.get('outputShape'),
+            }
+        }
+
+        # Generate class-based code using the appropriate framework generator
+        if framework == Framework.PYTORCH:
+            code = pytorch_generate_class(node, node_index=0)
+        else:  # TensorFlow
+            code = tensorflow_generate_class(node, node_index=0)
+
         return Response({
             'success': True,
-            'code': rendered.code,
+            'code': code,
             'node_type': node_type,
             'framework': framework.value,
-            'spec_hash': spec_hash,
-            'context': rendered.context,
+            'format': 'class'
         })
     except Exception as e:
         import traceback
         traceback.print_exc()  # Log to console for debugging
         return Response(
-            {'success': False, 'error': f'Error rendering node code: {str(e)}'},
+            {'success': False, 'error': f'Error generating node code: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 

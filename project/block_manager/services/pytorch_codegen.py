@@ -44,6 +44,120 @@ def generate_pytorch_code(
     }
 
 
+def generate_single_layer_class(
+    node: Dict[str, Any],
+    node_index: int = 0,
+    shape_info: Optional[Dict[str, Any]] = None
+) -> str:
+    """
+    Generate professional class-based code for a single layer.
+    Used for individual node preview in the visual editor.
+
+    Args:
+        node: Node dictionary with type, data, config
+        node_index: Index for layer naming (default: 0)
+        shape_info: Optional shape information dict. If None, extracted from node.
+
+    Returns:
+        String containing the complete layer class definition
+    """
+    # Extract node information
+    node_type = get_node_type(node)
+    config = node.get('data', {}).get('config', {})
+
+    # Extract or infer shape information
+    if shape_info is None:
+        shape_info = extract_shape_info_from_node(node)
+
+    # Skip nodes that don't generate layers
+    if node_type in ('input', 'dataloader', 'output'):
+        return f'''# {node_type.upper()} Node
+# This is handled automatically during model execution
+# Input shape: {shape_info.get('out_channels', '?')} channels or {shape_info.get('out_features', '?')} features'''
+
+    # Generate the layer class using existing function
+    layer_class = generate_layer_class(node, node_index, config, node_type, shape_info)
+
+    if layer_class:
+        return layer_class
+    else:
+        return f'''# Unsupported layer type: {node_type}
+# Please use the full export to generate complete model code'''
+
+
+def extract_shape_info_from_node(node: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Extract shape information from a single node's metadata.
+
+    Args:
+        node: Node dictionary
+
+    Returns:
+        Dictionary with shape information (in_channels, out_channels, in_features, out_features, etc.)
+    """
+    shape_info = {}
+    node_type = get_node_type(node)
+    config = node.get('data', {}).get('config', {})
+
+    # Try to get shape from node metadata
+    input_shape = node.get('data', {}).get('inputShape', {})
+    output_shape = node.get('data', {}).get('outputShape', {})
+
+    # Extract from inputShape/outputShape if available
+    if input_shape and isinstance(input_shape, dict):
+        dims = input_shape.get('dims', [])
+        if len(dims) >= 4:  # NCHW format
+            shape_info['in_channels'] = dims[1]
+            shape_info['in_height'] = dims[2]
+            shape_info['in_width'] = dims[3]
+        elif len(dims) >= 2:
+            shape_info['in_features'] = dims[1]
+
+    if output_shape and isinstance(output_shape, dict):
+        dims = output_shape.get('dims', [])
+        if len(dims) >= 4:  # NCHW format
+            shape_info['out_channels'] = dims[1]
+            shape_info['out_height'] = dims[2]
+            shape_info['out_width'] = dims[3]
+        elif len(dims) >= 2:
+            shape_info['out_features'] = dims[1]
+
+    # Infer from config if not in metadata
+    if node_type == 'conv2d':
+        if 'in_channels' not in shape_info:
+            shape_info['in_channels'] = 3  # Default
+        if 'out_channels' not in shape_info:
+            shape_info['out_channels'] = config.get('out_channels', 64)
+        # Try to estimate output dimensions if not provided
+        if 'out_height' not in shape_info:
+            shape_info['out_height'] = '?'
+        if 'out_width' not in shape_info:
+            shape_info['out_width'] = '?'
+
+    elif node_type == 'linear':
+        if 'in_features' not in shape_info:
+            shape_info['in_features'] = 512  # Default
+        if 'out_features' not in shape_info:
+            shape_info['out_features'] = config.get('out_features', 128)
+
+    elif node_type == 'batchnorm':
+        if 'num_features' not in shape_info:
+            shape_info['num_features'] = shape_info.get('out_channels', shape_info.get('in_channels', 64))
+
+    elif node_type == 'flatten':
+        if 'out_features' not in shape_info:
+            # Estimate based on typical conv output
+            channels = shape_info.get('in_channels', 512)
+            height = shape_info.get('in_height', 7)
+            width = shape_info.get('in_width', 7)
+            if isinstance(height, int) and isinstance(width, int):
+                shape_info['out_features'] = channels * height * width
+            else:
+                shape_info['out_features'] = '?'
+
+    return shape_info
+
+
 def topological_sort(nodes: List[Dict], edges: List[Dict]) -> List[Dict]:
     """Sort nodes in topological order based on edges using Kahn's algorithm"""
     node_map = {node['id']: node for node in nodes}
