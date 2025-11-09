@@ -26,10 +26,36 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
     { key: 'utility', label: 'Utility', icon: Icons.Toolbox }
   ]
 
-  // Prepare all blocks for fuzzy search
+  // Prepare all blocks for fuzzy search - maintain category order
   const allBlocks = useMemo(() => {
+    const categoryOrder = ['input', 'output', 'basic', 'advanced', 'merge', 'utility']
     const nodes = getAllNodeDefinitions(BackendFramework.PyTorch)
-    return nodes.map(node => ({
+
+    // Group by category
+    const nodesByCategory = new Map<string, typeof nodes>()
+    nodes.forEach(node => {
+      const cat = node.metadata.category
+      if (!nodesByCategory.has(cat)) {
+        nodesByCategory.set(cat, [])
+      }
+      nodesByCategory.get(cat)!.push(node)
+    })
+
+    // Build ordered list
+    const orderedNodes: typeof nodes = []
+    categoryOrder.forEach(category => {
+      const categoryNodes = nodesByCategory.get(category) || []
+      orderedNodes.push(...categoryNodes)
+    })
+
+    // Add any remaining categories not in the order list
+    nodesByCategory.forEach((nodes, category) => {
+      if (!categoryOrder.includes(category)) {
+        orderedNodes.push(...nodes)
+      }
+    })
+
+    const blocks = orderedNodes.map(node => ({
       type: node.metadata.type,
       label: node.metadata.label,
       category: node.metadata.category,
@@ -37,6 +63,11 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
       icon: node.metadata.icon,
       description: node.metadata.description
     }))
+
+    // Debug: log all icons
+    console.log('Block icons loaded:', blocks.map(b => `${b.label}: ${b.icon}`))
+
+    return blocks
   }, [])
 
   // Setup fuzzy search
@@ -71,7 +102,14 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
     icon: string
     description: string
   }) => {
-    const IconComponent = (Icons as any)[block.icon] || Icons.Cube
+    const IconComponent = (Icons as any)[block.icon]
+
+    // Debug: log if icon is missing
+    if (!IconComponent && block.icon) {
+      console.warn(`Icon "${block.icon}" not found for block "${block.label}" (${block.type})`)
+    }
+
+    const FinalIcon = IconComponent || Icons.Cube
 
     return (
       <Card
@@ -92,7 +130,7 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
               color: 'white'
             }}
           >
-            <IconComponent size={14} weight="bold" />
+            <FinalIcon size={14} weight="bold" />
           </div>
           <div className="flex-1 min-w-0 overflow-hidden">
             <div className="text-sm font-medium truncate">
@@ -119,7 +157,14 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
         <ScrollArea className="flex-1 w-full min-h-0">
           <div className="py-2 space-y-1 flex flex-col items-center px-2">
             {allBlocks.map((block) => {
-              const IconComponent = (Icons as any)[block.icon] || Icons.Cube
+              const IconComponent = (Icons as any)[block.icon]
+
+              // Debug: log if icon is missing
+              if (!IconComponent && block.icon) {
+                console.warn(`Icon "${block.icon}" not found for block "${block.label}" (${block.type})`)
+              }
+
+              const FinalIcon = IconComponent || Icons.Cube
 
               return (
                 <button
@@ -143,7 +188,7 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
                       color: 'white'
                     }}
                   >
-                    <IconComponent size={16} weight="bold" />
+                    <FinalIcon size={16} weight="bold" />
                   </div>
 
                   {/* Tooltip on hover */}

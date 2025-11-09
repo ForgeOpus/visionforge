@@ -35,7 +35,7 @@ export function HistoryToolbar() {
   }
 
   return (
-    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-2">
+    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-2">
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>

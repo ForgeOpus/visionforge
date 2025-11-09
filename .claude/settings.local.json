@@ -5,7 +5,8 @@
       "Bash(npm run build:*)",
       "Bash(npx tsc:*)",
       "Bash(cat:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(node test-icons.js:*)"
     ],
     "deny": [],
     "ask": []

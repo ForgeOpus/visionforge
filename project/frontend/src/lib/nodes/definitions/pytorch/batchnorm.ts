@@ -12,7 +12,7 @@ export class BatchNormNode extends NodeDefinition {
     label: 'Batch Normalization',
     category: 'basic',
     color: 'var(--color-accent)',
-    icon: 'Chart LineUp',
+    icon: 'ChartLineUp',
     description: 'Batch normalization layer',
     framework: BackendFramework.PyTorch
   }

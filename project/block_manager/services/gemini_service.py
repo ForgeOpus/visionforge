@@ -72,17 +72,61 @@ class GeminiChatService:
 
 VisionForge allows users to create deep learning models by connecting nodes (blocks) in a visual workflow.
 
-Available node types include:
-- Input nodes: Input, DataLoader
-- Convolutional layers: Conv1D, Conv2D, Conv3D
-- Linear layers: Linear, Embedding
-- Activation functions: ReLU, Softmax, Sigmoid, Tanh, LeakyReLU, Dropout
-- Pooling layers: MaxPool2D, AvgPool2D, AdaptiveAvgPool2D
-- Normalization: BatchNorm2D
-- Merge operations: Concat, Add
-- Utility: Flatten, Attention, Output, Loss
+=== AVAILABLE NODE TYPES AND THEIR CONFIGURATION SCHEMAS ===
 
-Each node has configurable parameters (e.g., channels, kernel_size, stride, etc.).
+INPUT NODES:
+- "input": {"shape": "[1, 3, 224, 224]", "label": "Input"}
+  - shape: tensor dimensions as string (required)
+  - label: custom label (optional)
+
+- "dataloader": {"dataset_name": "string", "batch_size": 32, "shuffle": true}
+
+CONVOLUTIONAL LAYERS:
+- "conv2d": {"out_channels": 64, "kernel_size": 3, "stride": 1, "padding": 1, "dilation": 1}
+  - out_channels: REQUIRED (number of output channels)
+  - kernel_size, stride, padding, dilation: optional (defaults shown)
+
+- "conv1d": {"out_channels": 64, "kernel_size": 3, "stride": 1, "padding": 0}
+- "conv3d": {"out_channels": 64, "kernel_size": 3, "stride": 1, "padding": 0}
+
+LINEAR LAYERS:
+- "linear": {"out_features": 10}
+  - out_features: REQUIRED (output dimension)
+
+- "embedding": {"num_embeddings": 1000, "embedding_dim": 128}
+  - Both fields REQUIRED
+
+ACTIVATION FUNCTIONS (no config needed, use empty object {}):
+- "relu", "softmax", "sigmoid", "tanh", "leakyrelu": {}
+
+POOLING LAYERS:
+- "maxpool": {"kernel_size": 2, "stride": 2, "padding": 0}
+- "avgpool": {"kernel_size": 2, "stride": 2, "padding": 0}
+- "adaptiveavgpool": {"output_size": "[1, 1]"}
+
+NORMALIZATION:
+- "batchnorm": {"num_features": 64}
+  - num_features: REQUIRED (must match input channels)
+
+- "dropout": {"p": 0.5}
+  - p: dropout probability (default 0.5)
+
+MERGE OPERATIONS (no config needed):
+- "concat": {}
+- "add": {}
+
+UTILITY:
+- "flatten": {}
+- "attention": {"embed_dim": 512, "num_heads": 8}
+- "output": {} (no config)
+- "loss": {"loss_type": "CrossEntropyLoss"}
+
+CRITICAL RULES:
+1. ALWAYS provide REQUIRED fields (marked above)
+2. Use exact nodeType names in LOWERCASE: "input", "conv2d", "linear", "output", etc.
+3. For conv2d, NEVER use "in_channels" - it's inferred from connections
+4. Use empty config {} for nodes that don't need configuration
+5. Provide reasonable defaults for optional fields
 """
 
         if modification_mode:
@@ -90,15 +134,19 @@ Each node has configurable parameters (e.g., channels, kernel_size, stride, etc.
 MODIFICATION MODE ENABLED:
 You MUST provide actionable workflow modifications when users ask you to make changes.
 
-CRITICAL: When a user asks you to add, remove, or modify nodes, you MUST:
-1. Provide a natural language response explaining what you're doing
-2. Include JSON modification blocks in your response using the exact format below
+CRITICAL INSTRUCTION - BE PRECISE AND MINIMAL:
+- ONLY add/modify/remove what the user EXPLICITLY requests
+- DO NOT be creative or add extra nodes unless asked
+- Follow the user's exact specifications to the letter
+- Provide a brief natural language response
+- Include ONLY the JSON blocks for what was requested
 
-When the user says things like:
-- "Add 2 input nodes" → Provide 2 separate add_node JSON blocks
-- "Add a Conv2D layer" → Provide 1 add_node JSON block
-- "Remove the dropout layer" → Provide 1 remove_node JSON block
-- "Change kernel size to 5" → Provide 1 modify_node JSON block
+Examples of CORRECT responses:
+- User: "Add 2 input nodes" → Provide EXACTLY 2 add_node blocks for input, NOTHING MORE
+- User: "Add a Conv2D layer" → Provide EXACTLY 1 add_node block for conv2d, NOTHING MORE
+- User: "input connects to conv2d connects to output" → Provide EXACTLY 3 add_node blocks (input, conv2d, output), mention connections will be added after nodes exist
+- User: "Remove dropout" → Provide EXACTLY 1 remove_node block
+- User: "Change kernel to 5" → Provide EXACTLY 1 modify_node block
 
 MANDATORY FORMAT for each modification (include the ```json code fences):
 
@@ -106,7 +154,7 @@ MANDATORY FORMAT for each modification (include the ```json code fences):
 {
   "action": "add_node",
   "details": {
-    "nodeType": "Input",
+    "nodeType": "input",
     "config": {"shape": "[1, 3, 224, 224]"},
     "position": {"x": 100, "y": 100}
   },
@@ -114,9 +162,14 @@ MANDATORY FORMAT for each modification (include the ```json code fences):
 }
 ```
 
-FOR CONNECTIONS (add_connection):
-To connect nodes, you MUST use the exact node IDs from the workflow context shown above.
-Example:
+FOR CONNECTIONS (two-step process):
+STEP 1: When user requests connected nodes (e.g., "A connects to B connects to C"):
+  - First add the nodes they requested (A, B, C)
+  - Tell user: "Please apply these nodes first, then I can connect them"
+
+STEP 2: After nodes exist in the workflow context, create connections:
+  - Use the exact node IDs shown in the workflow context
+  - Example:
 ```json
 {
   "action": "add_connection",
@@ -126,18 +179,17 @@ Example:
     "sourceHandle": null,
     "targetHandle": null
   },
-  "explanation": "Connecting the Input node to Conv2D layer"
+  "explanation": "Connecting Input to Conv2D"
 }
 ```
 
-IMPORTANT:
+IMPORTANT RULES:
 - ALWAYS wrap each modification in ```json ``` code fences
-- Use exact node type names: Input, DataLoader, Conv2D, Linear, ReLU, etc.
-- Use exact node IDs from the workflow context when creating connections
-- For add_connection, source and target must be valid node IDs like 'node-1234567890'
-- Provide reasonable default configurations
-- If adding multiple nodes, include multiple separate JSON blocks
-- The user will see "Apply Change" buttons for each modification
+- Use exact node type names in LOWERCASE: input, dataloader, conv2d, linear, relu, etc.
+- For connections, ONLY use node IDs from the current workflow context
+- You CANNOT connect nodes that don't exist yet
+- Provide only what user explicitly requests
+- User sees "Apply Change" buttons for each modification
 """
         else:
             mode_prompt = """
@@ -230,15 +282,14 @@ You cannot modify the workflow in this mode. If users want to make changes, sugg
 
 {workflow_context}
 
-Available node types include:
-- Input nodes: Input, DataLoader
-- Convolutional layers: Conv1D, Conv2D, Conv3D
-- Linear layers: Linear, Embedding
-- Activation functions: ReLU, Softmax, Sigmoid, Tanh, LeakyReLU, Dropout
-- Pooling layers: MaxPool2D, AvgPool2D, AdaptiveAvgPool2D
-- Normalization: BatchNorm2D
-- Merge operations: Concat, Add
-- Utility: Flatten, Attention, Output, Loss
+KEY NODE CONFIGURATION RULES (use LOWERCASE node types):
+- "conv2d": {{"out_channels": number (REQUIRED), "kernel_size": 3, "stride": 1, "padding": 1}}
+  - NEVER use "in_channels" - it's automatically inferred
+- "linear": {{"out_features": number (REQUIRED)}}
+- "input": {{"shape": "[batch, channels, height, width]"}}
+- "output": {{}} (no config needed)
+- "relu", "sigmoid", etc.: {{}} (no config needed)
+- "batchnorm": {{"num_features": number (REQUIRED)}}
 
 TASK: Analyze the uploaded file (could be an architecture diagram, sketch, description, or reference) and:
 1. Understand what neural network architecture the user wants to build
@@ -250,12 +301,12 @@ User's message: {user_message if user_message else "Please analyze this file and
 
 CRITICAL: You MUST provide actionable workflow modifications in JSON format.
 
-For each node you want to add, use this exact format:
+For each node you want to add, use this exact format (PROVIDE ALL REQUIRED FIELDS, use LOWERCASE nodeType):
 ```json
 {{
   "action": "add_node",
   "details": {{
-    "nodeType": "Input",
+    "nodeType": "input",
     "config": {{"shape": "[1, 3, 224, 224]"}},
     "position": {{"x": 100, "y": 100}}
   }},
@@ -266,16 +317,16 @@ For each node you want to add, use this exact format:
 For connections between nodes, you need to first add all nodes, then in subsequent messages you can connect them.
 Since this is the first analysis, focus on creating the nodes. Suggest reasonable positions (spread them out vertically by 100-150 pixels).
 
-EXAMPLE ARCHITECTURE for an image classifier:
-1. Input node (x: 100, y: 100)
-2. Conv2D layer (x: 100, y: 250)
-3. ReLU activation (x: 100, y: 400)
-4. MaxPool2D (x: 100, y: 550)
-5. Flatten (x: 100, y: 700)
-6. Linear layer (x: 100, y: 850)
-7. Output (x: 100, y: 1000)
+EXAMPLE ARCHITECTURE for an image classifier (with LOWERCASE node types):
+1. "input" node (x: 100, y: 100)
+2. "conv2d" layer (x: 100, y: 250)
+3. "relu" activation (x: 100, y: 400)
+4. "maxpool" (x: 100, y: 550)
+5. "flatten" (x: 100, y: 700)
+6. "linear" layer (x: 100, y: 850)
+7. "output" (x: 100, y: 1000)
 
-Provide each node as a separate JSON block with appropriate configurations.
+Provide each node as a separate JSON block with appropriate configurations using lowercase nodeType values.
 """
 
             # Generate content with the file

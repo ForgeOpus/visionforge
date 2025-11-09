@@ -13,7 +13,7 @@ export class EmptyNode extends PassthroughNodeDefinition {
     category: 'utility',
     color: 'var(--color-gray)',
     icon: 'Placeholder',
-    description: 'Placeholder node for architecture planning',
+    description: 'Placeholder node',
     framework: BackendFramework.PyTorch
   }
 
