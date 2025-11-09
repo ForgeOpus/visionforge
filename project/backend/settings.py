@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'rest_framework',
+    'block_manager',
 ]
 
 MIDDLEWARE = [
@@ -57,6 +58,9 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'backend.urls'
+
+# Disable automatic slash appending for API endpoints
+APPEND_SLASH = False
 
 TEMPLATES = [
     {
@@ -75,6 +79,21 @@ TEMPLATES = [
 
 CORS_ALLOWED_ORIGINS = [
     os.getenv("FRONTEND_URL", "http://localhost:3000"),   # React dev server
+    "http://localhost:5173",  # Vite dev server
+    "http://localhost:5000",  # Alternative Vite port
+]
+
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
 ]
 
 REST_FRAMEWORK = {

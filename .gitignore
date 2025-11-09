@@ -45,3 +45,8 @@ pids
 */project/frontend/*.lock
 .github/copilot-instructions.md
 .github/project-spec.md
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*/__pycache__/*

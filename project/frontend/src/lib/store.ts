@@ -78,10 +78,30 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     const state = get()
     const historyUpdate = saveHistory(state)
     
-    set((state) => ({
-      nodes: [...state.nodes, node],
-      ...historyUpdate
-    }))
+    // Auto-create default project if none exists
+    if (!state.currentProject) {
+      const defaultProject: Project = {
+        id: Date.now().toString(),
+        name: 'Untitled Project',
+        description: 'Auto-created project',
+        framework: 'pytorch',
+        nodes: [],
+        edges: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      }
+      
+      set({
+        currentProject: defaultProject,
+        nodes: [node],
+        ...historyUpdate
+      })
+    } else {
+      set((state) => ({
+        nodes: [...state.nodes, node],
+        ...historyUpdate
+      }))
+    }
   },
 
   updateNode: (id, data) => {

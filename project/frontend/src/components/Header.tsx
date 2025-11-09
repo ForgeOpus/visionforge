@@ -56,8 +56,15 @@ export default function Header() {
   }
 
   const handleSaveProject = () => {
-    if (!currentProject) {
-      toast.error('No active project to save')
+    if (nodes.length === 0) {
+      toast.error('No architecture to save')
+      return
+    }
+
+    // Ensure we have a project (auto-created when first node added)
+    const project = currentProject
+    if (!project) {
+      toast.error('No active project')
       return
     }
 
@@ -65,8 +72,8 @@ export default function Header() {
 
     setProjects((prevProjects) => {
       const projectList = prevProjects || []
-      const existingIndex = projectList.findIndex((p) => p.id === currentProject.id)
-      const updatedProject = { ...currentProject, nodes, edges, updatedAt: Date.now() }
+      const existingIndex = projectList.findIndex((p) => p.id === project.id)
+      const updatedProject = { ...project, nodes, edges, updatedAt: Date.now() }
 
       if (existingIndex >= 0) {
         const updated = [...projectList]
@@ -114,7 +121,7 @@ export default function Header() {
   }
 
   const handleValidate = async () => {
-    if (!currentProject || nodes.length === 0) {
+    if (nodes.length === 0) {
       toast.error('Cannot validate: No architecture to validate')
       return
     }
@@ -126,15 +133,15 @@ export default function Header() {
         nodes: nodes.map(node => ({
           id: node.id,
           type: node.data.blockType,
-          config: node.data.config,
+          data: node.data,
           position: node.position
         })),
         edges: edges.map(edge => ({
           id: edge.id,
           source: edge.source,
           target: edge.target,
-          sourceHandle: edge.sourceHandle,
-          targetHandle: edge.targetHandle
+          sourceHandle: edge.sourceHandle || '',
+          targetHandle: edge.targetHandle || ''
         }))
       })
 
@@ -150,10 +157,10 @@ export default function Header() {
           
           // Show warnings if any
           if (result.data.warnings && result.data.warnings.length > 0) {
-            result.data.warnings.forEach((warning, index) => {
+            result.data.warnings.forEach((warning: any, index: number) => {
               setTimeout(() => {
-                toast.warning(`Warning ${index + 1}`, {
-                  description: warning
+                toast.warning(warning.message || `Warning ${index + 1}`, {
+                  description: warning.suggestion || warning.nodeId ? `Node: ${warning.nodeId}` : undefined
                 })
               }, index * 100)
             })
@@ -167,10 +174,10 @@ export default function Header() {
           
           // Show errors
           if (result.data.errors && result.data.errors.length > 0) {
-            result.data.errors.forEach((error, index) => {
+            result.data.errors.forEach((error: any, index: number) => {
               setTimeout(() => {
-                toast.error(`Error ${index + 1}`, {
-                  description: error
+                toast.error(error.message || `Error ${index + 1}`, {
+                  description: error.suggestion || error.nodeId ? `Node: ${error.nodeId}` : undefined
                 })
               }, index * 100)
             })
@@ -326,7 +333,7 @@ export default function Header() {
           variant="outline"
           size="sm"
           onClick={handleSaveProject}
-          disabled={!currentProject}
+          disabled={nodes.length === 0}
         >
           <FloppyDisk size={16} className="mr-2" />
           Save
@@ -336,7 +343,7 @@ export default function Header() {
           variant="outline"
           size="sm"
           onClick={handleValidate}
-          disabled={!currentProject || nodes.length === 0}
+          disabled={nodes.length === 0}
         >
           <CheckCircle size={16} className="mr-2" />
           Validate
@@ -347,7 +354,7 @@ export default function Header() {
             variant="default"
             size="sm"
             onClick={handleExport}
-            disabled={!currentProject || nodes.length === 0}
+            disabled={nodes.length === 0}
           >
             <Download size={16} className="mr-2" />
             Export
