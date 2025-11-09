@@ -3,7 +3,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { getBlocksByCategory, blockDefinitions } from '@/lib/blockDefinitions'
+import { blockDefinitions, getBlocksByCategory } from '@/lib/blockDefinitions'
+import { getAllNodeDefinitions, BackendFramework } from '@/lib/nodes/registry'
 import { BlockDefinition } from '@/lib/types'
 import * as Icons from '@phosphor-icons/react'
 import Fuse from 'fuse.js'
@@ -20,12 +21,15 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
 
   const categories = [
     { key: 'input', label: 'Input Layers', icon: Icons.ArrowDown },
+    { key: 'output', label: 'Output Layers', icon: Icons.ArrowUp },
     { key: 'basic', label: 'Basic Layers', icon: Icons.Lightning },
     { key: 'advanced', label: 'Advanced Layers', icon: Icons.Brain },
-    { key: 'merge', label: 'Merge/Split', icon: Icons.GitMerge }
+    { key: 'merge', label: 'Merge/Split', icon: Icons.GitMerge },
+    { key: 'utility', label: 'Utility', icon: Icons.Toolbox }
   ]
 
   // Prepare all blocks for fuzzy search
+  // Using new registry system (falls back to legacy adapter internally)
   const allBlocks = useMemo(() => {
     return Object.values(blockDefinitions)
   }, [])
@@ -195,7 +199,7 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
             </div>
           ) : (
             // Categorized view
-            <Accordion type="multiple" defaultValue={['input', 'basic']} className="px-2 py-2">
+            <Accordion type="multiple" defaultValue={['input', 'output', 'basic']} className="px-2 py-2">
               {categories.map((category) => {
                 const blocks = getBlocksByCategory(category.key)
                 const CategoryIcon = category.icon

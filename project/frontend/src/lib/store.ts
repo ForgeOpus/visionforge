@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { Node, Edge, Connection } from '@xyflow/react'
 import { BlockData, Project, ValidationError, TensorShape } from './types'
 import { getBlockDefinition, validateBlockConnection, allowsMultipleInputs } from './blockDefinitions'
+import { getNodeDefinition, BackendFramework } from './nodes/registry'
 
 interface HistoryState {
   nodes: Node<BlockData>[]
@@ -332,11 +333,21 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
       
       const incomingEdges = getIncomingEdges(nodeId)
       
+      // Try new registry first, fall back to legacy adapter
+      let nodeDef = getNodeDefinition(node.data.blockType, BackendFramework.PyTorch)
+      
       if (node.data.blockType === 'input') {
-        const def = getBlockDefinition(node.data.blockType)
-        if (def) {
-          const outputShape = def.computeOutputShape(undefined, node.data.config)
+        if (nodeDef) {
+          // Use new registry method
+          const outputShape = nodeDef.computeOutputShape(undefined, node.data.config)
           node.data.outputShape = outputShape
+        } else {
+          // Fall back to legacy adapter
+          const def = getBlockDefinition(node.data.blockType)
+          if (def) {
+            const outputShape = def.computeOutputShape(undefined, node.data.config)
+            node.data.outputShape = outputShape
+          }
         }
       } else {
         if (incomingEdges.length > 0) {
@@ -345,10 +356,17 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
           if (sourceNode?.data.outputShape) {
             node.data.inputShape = sourceNode.data.outputShape
             
-            const def = getBlockDefinition(node.data.blockType)
-            if (def) {
-              const outputShape = def.computeOutputShape(node.data.inputShape, node.data.config)
+            if (nodeDef) {
+              // Use new registry method
+              const outputShape = nodeDef.computeOutputShape(node.data.inputShape, node.data.config)
               node.data.outputShape = outputShape
+            } else {
+              // Fall back to legacy adapter
+              const def = getBlockDefinition(node.data.blockType)
+              if (def) {
+                const outputShape = def.computeOutputShape(node.data.inputShape, node.data.config)
+                node.data.outputShape = outputShape
+              }
             }
           }
         }

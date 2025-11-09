@@ -112,9 +112,37 @@ export async function getModelSuggestions(modelData: {
   })
 }
 
+/**
+ * Get all available node definitions for a framework
+ */
+export async function getNodeDefinitions(framework: 'pytorch' | 'tensorflow' = 'pytorch'): Promise<ApiResponse<{
+  [nodeType: string]: any
+}>> {
+  return apiFetch(`/node-definitions?framework=${framework}`, {
+    method: 'GET',
+  })
+}
+
+/**
+ * Get a specific node definition
+ */
+export async function getNodeDefinition(
+  nodeType: string, 
+  framework: 'pytorch' | 'tensorflow' = 'pytorch'
+): Promise<ApiResponse<{
+  metadata: any
+  config_schema: any
+}>> {
+  return apiFetch(`/node-definitions/${nodeType}?framework=${framework}`, {
+    method: 'GET',
+  })
+}
+
 export default {
   validateModel,
   sendChatMessage,
   exportModel,
   getModelSuggestions,
+  getNodeDefinitions,
+  getNodeDefinition,
 }

@@ -36,6 +36,8 @@
   --teal: oklch(0.55 0.12 180);
   --purple: oklch(0.50 0.13 290);
   --orange: oklch(0.65 0.15 50);
+  --green: oklch(0.60 0.15 150);
+  --gray: oklch(0.65 0.02 240);
 }
 
 @theme {
@@ -58,10 +60,12 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  
+
   --color-teal: var(--teal);
   --color-purple: var(--purple);
   --color-orange: var(--orange);
+  --color-green: var(--green);
+  --color-gray: var(--gray);
 
   --radius-sm: calc(var(--radius) * 0.5);
   --radius-md: var(--radius);
