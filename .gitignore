@@ -44,3 +44,10 @@ pids
 
 */project/frontend/*.lock
 node_modules
+.github/copilot-instructions.md
+.github/project-spec.md
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*/__pycache__/*

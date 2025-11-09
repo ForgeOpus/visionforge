@@ -10,10 +10,12 @@ import Fuse from 'fuse.js'
 
 interface BlockPaletteProps {
   onDragStart: (blockType: string) => void
+  onBlockClick: (blockType: string) => void
   isCollapsed: boolean
+  onToggleCollapse: () => void
 }
 
-export default function BlockPalette({ onDragStart, isCollapsed }: BlockPaletteProps) {
+export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, onToggleCollapse }: BlockPaletteProps) {
   const [searchQuery, setSearchQuery] = useState('')
 
   const categories = [
@@ -58,14 +60,15 @@ export default function BlockPalette({ onDragStart, isCollapsed }: BlockPaletteP
     return (
       <Card
         key={block.type}
-        className="p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-all"
+        className="p-2 cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all overflow-hidden"
         draggable
         onDragStart={(e) => {
           e.dataTransfer.effectAllowed = 'move'
           handleDragStart(block.type)
         }}
+        onClick={() => onBlockClick(block.type)}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <div
             className="p-1.5 rounded shrink-0"
             style={{
@@ -75,7 +78,7 @@ export default function BlockPalette({ onDragStart, isCollapsed }: BlockPaletteP
           >
             <IconComponent size={14} weight="bold" />
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 overflow-hidden">
             <div className="text-sm font-medium truncate">
               {block.label}
             </div>
@@ -90,25 +93,68 @@ export default function BlockPalette({ onDragStart, isCollapsed }: BlockPaletteP
 
   if (isCollapsed) {
     return (
-      <div className="w-16 bg-card border-r border-border h-full flex flex-col items-center py-4">
+      <div className="w-16 bg-card border-r border-border h-full flex flex-col items-center relative">
+        {/* Header Icon */}
+        <div className="p-4 border-b border-border w-full flex justify-center">
+          <Icons.Cube size={24} className="text-primary" />
+        </div>
+        
+        {/* Scrollable Block Icons */}
+        <ScrollArea className="flex-1 w-full">
+          <div className="py-2 space-y-1 flex flex-col items-center px-2">
+            {allBlocks.map((block) => {
+              const IconComponent = (Icons as any)[block.icon] || Icons.Cube
+              
+              return (
+                <button
+                  key={block.type}
+                  className="w-12 h-12 rounded flex items-center justify-center hover:bg-accent transition-colors cursor-pointer group relative"
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = 'move'
+                    handleDragStart(block.type)
+                  }}
+                  onClick={() => onBlockClick(block.type)}
+                  title={block.label}
+                  style={{
+                    backgroundColor: 'transparent'
+                  }}
+                >
+                  <div
+                    className="w-8 h-8 rounded flex items-center justify-center"
+                    style={{
+                      backgroundColor: block.color,
+                      color: 'white'
+                    }}
+                  >
+                    <IconComponent size={18} weight="bold" />
+                  </div>
+                  
+                  {/* Tooltip on hover */}
+                  <div className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded shadow-md border border-border whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+                    {block.label}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </ScrollArea>
+        
+        {/* Toggle Button - Right Edge */}
         <button
-          className="p-2 hover:bg-accent rounded transition-colors"
-          title="Block Palette"
+          onClick={onToggleCollapse}
+          className="absolute -right-3 top-4 z-30 p-1.5 bg-card border border-border rounded-full shadow-sm hover:bg-accent transition-colors"
+          title="Expand sidebar"
         >
-          <Icons.Cube size={24} />
+          <Icons.CaretRight size={16} weight="bold" />
         </button>
       </div>
     )
   }
 
   return (
-    <div className="w-64 bg-card border-r border-border h-full flex flex-col">
-      <div className="p-4 border-b border-border sticky top-0 bg-card z-10">
-        <h2 className="font-semibold text-lg">Block Palette</h2>
-        <p className="text-xs text-muted-foreground mt-1 mb-3">
-          Drag blocks onto the canvas
-        </p>
-
+    <div className="w-64 bg-card border-r border-border h-full flex flex-col relative">
+      <div className="p-3 border-b border-border sticky top-0 bg-card z-10">
         <div className="relative">
           <Icons.MagnifyingGlass
             size={16}
@@ -174,6 +220,15 @@ export default function BlockPalette({ onDragStart, isCollapsed }: BlockPaletteP
           )}
         </div>
       </ScrollArea>
+      
+      {/* Toggle Button - Right Edge */}
+      <button
+        onClick={onToggleCollapse}
+        className="absolute -right-3 top-4 z-30 p-1.5 bg-card border border-border rounded-full shadow-sm hover:bg-accent transition-colors"
+        title="Collapse sidebar"
+      >
+        <Icons.CaretLeft size={16} weight="bold" />
+      </button>
     </div>
   )
 }

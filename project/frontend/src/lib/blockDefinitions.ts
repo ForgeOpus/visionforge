@@ -113,6 +113,14 @@ export const blockDefinitions: Record<string, BlockDefinition> = {
         default: 0,
         min: 0,
         description: 'Zero-padding added to both sides'
+      },
+      {
+        name: 'dilation',
+        label: 'Dilation',
+        type: 'number',
+        default: 1,
+        min: 1,
+        description: 'Spacing between kernel elements'
       }
     ],
     computeOutputShape: (inputShape, config) => {
@@ -174,6 +182,21 @@ export const blockDefinitions: Record<string, BlockDefinition> = {
         min: 0,
         max: 1,
         description: 'Momentum for running mean/var'
+      },
+      {
+        name: 'eps',
+        label: 'Epsilon',
+        type: 'number',
+        default: 0.00001,
+        min: 0,
+        description: 'Value added for numerical stability'
+      },
+      {
+        name: 'affine',
+        label: 'Affine Transform',
+        type: 'boolean',
+        default: true,
+        description: 'Learn affine parameters (gamma, beta)'
       }
     ],
     computeOutputShape: (inputShape) => inputShape
@@ -248,6 +271,14 @@ export const blockDefinitions: Record<string, BlockDefinition> = {
         default: 2,
         min: 1,
         description: 'Stride of pooling window'
+      },
+      {
+        name: 'padding',
+        label: 'Padding',
+        type: 'number',
+        default: 0,
+        min: 0,
+        description: 'Zero-padding added to both sides'
       }
     ],
     computeOutputShape: (inputShape, config) => {
@@ -361,6 +392,13 @@ export const blockDefinitions: Record<string, BlockDefinition> = {
         description: 'Name for your custom layer'
       },
       {
+        name: 'code',
+        label: 'Python Code',
+        type: 'text',
+        default: '# Define your forward pass\n# Input: x\n# Output: return x\nreturn x',
+        description: 'Custom forward pass implementation'
+      },
+      {
         name: 'output_shape',
         label: 'Output Shape',
         type: 'text',
@@ -419,4 +457,61 @@ export function getBlockDefinition(type: string): BlockDefinition | undefined {
 
 export function getBlocksByCategory(category: string): BlockDefinition[] {
   return Object.values(blockDefinitions).filter(b => b.category === category)
+}
+
+/**
+ * Connection rules between blocks based on tensor dimensions
+ * Returns an error message if connection is invalid, undefined if valid
+ */
+export function validateBlockConnection(
+  sourceBlockType: string,
+  targetBlockType: string,
+  sourceOutputShape?: TensorShape
+): string | undefined {
+  // Input blocks can't receive connections
+  if (targetBlockType === 'input') {
+    return 'Input blocks cannot receive connections'
+  }
+
+  // Source must have valid output shape (except for custom blocks which are flexible)
+  if (!sourceOutputShape && sourceBlockType !== 'custom') {
+    return 'Source block must have a valid output shape'
+  }
+
+  // If we have a shape, validate dimension requirements
+  if (sourceOutputShape) {
+    const dims = sourceOutputShape.dims.length
+
+    // Conv2D and MaxPool2D require 4D input [batch, channels, height, width]
+    if ((targetBlockType === 'conv2d' || targetBlockType === 'maxpool') && dims !== 4) {
+      return `${targetBlockType === 'conv2d' ? 'Conv2D' : 'MaxPool2D'} requires 4D input [batch, channels, height, width], got ${dims}D`
+    }
+
+    // Linear requires 2D input [batch, features]
+    if (targetBlockType === 'linear' && dims !== 2) {
+      return `Linear layer requires 2D input [batch, features], got ${dims}D. Consider adding a Flatten layer first.`
+    }
+
+    // Multi-Head Attention requires 3D input [batch, sequence, embedding]
+    if (targetBlockType === 'attention' && dims !== 3) {
+      return `Multi-Head Attention requires 3D input [batch, sequence, embedding], got ${dims}D`
+    }
+
+    // BatchNorm works with 2D or 4D
+    if (targetBlockType === 'batchnorm' && dims !== 2 && dims !== 4) {
+      return `BatchNorm requires 2D or 4D input, got ${dims}D`
+    }
+  }
+
+  // Merge blocks (concat, add) have special handling in store
+  // They're always valid from a type perspective
+  
+  return undefined // Connection is valid
+}
+
+/**
+ * Check if a block type allows multiple inputs
+ */
+export function allowsMultipleInputs(blockType: string): boolean {
+  return blockType === 'concat' || blockType === 'add'
 }
