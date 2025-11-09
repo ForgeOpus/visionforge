@@ -21,8 +21,7 @@ class Project(models.Model):
 
     def __str__(self):
         return self.name
-
-
+    
 class ModelArchitecture(models.Model):
     """Stores the architecture graph for a project"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
