@@ -9,6 +9,7 @@ import ConfigPanel from './components/ConfigPanel'
 import ChatBot from './components/ChatBot'
 import { useModelBuilderStore } from './lib/store'
 import { fetchProject, loadArchitecture, convertToFrontendProject } from './lib/projectApi'
+import { LandingPage } from './landing'
 
 function ProjectCanvas() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -102,8 +103,9 @@ function ProjectCanvas() {
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<ProjectCanvas />} />
-      <Route path="/project/:projectId" element={<ProjectCanvas />} />
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/app" element={<ProjectCanvas />} />
+      <Route path="/app/project/:projectId" element={<ProjectCanvas />} />
     </Routes>
   )
 }
