@@ -7,11 +7,11 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*-dist
-*.local
+*/frontend/node_modules
+*/frontend/dist
+*/frontend/dist-ssr
+*/frontend/*-dist
+*/frontend/*.local
 
 # Editor directories and files
 .vscode/*
@@ -31,12 +31,15 @@ pids
 .file-manifest
 .devcontainer/
 
-__pycache__/
-*.pyc
-.env
-instance/
-coverage/
-.venv/
-venv/
-*.lock
+.spark-workbench-id
 
+/project/backend/__pycache__/
+/project/backend/*.pyc
+/project/backend/.env
+/project/backend/instance/
+/project/backend/coverage/
+/project/backend/.venv/
+/project/backend/venv/
+/project/*.lock
+
+*/project/frontend/*.lock
