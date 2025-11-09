@@ -16,9 +16,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Download, FloppyDisk, FolderOpen, Code, Flask } from '@phosphor-icons/react'
+import { Plus, Download, FloppyDisk, FolderOpen, Code, Flask, CheckCircle } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { generatePyTorchCode } from '@/lib/codeGenerator'
+import { validateModel } from '@/lib/api'
 import { Project } from '@/lib/types'
 
 export default function Header() {
@@ -103,6 +104,82 @@ export default function Header() {
     } catch (error) {
       toast.error('Code generation failed', {
         description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
+  }
+
+  const handleValidate = async () => {
+    if (!currentProject || nodes.length === 0) {
+      toast.error('Cannot validate: No architecture to validate')
+      return
+    }
+
+    try {
+      toast.loading('Validating architecture...')
+      
+      const result = await validateModel({
+        nodes: nodes.map(node => ({
+          id: node.id,
+          type: node.data.blockType,
+          config: node.data.config,
+          position: node.position
+        })),
+        edges: edges.map(edge => ({
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          sourceHandle: edge.sourceHandle,
+          targetHandle: edge.targetHandle
+        }))
+      })
+
+      toast.dismiss()
+
+      if (result.success && result.data) {
+        if (result.data.isValid) {
+          toast.success('Architecture is valid!', {
+            description: result.data.warnings && result.data.warnings.length > 0
+              ? `${result.data.warnings.length} warning(s) found`
+              : 'No issues detected'
+          })
+          
+          // Show warnings if any
+          if (result.data.warnings && result.data.warnings.length > 0) {
+            result.data.warnings.forEach((warning, index) => {
+              setTimeout(() => {
+                toast.warning(`Warning ${index + 1}`, {
+                  description: warning
+                })
+              }, index * 100)
+            })
+          }
+        } else {
+          toast.error('Architecture validation failed', {
+            description: result.data.errors && result.data.errors.length > 0
+              ? `${result.data.errors.length} error(s) found`
+              : 'Invalid architecture'
+          })
+          
+          // Show errors
+          if (result.data.errors && result.data.errors.length > 0) {
+            result.data.errors.forEach((error, index) => {
+              setTimeout(() => {
+                toast.error(`Error ${index + 1}`, {
+                  description: error
+                })
+              }, index * 100)
+            })
+          }
+        }
+      } else {
+        toast.error('Validation request failed', {
+          description: result.error || 'Could not connect to validation service'
+        })
+      }
+    } catch (error) {
+      toast.dismiss()
+      toast.error('Validation error', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred'
       })
     }
   }
@@ -240,6 +317,16 @@ export default function Header() {
         >
           <FloppyDisk size={16} className="mr-2" />
           Save
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleValidate}
+          disabled={!currentProject || nodes.length === 0}
+        >
+          <CheckCircle size={16} className="mr-2" />
+          Validate
         </Button>
 
         <Dialog open={isExportOpen} onOpenChange={setIsExportOpen}>

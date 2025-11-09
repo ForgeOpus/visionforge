@@ -1,4 +1,4 @@
-import { useCallback, DragEvent } from 'react'
+import { useCallback, DragEvent, useRef, useEffect } from 'react'
 import {
   ReactFlow,
   Background,
@@ -6,20 +6,27 @@ import {
   MiniMap,
   Connection,
   useReactFlow,
-  ReactFlowProvider
+  ReactFlowProvider,
+  Node
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useModelBuilderStore } from '@/lib/store'
-import { getBlockDefinition } from '@/lib/blockDefinitions'
+import { getBlockDefinition, validateBlockConnection } from '@/lib/blockDefinitions'
 import { BlockData } from '@/lib/types'
 import BlockNode from './BlockNode'
+import CustomConnectionLine from './CustomConnectionLine'
 import { toast } from 'sonner'
 
 const nodeTypes = {
   custom: BlockNode
 }
 
-function FlowCanvas() {
+interface CanvasProps {
+  onDragStart: (type: string) => void
+  onRegisterAddNode: (handler: (blockType: string) => void) => void
+}
+
+function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (blockType: string) => void) => void }) {
   const {
     nodes,
     edges,
@@ -32,7 +39,126 @@ function FlowCanvas() {
     validateConnection
   } = useModelBuilderStore()
 
-  const { screenToFlowPosition } = useReactFlow()
+  const { screenToFlowPosition, getViewport } = useReactFlow()
+  const nextPositionOffset = useRef({ x: 0, y: 0 })
+
+  // Helper function to check if a position overlaps with existing nodes
+  const isPositionOverlapping = useCallback((x: number, y: number, nodes: Node<BlockData>[]) => {
+    const NODE_WIDTH = 200
+    const NODE_HEIGHT = 80
+    const MARGIN = 20
+
+    return nodes.some(node => {
+      const nodeX = node.position.x
+      const nodeY = node.position.y
+      
+      return (
+        x < nodeX + NODE_WIDTH + MARGIN &&
+        x + NODE_WIDTH + MARGIN > nodeX &&
+        y < nodeY + NODE_HEIGHT + MARGIN &&
+        y + NODE_HEIGHT + MARGIN > nodeY
+      )
+    })
+  }, [])
+
+  // Find a suitable position for a new node
+  const findAvailablePosition = useCallback(() => {
+    const viewport = getViewport()
+    const NODE_WIDTH = 200
+    const NODE_HEIGHT = 80
+    const GRID_SIZE = 50
+    
+    // Start from center of viewport
+    const centerX = -viewport.x / viewport.zoom + (window.innerWidth / 2) / viewport.zoom
+    const centerY = -viewport.y / viewport.zoom + (window.innerHeight / 2) / viewport.zoom
+    
+    // Try positions in a spiral pattern from center
+    let x = centerX + nextPositionOffset.current.x
+    let y = centerY + nextPositionOffset.current.y
+    
+    // If this position overlaps, try nearby positions
+    let attempts = 0
+    const maxAttempts = 100
+    
+    while (isPositionOverlapping(x, y, nodes) && attempts < maxAttempts) {
+      attempts++
+      // Try in a grid pattern
+      const offset = Math.ceil(attempts / 4) * GRID_SIZE
+      const direction = attempts % 4
+      
+      switch (direction) {
+        case 0: // right
+          x = centerX + offset
+          y = centerY
+          break
+        case 1: // down
+          x = centerX
+          y = centerY + offset
+          break
+        case 2: // left
+          x = centerX - offset
+          y = centerY
+          break
+        case 3: // up
+          x = centerX
+          y = centerY - offset
+          break
+      }
+    }
+    
+    // Update offset for next node
+    nextPositionOffset.current = {
+      x: (nextPositionOffset.current.x + GRID_SIZE) % (GRID_SIZE * 4),
+      y: nextPositionOffset.current.y
+    }
+    
+    if (nextPositionOffset.current.x === 0) {
+      nextPositionOffset.current.y = (nextPositionOffset.current.y + GRID_SIZE) % (GRID_SIZE * 4)
+    }
+    
+    return { x, y }
+  }, [getViewport, isPositionOverlapping, nodes])
+
+  // Handle block click from palette
+  useEffect(() => {
+    const handleBlockClickInternal = (blockType: string) => {
+      const definition = getBlockDefinition(blockType)
+      if (!definition) return
+
+      const position = findAvailablePosition()
+
+      const newNode = {
+        id: `${blockType}-${Date.now()}`,
+        type: 'custom',
+        position,
+        data: {
+          blockType: definition.type,
+          label: definition.label,
+          config: {},
+          category: definition.category
+        } as BlockData
+      }
+
+      Object.values(definition.configSchema).forEach((field) => {
+        if (field.default !== undefined) {
+          newNode.data.config[field.name] = field.default
+        }
+      })
+
+      addNode(newNode)
+
+      setTimeout(() => {
+        useModelBuilderStore.getState().inferDimensions()
+      }, 0)
+
+      toast.success(`Added ${definition.label}`, {
+        description: 'Block added to canvas'
+      })
+    }
+    
+    // Register the handler with parent
+    onRegisterAddNode(handleBlockClickInternal)
+  }, [addNode, findAvailablePosition, onRegisterAddNode])
 
   const onDragOver = useCallback((event: DragEvent) => {
     event.preventDefault()
@@ -91,37 +217,28 @@ function FlowCanvas() {
         const sourceNode = nodes.find((n) => n.id === connection.source)
         const targetNode = nodes.find((n) => n.id === connection.target)
 
-        if (targetNode?.data.blockType !== 'concat' && targetNode?.data.blockType !== 'add') {
-          const hasInput = edges.some((e) => e.target === connection.target)
-          if (hasInput) {
-            toast.error('Block already has an input connection', {
-              description: 'Use a Concatenate or Add block for multiple inputs'
+        // Use the validation function to get specific error message
+        if (sourceNode && targetNode) {
+          const errorMessage = validateBlockConnection(
+            sourceNode.data.blockType,
+            targetNode.data.blockType,
+            sourceNode.data.outputShape
+          )
+          
+          if (errorMessage) {
+            toast.error('Connection Invalid', {
+              description: errorMessage
             })
             return
           }
         }
 
-        if (sourceNode?.data.outputShape && targetNode) {
-          const sourceShape = sourceNode.data.outputShape
-          const targetType = targetNode.data.blockType
-
-          if (targetType === 'linear' && sourceShape.dims.length !== 2) {
-            toast.error('Shape incompatible with Linear layer', {
-              description: 'Linear requires 2D input. Add a Flatten layer first.'
-            })
-            return
-          }
-
-          if (targetType === 'conv2d' && sourceShape.dims.length !== 4) {
-            toast.error('Shape incompatible with Conv2D layer', {
-              description: 'Conv2D requires 4D input [B, C, H, W]'
-            })
-            return
-          }
-
-          if (targetType === 'add') {
-            toast.error('Shape incompatible for addition', {
-              description: 'All inputs to Add must have the same shape'
+        // Fallback for other validation errors
+        if (targetNode?.data.blockType !== 'concat' && targetNode?.data.blockType !== 'add') {
+          const hasInput = edges.some((e) => e.target === connection.target)
+          if (hasInput) {
+            toast.error('Block already has an input connection', {
+              description: 'Use a Concatenate or Add block for multiple inputs'
             })
             return
           }
@@ -203,6 +320,7 @@ function FlowCanvas() {
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
+        connectionLineComponent={CustomConnectionLine}
         fitView
         minZoom={0.5}
         maxZoom={1.5}
@@ -225,10 +343,10 @@ function FlowCanvas() {
   )
 }
 
-export default function Canvas({ onDragStart }: { onDragStart: (type: string) => void }) {
+export default function Canvas({ onDragStart, onRegisterAddNode }: CanvasProps) {
   return (
     <ReactFlowProvider>
-      <FlowCanvas />
+      <FlowCanvas onRegisterAddNode={onRegisterAddNode} />
     </ReactFlowProvider>
   )
 }
