@@ -89,6 +89,48 @@ class ArchitectureValidator:
         # Check if blockType is in data
         return node.get('data', {}).get('blockType', '')
     
+    def _validate_loss_connections(self, node, edges_list):
+        """Validate loss node connections match required inputs for loss type"""
+        from .nodes.specs.pytorch import LOSS_SPEC
+        
+        node_id = node['id']
+        config = node.get('data', {}).get('config', {})
+        loss_type = config.get('loss_type', 'cross_entropy')
+        
+        # Get required ports for this loss type
+        input_ports_config = LOSS_SPEC.input_ports_config
+        required_port_ids = input_ports_config.get(loss_type, [])
+        
+        # Check if connection count matches
+        if len(edges_list) != len(required_port_ids):
+            self.errors.append(ValidationError(
+                message=f'Loss function "{loss_type}" requires {len(required_port_ids)} inputs, but has {len(edges_list)}',
+                node_id=node_id,
+                error_type='error',
+                suggestion=f'Connect exactly {len(required_port_ids)} inputs to the loss node'
+            ))
+            return
+        
+        # Check that all required ports are filled (handle-aware validation)
+        connected_handles = {
+            edge.get('targetHandle', 'default') for edge in edges_list
+        }
+        
+        missing_ports = []
+        for port_id in required_port_ids:
+            # Frontend adds 'loss-input-' prefix to port IDs
+            handle_id = f'loss-input-{port_id}'
+            if handle_id not in connected_handles:
+                missing_ports.append(port_id)
+        
+        if missing_ports:
+            self.errors.append(ValidationError(
+                message=f'Loss node missing connections to: {", ".join(missing_ports)}',
+                node_id=node_id,
+                error_type='error',
+                suggestion=f'Connect to the specific input ports: {", ".join(missing_ports)}'
+            ))
+    
     def _validate_connections(self):
         """Validate all connections between blocks"""
         # Build connection map
@@ -107,20 +149,23 @@ class ArchitectureValidator:
                 outgoing_edges[source_id] = []
             outgoing_edges[source_id].append(edge)
         
-        # Check for blocks with multiple inputs (except merge blocks)
+        # Check for blocks with multiple inputs (except merge blocks and loss blocks)
         for node_id, edges_list in incoming_edges.items():
             if len(edges_list) > 1:
                 node = self.node_map.get(node_id)
                 if node:
                     block_type = self._get_block_type(node)
-                    # Allow multiple inputs for merge blocks
-                    if block_type not in ['concat', 'add']:
+                    # Allow multiple inputs for merge blocks and loss blocks
+                    if block_type not in ['concat', 'add', 'loss']:
                         self.errors.append(ValidationError(
                             message=f'Block has multiple input connections but is not a merge block',
                             node_id=node_id,
                             error_type='error',
                             suggestion='Use a Concatenate or Add block to merge multiple inputs'
                         ))
+                    # Special validation for loss blocks
+                    elif block_type == 'loss':
+                        self._validate_loss_connections(node, edges_list)
     
     def _validate_orphaned_blocks(self):
         """Check for blocks that aren't connected to the graph"""

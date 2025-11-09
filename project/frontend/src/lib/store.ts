@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { Node, Edge, Connection } from '@xyflow/react'
 import { BlockData, Project, ValidationError, TensorShape, BlockType } from './types'
 import { getNodeDefinition, BackendFramework } from './nodes/registry'
+import { arePortsCompatible } from './nodes/ports'
 
 interface HistoryState {
   nodes: Node<BlockData>[]
@@ -273,7 +274,79 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     const sourceNode = nodes.find((n) => n.id === connection.source)
     if (!sourceNode) return false
     
-    // Check if target allows multiple inputs (concat, add, and loss blocks)
+    // Get node definitions
+    const targetNodeDef = getNodeDefinition(
+      targetNode.data.blockType as BlockType,
+      BackendFramework.PyTorch
+    )
+    const sourceNodeDef = getNodeDefinition(
+      sourceNode.data.blockType as BlockType,
+      BackendFramework.PyTorch
+    )
+    
+    if (!targetNodeDef || !sourceNodeDef) return false
+    
+    // === NEW: Validate source handle exists ===
+    const sourceHandleId = connection.sourceHandle || 'default'
+    const sourcePorts = sourceNodeDef.getOutputPorts(sourceNode.data.config)
+    const sourcePort = sourcePorts.find(p => p.id === sourceHandleId)
+    
+    if (!sourcePort) {
+      console.error(`Source handle ${sourceHandleId} not found on ${sourceNode.data.blockType}`)
+      return false
+    }
+    
+    // === NEW: Validate target handle exists ===
+    const targetHandleId = connection.targetHandle || 'default'
+    const targetPorts = targetNodeDef.getInputPorts(targetNode.data.config)
+    const targetPort = targetPorts.find(p => p.id === targetHandleId)
+    
+    if (!targetPort) {
+      console.error(`Target handle ${targetHandleId} not found on ${targetNode.data.blockType}`)
+      return false
+    }
+    
+    // === NEW: Check if target handle already has a connection ===
+    // Allow multiple connections to the same handle for merge nodes (concat, add)
+    const isMergeNode = targetNode.data.blockType === 'concat' || targetNode.data.blockType === 'add'
+    
+    if (!isMergeNode) {
+      const handleOccupied = edges.some(e => 
+        e.target === connection.target && 
+        (e.targetHandle || 'default') === targetHandleId
+      )
+      
+      if (handleOccupied) {
+        console.warn(`Target handle ${targetHandleId} already connected`)
+        return false
+      }
+    }
+    
+    // === NEW: Semantic validation - check port compatibility ===
+    if (!arePortsCompatible(sourcePort, targetPort)) {
+      console.error(`Port semantic mismatch: ${sourcePort.semantic} -> ${targetPort.semantic}`)
+      return false
+    }
+    
+    // === NEW: Real-time loss node input count validation ===
+    if (targetNode.data.blockType === 'loss') {
+      const requiredPorts = targetPorts
+      const existingConnections = edges.filter(e => e.target === connection.target)
+      
+      // Count how many connections exist after this one would be added
+      const totalConnectionsAfter = existingConnections.length + 1
+      
+      if (totalConnectionsAfter > requiredPorts.length) {
+        const lossType = targetNode.data.config.loss_type || 'cross_entropy'
+        console.error(
+          `Loss function "${lossType}" only accepts ${requiredPorts.length} inputs ` +
+          `(${requiredPorts.map(p => p.label).join(', ')}). Cannot add more.`
+        )
+        return false
+      }
+    }
+    
+    // Check if target allows multiple inputs (for backwards compatibility)
     const allowsMultiple = targetNode.data.blockType === 'concat' || targetNode.data.blockType === 'add' || targetNode.data.blockType === 'loss'
     if (!allowsMultiple) {
       const hasExistingInput = edges.some((e) => e.target === connection.target)
@@ -281,13 +354,6 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     }
     
     // Use the node definition validation method
-    const targetNodeDef = getNodeDefinition(
-      targetNode.data.blockType as BlockType,
-      BackendFramework.PyTorch
-    )
-    
-    if (!targetNodeDef) return false
-    
     const validationError = targetNodeDef.validateIncomingConnection(
       sourceNode.data.blockType as BlockType,
       sourceNode.data.outputShape,
@@ -371,12 +437,30 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
           const requiredPorts = lossNodeDef.getInputPorts(node.data.config)
           const incomingEdges = edges.filter((e) => e.target === node.id)
           
+          // Check total connection count
           if (incomingEdges.length !== requiredPorts.length) {
             errors.push({
               nodeId: node.id,
               message: `Loss function "${node.data.config.loss_type || 'cross_entropy'}" requires ${requiredPorts.length} inputs (${requiredPorts.map((p: any) => p.label).join(', ')}), but has ${incomingEdges.length}`,
               type: 'error'
             })
+          } else {
+            // Check that all required ports are filled (handle-aware)
+            const connectedHandles = new Set(
+              incomingEdges.map(e => e.targetHandle || 'default')
+            )
+            
+            const missingPorts = requiredPorts.filter(
+              (p: any) => !connectedHandles.has(p.id)
+            )
+            
+            if (missingPorts.length > 0) {
+              errors.push({
+                nodeId: node.id,
+                message: `Loss node missing connections to: ${missingPorts.map((p: any) => p.label).join(', ')}`,
+                type: 'error'
+              })
+            }
           }
         }
       }
@@ -415,15 +499,45 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
         }
       } else {
         if (incomingEdges.length > 0) {
-          const sourceNode = nodeMap.get(incomingEdges[0].source)
-          
-          if (sourceNode?.data.outputShape) {
-            node.data.inputShape = sourceNode.data.outputShape
+          // Special handling for merge nodes (concat, add) with multiple inputs
+          if ((node.data.blockType === 'concat' || node.data.blockType === 'add') && incomingEdges.length > 1) {
+            // Gather all input shapes
+            const inputShapes: TensorShape[] = []
+            for (const edge of incomingEdges) {
+              const sourceNode = nodeMap.get(edge.source)
+              if (sourceNode?.data.outputShape) {
+                inputShapes.push(sourceNode.data.outputShape)
+              }
+            }
             
-            if (nodeDef) {
-              // Use new registry method
-              const outputShape = nodeDef.computeOutputShape(node.data.inputShape, node.data.config)
-              node.data.outputShape = outputShape
+            // Only compute if all inputs have shapes
+            if (inputShapes.length === incomingEdges.length && nodeDef) {
+              // Set first input as inputShape for consistency
+              node.data.inputShape = inputShapes[0]
+              
+              // Use computeMultiInputShape if available (for concat/add nodes)
+              const nodeDefAny = nodeDef as any
+              if (typeof nodeDefAny.computeMultiInputShape === 'function') {
+                const outputShape = nodeDefAny.computeMultiInputShape(inputShapes, node.data.config)
+                node.data.outputShape = outputShape
+              } else {
+                // Fallback to regular computation
+                const outputShape = nodeDef.computeOutputShape(node.data.inputShape, node.data.config)
+                node.data.outputShape = outputShape
+              }
+            }
+          } else {
+            // Regular nodes or merge nodes with single input
+            const sourceNode = nodeMap.get(incomingEdges[0].source)
+            
+            if (sourceNode?.data.outputShape) {
+              node.data.inputShape = sourceNode.data.outputShape
+              
+              if (nodeDef) {
+                // Use new registry method
+                const outputShape = nodeDef.computeOutputShape(node.data.inputShape, node.data.config)
+                node.data.outputShape = outputShape
+              }
             }
           }
         }

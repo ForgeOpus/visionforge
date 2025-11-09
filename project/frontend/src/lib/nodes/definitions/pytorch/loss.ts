@@ -5,6 +5,7 @@
 import { NodeDefinition } from '../../base'
 import { NodeMetadata, BackendFramework } from '../../contracts'
 import { TensorShape, BlockConfig, ConfigField, BlockType } from '../../../types'
+import { PortDefinition } from '../../ports'
 
 export interface InputPort {
   id: string
@@ -68,55 +69,69 @@ export class LossNode extends NodeDefinition {
   /**
    * Get input ports based on the loss type configuration
    */
-  getInputPorts(config: BlockConfig): InputPort[] {
+  getInputPorts(config: BlockConfig): PortDefinition[] {
     const lossType = config.loss_type || 'cross_entropy'
 
-    const portConfigs: Record<string, InputPort[]> = {
+    const portConfigs: Record<string, PortDefinition[]> = {
       cross_entropy: [
-        { id: 'y_pred', label: 'Predictions', description: 'Model predictions' },
-        { id: 'y_true', label: 'Ground Truth', description: 'True labels' }
+        { id: 'loss-input-y_pred', label: 'Predictions', type: 'input', semantic: 'predictions', required: true, description: 'Model predictions' },
+        { id: 'loss-input-y_true', label: 'Ground Truth', type: 'input', semantic: 'labels', required: true, description: 'True labels' }
       ],
       mse: [
-        { id: 'y_pred', label: 'Predictions', description: 'Model predictions' },
-        { id: 'y_true', label: 'Ground Truth', description: 'True values' }
+        { id: 'loss-input-y_pred', label: 'Predictions', type: 'input', semantic: 'predictions', required: true, description: 'Model predictions' },
+        { id: 'loss-input-y_true', label: 'Ground Truth', type: 'input', semantic: 'labels', required: true, description: 'True values' }
       ],
       mae: [
-        { id: 'y_pred', label: 'Predictions', description: 'Model predictions' },
-        { id: 'y_true', label: 'Ground Truth', description: 'True values' }
+        { id: 'loss-input-y_pred', label: 'Predictions', type: 'input', semantic: 'predictions', required: true, description: 'Model predictions' },
+        { id: 'loss-input-y_true', label: 'Ground Truth', type: 'input', semantic: 'labels', required: true, description: 'True values' }
       ],
       bce: [
-        { id: 'y_pred', label: 'Predictions', description: 'Model predictions' },
-        { id: 'y_true', label: 'Ground Truth', description: 'True labels' }
+        { id: 'loss-input-y_pred', label: 'Predictions', type: 'input', semantic: 'predictions', required: true, description: 'Model predictions' },
+        { id: 'loss-input-y_true', label: 'Ground Truth', type: 'input', semantic: 'labels', required: true, description: 'True labels' }
       ],
       nll: [
-        { id: 'y_pred', label: 'Predictions', description: 'Model predictions' },
-        { id: 'y_true', label: 'Ground Truth', description: 'True labels' }
+        { id: 'loss-input-y_pred', label: 'Predictions', type: 'input', semantic: 'predictions', required: true, description: 'Model predictions' },
+        { id: 'loss-input-y_true', label: 'Ground Truth', type: 'input', semantic: 'labels', required: true, description: 'True labels' }
       ],
       smooth_l1: [
-        { id: 'y_pred', label: 'Predictions', description: 'Model predictions' },
-        { id: 'y_true', label: 'Ground Truth', description: 'True values' }
+        { id: 'loss-input-y_pred', label: 'Predictions', type: 'input', semantic: 'predictions', required: true, description: 'Model predictions' },
+        { id: 'loss-input-y_true', label: 'Ground Truth', type: 'input', semantic: 'labels', required: true, description: 'True values' }
       ],
       kl_div: [
-        { id: 'y_pred', label: 'Predictions', description: 'Predicted distribution' },
-        { id: 'y_true', label: 'Ground Truth', description: 'Target distribution' }
+        { id: 'loss-input-y_pred', label: 'Predictions', type: 'input', semantic: 'predictions', required: true, description: 'Predicted distribution' },
+        { id: 'loss-input-y_true', label: 'Ground Truth', type: 'input', semantic: 'labels', required: true, description: 'Target distribution' }
       ],
       triplet: [
-        { id: 'anchor', label: 'Anchor', description: 'Anchor embedding' },
-        { id: 'positive', label: 'Positive', description: 'Positive example embedding' },
-        { id: 'negative', label: 'Negative', description: 'Negative example embedding' }
+        { id: 'loss-input-anchor', label: 'Anchor', type: 'input', semantic: 'anchor', required: true, description: 'Anchor embedding' },
+        { id: 'loss-input-positive', label: 'Positive', type: 'input', semantic: 'positive', required: true, description: 'Positive example embedding' },
+        { id: 'loss-input-negative', label: 'Negative', type: 'input', semantic: 'negative', required: true, description: 'Negative example embedding' }
       ],
       contrastive: [
-        { id: 'input1', label: 'Input 1', description: 'First input embedding' },
-        { id: 'input2', label: 'Input 2', description: 'Second input embedding' },
-        { id: 'label', label: 'Label', description: 'Similarity label (1 or -1)' }
+        { id: 'loss-input-input1', label: 'Input 1', type: 'input', semantic: 'input1', required: true, description: 'First input embedding' },
+        { id: 'loss-input-input2', label: 'Input 2', type: 'input', semantic: 'input2', required: true, description: 'Second input embedding' },
+        { id: 'loss-input-label', label: 'Label', type: 'input', semantic: 'labels', required: true, description: 'Similarity label (1 or -1)' }
       ],
       custom: [
-        { id: 'input1', label: 'Input 1', description: 'First input' },
-        { id: 'input2', label: 'Input 2', description: 'Second input' }
+        { id: 'loss-input-input1', label: 'Input 1', type: 'input', semantic: 'input1', required: true, description: 'First input' },
+        { id: 'loss-input-input2', label: 'Input 2', type: 'input', semantic: 'input2', required: true, description: 'Second input' }
       ]
     }
 
     return portConfigs[lossType as string] || portConfigs.cross_entropy
+  }
+  
+  /**
+   * Get output ports - loss always outputs a single scalar loss value
+   */
+  getOutputPorts(config: BlockConfig): PortDefinition[] {
+    return [{
+      id: 'loss-output',
+      label: 'Loss',
+      type: 'output',
+      semantic: 'loss',
+      required: false,
+      description: 'Scalar loss value'
+    }]
   }
 
   /**

@@ -4,6 +4,7 @@
  */
 
 import { TensorShape, BlockConfig, ConfigField, BlockType, BlockCategory } from '../types'
+import { PortDefinition } from './ports'
 
 /**
  * Supported backend frameworks for model building
@@ -87,6 +88,20 @@ export interface INodeDefinition extends IShapeComputer, INodeValidator {
 
   /** Configuration schema defining editable parameters */
   readonly configSchema: ConfigField[]
+
+  /**
+   * Get input ports for this node based on configuration
+   * @param config - Node configuration
+   * @returns Array of input port definitions
+   */
+  getInputPorts(config: BlockConfig): PortDefinition[]
+
+  /**
+   * Get output ports for this node based on configuration
+   * @param config - Node configuration
+   * @returns Array of output port definitions
+   */
+  getOutputPorts(config: BlockConfig): PortDefinition[]
 
   /**
    * Get default configuration values for this node

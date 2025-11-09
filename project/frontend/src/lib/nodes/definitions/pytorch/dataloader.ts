@@ -5,6 +5,7 @@
 import { SourceNodeDefinition } from '../../base'
 import { NodeMetadata, BackendFramework } from '../../contracts'
 import { TensorShape, BlockConfig, ConfigField } from '../../../types'
+import { PortDefinition } from '../../ports'
 
 export class DataLoaderNode extends SourceNodeDefinition {
   readonly metadata: NodeMetadata = {
@@ -151,5 +152,51 @@ export class DataLoaderNode extends SourceNodeDefinition {
     }
 
     return errors
+  }
+  
+  /**
+   * Get output ports based on configuration
+   * DataLoader can have multiple data outputs and optionally a ground truth output
+   */
+  getOutputPorts(config: BlockConfig): PortDefinition[] {
+    const ports: PortDefinition[] = []
+    const numOutlets = Number(config.num_input_outlets || 1)
+    
+    // Add data output ports
+    if (numOutlets === 1) {
+      ports.push({
+        id: 'input-output',
+        label: 'Data',
+        type: 'output',
+        semantic: 'data',
+        required: false,
+        description: 'Input data tensor'
+      })
+    } else {
+      for (let i = 0; i < numOutlets; i++) {
+        ports.push({
+          id: `input-output-${i}`,
+          label: `Input ${i + 1}`,
+          type: 'output',
+          semantic: 'data',
+          required: false,
+          description: `Input data tensor ${i + 1}`
+        })
+      }
+    }
+    
+    // Add ground truth port if enabled
+    if (config.has_ground_truth) {
+      ports.push({
+        id: 'ground-truth-output',
+        label: 'Ground Truth',
+        type: 'output',
+        semantic: 'labels',
+        required: false,
+        description: 'Ground truth labels'
+      })
+    }
+    
+    return ports
   }
 }

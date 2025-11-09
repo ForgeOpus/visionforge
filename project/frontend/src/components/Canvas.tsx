@@ -252,7 +252,7 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
         }
 
         // Fallback for other validation errors
-        if (targetNode?.data.blockType !== 'concat' && targetNode?.data.blockType !== 'add') {
+        if (targetNode?.data.blockType !== 'concat' && targetNode?.data.blockType !== 'add' && targetNode?.data.blockType !== 'loss') {
           const hasInput = edges.some((e) => e.target === connection.target)
           if (hasInput) {
             toast.error('Block already has an input connection', {
