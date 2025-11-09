@@ -10,7 +10,7 @@ export class SoftmaxNode extends PassthroughNodeDefinition {
   readonly metadata: NodeMetadata = {
     type: 'softmax',
     label: 'Softmax',
-    category: 'basic',
+    category: 'activation',
     color: 'var(--color-destructive)',
     icon: 'Percent',
     description: 'Softmax activation',

@@ -17,7 +17,7 @@ export type BlockType =
   | 'add'
   | 'custom'
 
-export type BlockCategory = 'input' | 'output' | 'basic' | 'advanced' | 'merge' | 'utility'
+export type BlockCategory = 'input' | 'output' | 'basic' | 'activation' | 'advanced' | 'merge' | 'utility'
 
 export interface TensorShape {
   dims: (number | string)[]

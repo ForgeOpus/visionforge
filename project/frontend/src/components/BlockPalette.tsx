@@ -11,24 +11,24 @@ interface BlockPaletteProps {
   onDragStart: (blockType: string) => void
   onBlockClick: (blockType: string) => void
   isCollapsed: boolean
-  onToggleCollapse: () => void
 }
 
-export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, onToggleCollapse }: BlockPaletteProps) {
+export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed }: BlockPaletteProps) {
   const [searchQuery, setSearchQuery] = useState('')
 
   const categories = [
-    { key: 'input', label: 'Input Layers', icon: Icons.ArrowDown },
-    { key: 'output', label: 'Output Layers', icon: Icons.ArrowUp },
-    { key: 'basic', label: 'Basic Layers', icon: Icons.Lightning },
-    { key: 'advanced', label: 'Advanced Layers', icon: Icons.Brain },
-    { key: 'merge', label: 'Merge/Split', icon: Icons.GitMerge },
-    { key: 'utility', label: 'Utility', icon: Icons.Toolbox }
+    { key: 'input', label: 'Input & Data', icon: Icons.DownloadSimple },
+    { key: 'basic', label: 'Base Layers', icon: Icons.SquaresFour },
+    { key: 'activation', label: 'Activation Functions', icon: Icons.Lightning },
+    { key: 'advanced', label: 'Advanced Layers', icon: Icons.CubeFocus },
+    { key: 'merge', label: 'Operations', icon: Icons.Unite },
+    { key: 'output', label: 'Output & Loss', icon: Icons.UploadSimple },
+    { key: 'utility', label: 'Utility', icon: Icons.Wrench }
   ]
 
   // Prepare all blocks for fuzzy search - maintain category order
   const allBlocks = useMemo(() => {
-    const categoryOrder = ['input', 'output', 'basic', 'advanced', 'merge', 'utility']
+    const categoryOrder = ['input', 'basic', 'activation', 'advanced', 'merge', 'output', 'utility']
     const nodes = getAllNodeDefinitions(BackendFramework.PyTorch)
 
     // Group by category
@@ -147,12 +147,7 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
 
   if (isCollapsed) {
     return (
-      <div className="w-16 bg-card border-r border-border h-full flex flex-col items-center relative overflow-hidden">
-        {/* Header Icon */}
-        <div className="p-4 border-b border-border w-full flex justify-center flex-shrink-0">
-          <Icons.Cube size={24} className="text-primary" />
-        </div>
-
+      <div className="w-full bg-card h-full flex flex-col items-center relative overflow-hidden">
         {/* Scrollable Block Icons */}
         <ScrollArea className="flex-1 w-full min-h-0">
           <div className="py-2 space-y-1 flex flex-col items-center px-2">
@@ -200,21 +195,12 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
             })}
           </div>
         </ScrollArea>
-
-        {/* Toggle Button - Right Edge */}
-        <button
-          onClick={onToggleCollapse}
-          className="absolute -right-3 top-4 z-30 p-1.5 bg-card border border-border rounded-full shadow-sm hover:bg-accent transition-colors"
-          title="Expand sidebar"
-        >
-          <Icons.CaretRight size={16} weight="bold" />
-        </button>
       </div>
     )
   }
 
   return (
-    <div className="w-64 bg-card border-r border-border h-full flex flex-col relative">
+    <div className="w-full bg-card h-full flex flex-col relative">
       <div className="p-3 border-b border-border sticky top-0 bg-card z-10">
         <div className="relative">
           <Icons.MagnifyingGlass
@@ -256,7 +242,7 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
             </div>
           ) : (
             // Categorized view
-            <Accordion type="multiple" defaultValue={['input', 'output', 'basic']} className="px-2 py-2">
+            <Accordion type="multiple" defaultValue={['input', 'basic', 'activation']} className="px-2 py-2">
               {categories.map((category) => {
                 const blocks = allBlocks.filter(b => b.category === category.key)
                 const CategoryIcon = category.icon
@@ -281,15 +267,6 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
           )}
         </div>
       </ScrollArea>
-      
-      {/* Toggle Button - Right Edge */}
-      <button
-        onClick={onToggleCollapse}
-        className="absolute -right-3 top-4 z-30 p-1.5 bg-card border border-border rounded-full shadow-sm hover:bg-accent transition-colors"
-        title="Collapse sidebar"
-      >
-        <Icons.CaretLeft size={16} weight="bold" />
-      </button>
     </div>
   )
 }
