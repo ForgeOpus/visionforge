@@ -263,10 +263,6 @@ html.dark .react-flow__minimap {
   opacity: 0.5;
 }
 
-.react-flow__minimap-node {
-  opacity: 1 !important;
-}
-
 .dark .react-flow__minimap-mask,
 html.dark .react-flow__minimap-mask {
   fill: oklch(0.10 0 0);
