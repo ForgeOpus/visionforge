@@ -14,7 +14,7 @@ import { LandingPage } from './landing'
 function ProjectCanvas() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
-  const { setNodes, setEdges, loadProject, currentProject } = useModelBuilderStore()
+  const { setNodes, setEdges, loadProject, currentProject, reset } = useModelBuilderStore()
   const [isLoading, setIsLoading] = useState(false)
   const [draggedType, setDraggedType] = useState<string | null>(null)
   const { selectedNodeId } = useModelBuilderStore()
@@ -42,7 +42,7 @@ function ProjectCanvas() {
           toast.error('Failed to load project', {
             description: error instanceof Error ? error.message : 'Unknown error'
           })
-          navigate('/')
+          // Don't navigate away, just show error
         })
         .finally(() => {
           setIsLoading(false)
