@@ -41,12 +41,15 @@ class GeminiChatService:
         for node in nodes:
             node_id = node.get('id', 'unknown')
             node_type = node.get('type', 'unknown')
+            position = node.get('position', {})
             data = node.get('data', {})
             label = data.get('label', 'Unlabeled')
             node_type_name = data.get('nodeType', data.get('blockType', 'unknown'))
             config = data.get('config', {})
 
-            context_parts.append(f"  - {label} (ID: '{node_id}', NodeType: '{node_type_name}')")
+            # Format node info with position
+            pos_str = f"Position: x={position.get('x', 0)}, y={position.get('y', 0)}"
+            context_parts.append(f"  - {label} (ID: '{node_id}', NodeType: '{node_type_name}', {pos_str})")
             if config:
                 config_str = ', '.join([f"{k}={v}" for k, v in config.items() if k != 'nodeType'])
                 if config_str:
@@ -56,13 +59,14 @@ class GeminiChatService:
             context_parts.append("")
             context_parts.append("Connections:")
             for edge in edges:
+                edge_id = edge.get('id', '?')
                 source = edge.get('source', '?')
                 target = edge.get('target', '?')
                 source_label = next((n.get('data', {}).get('label', source)
                                    for n in nodes if n.get('id') == source), source)
                 target_label = next((n.get('data', {}).get('label', target)
                                    for n in nodes if n.get('id') == target), target)
-                context_parts.append(f"  - {source_label} (ID: '{source}') → {target_label} (ID: '{target}')")
+                context_parts.append(f"  - {source_label} → {target_label} (Edge ID: '{edge_id}', Source: '{source}', Target: '{target}')")
 
         return "\n".join(context_parts)
 
@@ -146,10 +150,14 @@ Examples of CORRECT responses:
 - User: "Add a Conv2D layer" → Provide EXACTLY 1 add_node block for conv2d, NOTHING MORE
 - User: "input connects to conv2d connects to output" → Provide EXACTLY 3 add_node blocks (input, conv2d, output), mention connections will be added after nodes exist
 - User: "Remove dropout" → Provide EXACTLY 1 remove_node block
+- User: "Duplicate the ReLU" → Provide EXACTLY 1 duplicate_node block
 - User: "Change kernel to 5" → Provide EXACTLY 1 modify_node block
+- User: "Move conv2d down" → Provide EXACTLY 1 modify_node block with position
+- User: "Rename input to 'Image Data'" → Provide EXACTLY 1 modify_node block with label
 
 MANDATORY FORMAT for each modification (include the ```json code fences):
 
+FOR ADDING NODES:
 ```json
 {
   "action": "add_node",
@@ -162,6 +170,73 @@ MANDATORY FORMAT for each modification (include the ```json code fences):
 }
 ```
 
+FOR REMOVING NODES:
+Use the exact node ID from the workflow context:
+```json
+{
+  "action": "remove_node",
+  "details": {
+    "id": "conv-1234567890"
+  },
+  "explanation": "Removing the Conv2D layer"
+}
+```
+
+FOR DUPLICATING NODES:
+Creates a copy of an existing node with the same configuration:
+```json
+{
+  "action": "duplicate_node",
+  "details": {
+    "id": "relu-1234567890"
+  },
+  "explanation": "Duplicating the ReLU activation"
+}
+```
+
+FOR MODIFYING NODES:
+Use modify_node to update node configuration, position, or label:
+- To update config: include "id" and "config" fields
+- To move a node: include "id" and "position" fields
+- To rename a node: include "id" and "label" fields
+- You can update multiple properties at once
+
+Example (updating config):
+```json
+{
+  "action": "modify_node",
+  "details": {
+    "id": "conv-1234567890",
+    "config": {"kernel_size": 5, "padding": 2}
+  },
+  "explanation": "Changing kernel size to 5 and padding to 2"
+}
+```
+
+Example (moving node):
+```json
+{
+  "action": "modify_node",
+  "details": {
+    "id": "relu-1234567890",
+    "position": {"x": 350, "y": 200}
+  },
+  "explanation": "Moving ReLU node down"
+}
+```
+
+Example (renaming node):
+```json
+{
+  "action": "modify_node",
+  "details": {
+    "id": "conv-1234567890",
+    "label": "Feature Extractor"
+  },
+  "explanation": "Renaming Conv2D layer to 'Feature Extractor'"
+}
+```
+
 FOR CONNECTIONS (two-step process):
 STEP 1: When user requests connected nodes (e.g., "A connects to B connects to C"):
   - First add the nodes they requested (A, B, C)
@@ -169,7 +244,8 @@ STEP 1: When user requests connected nodes (e.g., "A connects to B connects to C
 
 STEP 2: After nodes exist in the workflow context, create connections:
   - Use the exact node IDs shown in the workflow context
-  - Example:
+  
+Example (adding connection):
 ```json
 {
   "action": "add_connection",
@@ -183,13 +259,47 @@ STEP 2: After nodes exist in the workflow context, create connections:
 }
 ```
 
+Example (removing connection by ID):
+```json
+{
+  "action": "remove_connection",
+  "details": {
+    "id": "edge-1234567890"
+  },
+  "explanation": "Removing connection between nodes"
+}
+```
+
+Example (removing connection by source/target):
+```json
+{
+  "action": "remove_connection",
+  "details": {
+    "source": "input-1234567890",
+    "target": "conv-9876543210"
+  },
+  "explanation": "Removing connection from Input to Conv2D"
+}
+```
+
 IMPORTANT RULES:
 - ALWAYS wrap each modification in ```json ``` code fences
 - Use exact node type names in LOWERCASE: input, dataloader, conv2d, linear, relu, etc.
+- For node operations (remove, duplicate, modify), ALWAYS use node IDs from the current workflow context
 - For connections, ONLY use node IDs from the current workflow context
 - You CANNOT connect nodes that don't exist yet
+- When modifying nodes, use "id" field (not "nodeId") in details
+- When removing connections, use "id" field or provide both "source" and "target"
 - Provide only what user explicitly requests
 - User sees "Apply Change" buttons for each modification
+
+SUPPORTED ACTIONS:
+1. add_node - Add a new node to the workflow
+2. remove_node - Remove an existing node (requires "id")
+3. duplicate_node - Duplicate an existing node (requires "id")
+4. modify_node - Update node config/position/label (requires "id" plus one or more: "config", "position", "label")
+5. add_connection - Connect two existing nodes (requires "source" and "target")
+6. remove_connection - Remove a connection (requires "id" OR both "source" and "target")
 """
         else:
             mode_prompt = """
