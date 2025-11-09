@@ -25,17 +25,41 @@ Blocks that combine or split multiple tensor streams.
 **Description:** Define input tensor shape for any modality (text, image, audio, etc.)
 
 **Configuration:**
-- **Tensor Shape** (required): Input tensor dimensions as JSON array
+- **Custom Label** (optional): Custom label for this input node
+- **Note** (optional): Notes or comments about this input
+
+**Input Requirements:** Can receive connections only from data source nodes (e.g., DataLoader)
+
+**Output Shape:** Passes through the shape from connected data source, or user-defined if no connection
+
+**Connection Rules:**
+- Can receive connections from data source nodes (DataLoader)
+- Cannot receive connections from other processing nodes
+- Can connect to any processing block
+
+---
+
+### DataLoader
+**Category:** Input  
+**Description:** Load and prepare input data with optional ground truth labels
+
+**Configuration:**
+- **Input Shape** (required): Input tensor dimensions as JSON array
   - Image example: `[1, 3, 224, 224]` - [batch, channels, height, width]
   - Text example: `[32, 512, 768]` - [batch, sequence, embedding]
   - Audio example: `[16, 1, 16000]` - [batch, channels, samples]
   - Tabular example: `[8, 100, 13]` - [batch, rows, features]
+- **Include Ground Truth Output** (optional, default: false): Enable a second output for ground truth labels
+- **Ground Truth Shape** (optional, default: `[1, 10]`): Shape for ground truth labels when enabled
+- **Randomize Data** (optional, default: false): Use random synthetic data for testing
+- **CSV File Path** (optional): Path to CSV file for data loading
 
-**Output Shape:** As specified in configuration
+**Output Shape:** As specified in Input Shape configuration
 
 **Connection Rules:**
-- Cannot receive connections (it's a source)
-- Can connect to any block
+- Cannot receive connections (it's a data source)
+- Can connect to Input nodes or processing blocks
+- Primary data source for the network
 
 ---
 
@@ -310,8 +334,11 @@ return x
 
 ### Special Rules
 
-**No Input Allowed:**
-- Input (source block)
+**Data Source Nodes (Cannot Receive Connections):**
+- DataLoader (primary data source)
+
+**Can Only Receive from Data Sources:**
+- Input (can receive from DataLoader and other future data sources)
 
 **Multiple Inputs Allowed:**
 - Concatenate (shapes must be compatible for concatenation)
@@ -322,7 +349,13 @@ return x
 
 ### Common Connection Patterns
 
-#### Image Classification CNN
+#### Image Classification CNN with DataLoader
+```
+DataLoader → Input → Conv2D → ReLU → MaxPool2D → Conv2D → ReLU → 
+MaxPool2D → Flatten → Linear → Dropout → Linear → Softmax
+```
+
+#### Simple Image Classification (Direct Connection)
 ```
 Input (4D) → Conv2D → ReLU → MaxPool2D → Conv2D → ReLU → 
 MaxPool2D → Flatten → Linear → Dropout → Linear → Softmax
@@ -337,11 +370,11 @@ Input → Conv2D → ReLU → Conv2D → Add → ReLU
                            │
 ```
 
-#### Multi-Modal Fusion
+#### Multi-Modal Fusion with Separate Data Sources
 ```
-Image Input (4D) → Conv2D → Flatten ─┐
-                                      ├→ Concatenate → Linear
-Text Input (3D) → Attention → Flatten─┘
+DataLoader (Images) → Input (4D) → Conv2D → Flatten ─┐
+                                                      ├→ Concatenate → Linear
+DataLoader (Text) → Input (3D) → Attention → Flatten─┘
 ```
 
 ---
@@ -350,7 +383,8 @@ Text Input (3D) → Attention → Flatten─┘
 
 When attempting invalid connections, you'll see helpful error messages:
 
-- **"Input blocks cannot receive connections"** - Inputs are source blocks only
+- **"Input blocks can only receive connections from data source nodes (DataLoader)"** - Input can't connect from processing blocks
+- **"DataLoader blocks cannot receive connections (they are source nodes)"** - DataLoader is a data source
 - **"Conv2D requires 4D input, got 2D"** - Need to add reshaping or use different architecture
 - **"Linear layer requires 2D input, got 4D. Consider adding a Flatten layer first."** - Insert Flatten between Conv/Pool and Linear
 - **"Multi-Head Attention requires 3D input, got 4D"** - Wrong tensor dimensionality
@@ -361,14 +395,16 @@ When attempting invalid connections, you'll see helpful error messages:
 
 ## Tips for Building Architectures
 
-1. **Always start with an Input block** - Define your data shape first
-2. **Use Flatten between Conv/Pool and Linear** - Bridge between spatial and dense layers
-3. **Check dimension compatibility** - Hover over blocks to see input/output shapes
-4. **Use Add for skip connections** - Perfect for ResNet-style architectures
-5. **Concatenate for multi-path fusion** - Combine features from different branches
-6. **Custom blocks for experiments** - Quick prototyping without modifying codebase
-7. **Dropout for regularization** - Add before Linear layers to prevent overfitting
-8. **BatchNorm after Conv/Linear** - Helps training stability
+1. **Use DataLoader for complete data pipelines** - Connect DataLoader to Input for proper data flow
+2. **Input blocks as shape adapters** - When using DataLoader, Input acts as a shape passthrough
+3. **Always define your data shape** - Either in DataLoader or Input block
+4. **Use Flatten between Conv/Pool and Linear** - Bridge between spatial and dense layers
+5. **Check dimension compatibility** - Hover over blocks to see input/output shapes
+6. **Use Add for skip connections** - Perfect for ResNet-style architectures
+7. **Concatenate for multi-path fusion** - Combine features from different branches
+8. **Custom blocks for experiments** - Quick prototyping without modifying codebase
+9. **Dropout for regularization** - Add before Linear layers to prevent overfitting
+10. **BatchNorm after Conv/Linear** - Helps training stability
 
 ---
 

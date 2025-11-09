@@ -23,8 +23,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Download, FloppyDisk, CaretDown, Code, Flask, CheckCircle, GitBranch, Upload, FileCode, FilePy } from '@phosphor-icons/react'
+import { Plus, Download, FloppyDisk, CaretDown, Code, Flask, CheckCircle, GitBranch, Upload, FileCode, FilePy, GearSix, Trash, Info, PencilSimple } from '@phosphor-icons/react'
 import { toast } from 'sonner'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { generatePyTorchCode } from '@/lib/codeGenerator'
 import { validateModel } from '@/lib/api'
 import { exportToJSON, importFromJSON, downloadJSON, readJSONFile } from '@/lib/exportImport'
@@ -40,10 +41,16 @@ export default function Header() {
 
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
+  const [isManageProjectOpen, setIsManageProjectOpen] = useState(false)
+  const [managingProject, setManagingProject] = useState<projectApi.ProjectResponse | null>(null)
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
 
   const [newProjectName, setNewProjectName] = useState('')
   const [newProjectDesc, setNewProjectDesc] = useState('')
   const [newProjectFramework, setNewProjectFramework] = useState<'pytorch' | 'tensorflow'>('pytorch')
+
+  const [editProjectName, setEditProjectName] = useState('')
+  const [editProjectDesc, setEditProjectDesc] = useState('')
 
   const [exportCode, setExportCode] = useState<{model: string, train: string, config: string} | null>(null)
 
@@ -351,6 +358,65 @@ export default function Header() {
     toast.success(`${label} copied to clipboard!`)
   }
 
+  const handleOpenProjectManagement = (project: projectApi.ProjectResponse, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setManagingProject(project)
+    setEditProjectName(project.name)
+    setEditProjectDesc(project.description)
+    setIsManageProjectOpen(true)
+  }
+
+  const handleUpdateProject = async () => {
+    if (!managingProject) return
+
+    if (!editProjectName.trim()) {
+      toast.error('Please enter a project name')
+      return
+    }
+
+    try {
+      await projectApi.updateProject(managingProject.id, {
+        name: editProjectName,
+        description: editProjectDesc
+      })
+
+      toast.success('Project updated!')
+      setIsManageProjectOpen(false)
+      loadProjectsList()
+
+      // If we're updating the current project, reload it
+      if (currentProject?.id === managingProject.id) {
+        navigate(`/project/${managingProject.id}`)
+      }
+    } catch (error) {
+      toast.error('Failed to update project', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
+  }
+
+  const handleDeleteProject = async () => {
+    if (!managingProject) return
+
+    try {
+      await projectApi.deleteProject(managingProject.id)
+
+      toast.success('Project deleted!')
+      setIsDeleteConfirmOpen(false)
+      setIsManageProjectOpen(false)
+      loadProjectsList()
+
+      // If we deleted the current project, navigate to home
+      if (currentProject?.id === managingProject.id) {
+        navigate('/')
+      }
+    } catch (error) {
+      toast.error('Failed to delete project', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
+  }
+
   return (
     <header className="h-16 border-b border-border bg-card px-6 flex items-center justify-between">
       <div className="flex items-center gap-4">
@@ -410,11 +476,21 @@ export default function Header() {
                       onSelect={() => handleLoadProject(project)}
                     >
                       <div className="flex items-center gap-2 w-full">
-                        <GitBranch size={14} className="text-muted-foreground" />
-                        <span className="font-medium flex-1">{project.name}</span>
-                        {currentProject?.id === project.id && (
-                          <CheckCircle size={14} weight="fill" className="text-primary" />
-                        )}
+                        <GitBranch size={14} className="text-muted-foreground shrink-0" />
+                        <span className="font-medium flex-1 truncate">{project.name}</span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          {currentProject?.id === project.id && (
+                            <CheckCircle size={14} weight="fill" className="text-primary" />
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 hover:bg-accent"
+                            onClick={(e) => handleOpenProjectManagement(project, e)}
+                          >
+                            <GearSix size={14} />
+                          </Button>
+                        </div>
                       </div>
                       <div className="text-xs text-muted-foreground pl-5">
                         {project.description || 'No description'} • {project.framework}
@@ -432,6 +508,8 @@ export default function Header() {
       </div>
 
       <div className="flex items-center gap-2">
+        <ThemeToggle />
+        
         {/* Hidden file input for JSON import */}
         <input
           ref={fileInputRef}
@@ -612,6 +690,153 @@ export default function Header() {
                     <Code size={16} className="mr-2" />
                     Copy config.py
                   </Button>
+                </TabsContent>
+              </Tabs>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Project Management Dialog */}
+        <Dialog open={isManageProjectOpen} onOpenChange={setIsManageProjectOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Manage Project</DialogTitle>
+              <DialogDescription>
+                {managingProject?.name}
+              </DialogDescription>
+            </DialogHeader>
+            {managingProject && (
+              <Tabs defaultValue="edit" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="edit">
+                    <PencilSimple size={16} className="mr-2" />
+                    Edit
+                  </TabsTrigger>
+                  <TabsTrigger value="info">
+                    <Info size={16} className="mr-2" />
+                    Info
+                  </TabsTrigger>
+                  <TabsTrigger value="delete">
+                    <Trash size={16} className="mr-2" />
+                    Delete
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="edit" className="space-y-4 pt-4">
+                  <div>
+                    <Label htmlFor="edit-project-name">Project Name *</Label>
+                    <Input
+                      id="edit-project-name"
+                      placeholder="My Model"
+                      value={editProjectName}
+                      onChange={(e) => setEditProjectName(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-project-desc">Description</Label>
+                    <Textarea
+                      id="edit-project-desc"
+                      placeholder="Describe your model architecture..."
+                      value={editProjectDesc}
+                      onChange={(e) => setEditProjectDesc(e.target.value)}
+                      rows={4}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-muted rounded-md">
+                    <div>
+                      <Label className="text-sm font-medium">Framework</Label>
+                      <p className="text-sm text-muted-foreground">
+                        {managingProject.framework.toUpperCase()}
+                      </p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Framework cannot be changed after creation
+                    </p>
+                  </div>
+                  <Button onClick={handleUpdateProject} className="w-full">
+                    <PencilSimple size={16} className="mr-2" />
+                    Save Changes
+                  </Button>
+                </TabsContent>
+
+                <TabsContent value="info" className="space-y-4 pt-4">
+                  <div className="space-y-3">
+                    <div className="p-3 bg-muted rounded-md">
+                      <Label className="text-sm font-medium">Project ID</Label>
+                      <p className="text-sm text-muted-foreground font-mono">{managingProject.id}</p>
+                    </div>
+                    <div className="p-3 bg-muted rounded-md">
+                      <Label className="text-sm font-medium">Framework</Label>
+                      <p className="text-sm text-muted-foreground">{managingProject.framework.toUpperCase()}</p>
+                    </div>
+                    <div className="p-3 bg-muted rounded-md">
+                      <Label className="text-sm font-medium">Created</Label>
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(managingProject.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-muted rounded-md">
+                      <Label className="text-sm font-medium">Last Updated</Label>
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(managingProject.updated_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-muted rounded-md">
+                      <Label className="text-sm font-medium">Description</Label>
+                      <p className="text-sm text-muted-foreground">
+                        {managingProject.description || 'No description provided'}
+                      </p>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="delete" className="space-y-4 pt-4">
+                  <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-md">
+                    <div className="flex items-start gap-3">
+                      <Trash size={20} className="text-destructive shrink-0 mt-0.5" />
+                      <div className="space-y-2">
+                        <h4 className="font-semibold text-destructive">Delete Project</h4>
+                        <p className="text-sm text-muted-foreground">
+                          This will permanently delete the project "{managingProject.name}" and all its architecture data.
+                          This action cannot be undone.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {!isDeleteConfirmOpen ? (
+                    <Button
+                      variant="destructive"
+                      className="w-full"
+                      onClick={() => setIsDeleteConfirmOpen(true)}
+                    >
+                      <Trash size={16} className="mr-2" />
+                      Delete Project
+                    </Button>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium text-center">
+                        Are you sure you want to delete this project?
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => setIsDeleteConfirmOpen(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          className="flex-1"
+                          onClick={handleDeleteProject}
+                        >
+                          <Trash size={16} className="mr-2" />
+                          Confirm Delete
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </TabsContent>
               </Tabs>
             )}

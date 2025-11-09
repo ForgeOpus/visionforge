@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { Node, Edge, Connection } from '@xyflow/react'
-import { BlockData, Project, ValidationError, TensorShape } from './types'
-import { getBlockDefinition, validateBlockConnection, allowsMultipleInputs } from './blockDefinitions'
+import { BlockData, Project, ValidationError, TensorShape, BlockType } from './types'
 import { getNodeDefinition, BackendFramework } from './nodes/registry'
 
 interface HistoryState {
@@ -13,36 +12,41 @@ interface ModelBuilderState {
   nodes: Node<BlockData>[]
   edges: Edge[]
   selectedNodeId: string | null
+  selectedEdgeId: string | null
+  recentlyUsedNodes: BlockType[]
   validationErrors: ValidationError[]
   currentProject: Project | null
-  
+
   // History for undo/redo
   past: HistoryState[]
   future: HistoryState[]
-  
+
   setNodes: (nodes: Node<BlockData>[]) => void
   setEdges: (edges: Edge[]) => void
   addNode: (node: Node<BlockData>) => void
   updateNode: (id: string, data: Partial<BlockData>) => void
   removeNode: (id: string) => void
+  duplicateNode: (id: string) => void
   addEdge: (edge: Edge) => void
   removeEdge: (id: string) => void
   setSelectedNodeId: (id: string | null) => void
-  
+  setSelectedEdgeId: (id: string | null) => void
+  trackRecentlyUsedNode: (nodeType: BlockType) => void
+
   validateConnection: (connection: Connection) => boolean
   validateArchitecture: () => ValidationError[]
   inferDimensions: () => void
-  
+
   undo: () => void
   redo: () => void
   canUndo: () => boolean
   canRedo: () => boolean
-  
+
   createProject: (name: string, description: string, framework: 'pytorch' | 'tensorflow') => void
   saveProject: () => void
   loadProject: (project: Project) => void
   updateProjectInfo: (name: string, description: string) => void
-  
+
   reset: () => void
 }
 
@@ -67,6 +71,8 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
   nodes: [],
   edges: [],
   selectedNodeId: null,
+  selectedEdgeId: null,
+  recentlyUsedNodes: [],
   validationErrors: [],
   currentProject: null,
   past: [],
@@ -78,7 +84,10 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
   addNode: (node) => {
     const state = get()
     const historyUpdate = saveHistory(state)
-    
+
+    // Track recently used node
+    get().trackRecentlyUsedNode(node.data.blockType as BlockType)
+
     // Auto-create default project if none exists
     if (!state.currentProject) {
       const defaultProject: Project = {
@@ -91,7 +100,7 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
         createdAt: Date.now(),
         updatedAt: Date.now()
       }
-      
+
       set({
         currentProject: defaultProject,
         nodes: [node],
@@ -145,7 +154,10 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     const sourceNode = nodes.find((n) => n.id === edge.source)
     
     if (targetNode && sourceNode?.data.outputShape) {
-      const targetDef = getBlockDefinition(targetNode.data.blockType)
+      const targetNodeDef = getNodeDefinition(
+        targetNode.data.blockType as BlockType,
+        BackendFramework.PyTorch
+      )
       const sourceShape = sourceNode.data.outputShape
       
       if (targetNode.data.blockType === 'linear' && sourceShape.dims.length !== 2) {
@@ -216,7 +228,41 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     }))
   },
 
-  setSelectedNodeId: (id) => set({ selectedNodeId: id }),
+  setSelectedNodeId: (id) => set({ selectedNodeId: id, selectedEdgeId: null }),
+  setSelectedEdgeId: (id) => set({ selectedEdgeId: id, selectedNodeId: null }),
+
+  trackRecentlyUsedNode: (nodeType) => {
+    const { recentlyUsedNodes } = get()
+    const filtered = recentlyUsedNodes.filter(t => t !== nodeType)
+    const updated = [nodeType, ...filtered].slice(0, 5) // Keep last 5
+    set({ recentlyUsedNodes: updated })
+  },
+
+  duplicateNode: (id) => {
+    const state = get()
+    const historyUpdate = saveHistory(state)
+
+    const nodeToDuplicate = state.nodes.find(n => n.id === id)
+    if (!nodeToDuplicate) return
+
+    const newNode: Node<BlockData> = {
+      ...nodeToDuplicate,
+      id: `${nodeToDuplicate.data.blockType}-${Date.now()}`,
+      position: {
+        x: nodeToDuplicate.position.x + 50,
+        y: nodeToDuplicate.position.y + 50
+      },
+      data: {
+        ...nodeToDuplicate.data,
+        config: { ...nodeToDuplicate.data.config }
+      }
+    }
+
+    set((state) => ({
+      nodes: [...state.nodes, newNode],
+      ...historyUpdate
+    }))
+  },
 
   validateConnection: (connection) => {
     const { nodes, edges } = get()
@@ -227,17 +273,25 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     const sourceNode = nodes.find((n) => n.id === connection.source)
     if (!sourceNode) return false
     
-    // Check if target allows multiple inputs
-    if (!allowsMultipleInputs(targetNode.data.blockType)) {
+    // Check if target allows multiple inputs (concat and add blocks)
+    const allowsMultiple = targetNode.data.blockType === 'concat' || targetNode.data.blockType === 'add'
+    if (!allowsMultiple) {
       const hasExistingInput = edges.some((e) => e.target === connection.target)
       if (hasExistingInput) return false
     }
     
-    // Use the new validation function
-    const validationError = validateBlockConnection(
-      sourceNode.data.blockType,
-      targetNode.data.blockType,
-      sourceNode.data.outputShape
+    // Use the node definition validation method
+    const targetNodeDef = getNodeDefinition(
+      targetNode.data.blockType as BlockType,
+      BackendFramework.PyTorch
+    )
+    
+    if (!targetNodeDef) return false
+    
+    const validationError = targetNodeDef.validateIncomingConnection(
+      sourceNode.data.blockType as BlockType,
+      sourceNode.data.outputShape,
+      targetNode.data.config
     )
     
     if (validationError) {
@@ -296,9 +350,9 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
         })
       }
       
-      const def = getBlockDefinition(node.data.blockType)
-      if (def) {
-        const requiredFields = def.configSchema.filter((f) => f.required)
+      const nodeDef = getNodeDefinition(node.data.blockType as BlockType, BackendFramework.PyTorch)
+      if (nodeDef) {
+        const requiredFields = nodeDef.configSchema.filter((f) => f.required)
         requiredFields.forEach((field) => {
           if (!node.data.config[field.name]) {
             errors.push({
@@ -341,13 +395,6 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
           // Use new registry method
           const outputShape = nodeDef.computeOutputShape(undefined, node.data.config)
           node.data.outputShape = outputShape
-        } else {
-          // Fall back to legacy adapter
-          const def = getBlockDefinition(node.data.blockType)
-          if (def) {
-            const outputShape = def.computeOutputShape(undefined, node.data.config)
-            node.data.outputShape = outputShape
-          }
         }
       } else {
         if (incomingEdges.length > 0) {
@@ -360,13 +407,6 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
               // Use new registry method
               const outputShape = nodeDef.computeOutputShape(node.data.inputShape, node.data.config)
               node.data.outputShape = outputShape
-            } else {
-              // Fall back to legacy adapter
-              const def = getBlockDefinition(node.data.blockType)
-              if (def) {
-                const outputShape = def.computeOutputShape(node.data.inputShape, node.data.config)
-                node.data.outputShape = outputShape
-              }
             }
           }
         }

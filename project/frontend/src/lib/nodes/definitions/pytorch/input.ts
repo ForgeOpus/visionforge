@@ -19,6 +19,14 @@ export class InputNode extends NodeDefinition {
 
   readonly configSchema: ConfigField[] = [
     {
+      name: 'shape',
+      label: 'Input Shape',
+      type: 'text',
+      default: '[1, 3, 224, 224]',
+      placeholder: '[batch, channels, height, width]',
+      description: 'Input tensor dimensions as JSON array. Overridden if connected to DataLoader.'
+    },
+    {
       name: 'label',
       label: 'Custom Label',
       type: 'text',
@@ -52,6 +60,21 @@ export class InputNode extends NodeDefinition {
   }
 
   computeOutputShape(inputShape: TensorShape | undefined, config: BlockConfig): TensorShape | undefined {
-    return inputShape
+    // If connected to a data source (DataLoader), use its shape
+    if (inputShape) {
+      return inputShape
+    }
+    
+    // Otherwise, use manually configured shape
+    if (config.shape && typeof config.shape === 'string') {
+      const dims = this.parseShapeString(config.shape)
+      if (dims) {
+        return { dims }
+      }
+    }
+    
+    // Fallback to default shape
+    const defaultDims = this.parseShapeString('[1, 3, 224, 224]')
+    return defaultDims ? { dims: defaultDims } : undefined
   }
 }

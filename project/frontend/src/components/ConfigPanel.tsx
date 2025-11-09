@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useModelBuilderStore } from '@/lib/store'
-import { getBlockDefinition } from '@/lib/blockDefinitions'
 import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,12 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card } from '@/components/ui/card'
-import { X, Code } from '@phosphor-icons/react'
+import { X, Code, UploadSimple } from '@phosphor-icons/react'
+import { toast } from 'sonner'
 import CustomLayerModal from './CustomLayerModal'
 
 export default function ConfigPanel() {
   const { nodes, selectedNodeId, updateNode, setSelectedNodeId, removeNode } = useModelBuilderStore()
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false)
+  const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({})
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)
 
@@ -71,8 +72,14 @@ export default function ConfigPanel() {
     )
   }
 
-  const definition = getBlockDefinition(selectedNode.data.blockType)
-  if (!definition) return null
+  const nodeDef = getNodeDefinition(selectedNode.data.blockType, BackendFramework.PyTorch)
+  if (!nodeDef) return null
+  
+  const definition = {
+    label: nodeDef.metadata.label,
+    description: nodeDef.metadata.description,
+    configSchema: nodeDef.configSchema
+  }
 
   const handleConfigChange = (fieldName: string, value: any) => {
     updateNode(selectedNode.id, {
@@ -96,6 +103,32 @@ export default function ConfigPanel() {
     removeNode(selectedNode.id)
   }
 
+  const handleFileUpload = async (fieldName: string, file: File) => {
+    try {
+      // Read file as base64 for storage
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const fileContent = e.target?.result as string
+
+        // Store both the file content and filename
+        handleConfigChange(fieldName, fileContent)
+        handleConfigChange(`${fieldName}name`, file.name)
+
+        toast.success('File uploaded', {
+          description: `${file.name} loaded successfully`
+        })
+      }
+      reader.onerror = () => {
+        toast.error('Failed to read file')
+      }
+      reader.readAsDataURL(file)
+    } catch (error) {
+      toast.error('File upload failed', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
+  }
+
   return (
     <div className="w-80 bg-card border-l border-border h-full flex flex-col overflow-hidden">
       <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
@@ -117,6 +150,7 @@ export default function ConfigPanel() {
           {definition.configSchema.length > 0 ? (
             definition.configSchema
               .filter(field => field.name !== 'code') // Skip code field, it's handled in modal
+              .filter(field => field.name !== 'csv_filename') // Skip csv_filename, it's auto-populated
               .map((field) => (
               <div key={field.name} className="space-y-2">
                 <Label className="text-sm font-medium">
@@ -221,6 +255,50 @@ export default function ConfigPanel() {
                       ))}
                     </SelectContent>
                   </Select>
+                )}
+
+                {field.type === 'file' && (
+                  <div className="space-y-2">
+                    <input
+                      ref={(el) => (fileInputRefs.current[field.name] = el)}
+                      type="file"
+                      accept={field.accept || '*'}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          handleFileUpload(field.name, file)
+                        }
+                      }}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => fileInputRefs.current[field.name]?.click()}
+                    >
+                      <UploadSimple size={16} className="mr-2" />
+                      {selectedNode.data.config[`${field.name}name`] || 'Choose File'}
+                    </Button>
+                    {selectedNode.data.config[`${field.name}name`] && (
+                      <div className="flex items-center justify-between p-2 bg-muted rounded text-xs">
+                        <span className="truncate">{selectedNode.data.config[`${field.name}name`]}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 hover:bg-destructive/10"
+                          onClick={() => {
+                            handleConfigChange(field.name, '')
+                            handleConfigChange(`${field.name}name`, '')
+                            toast.info('File removed')
+                          }}
+                        >
+                          <X size={12} />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             ))

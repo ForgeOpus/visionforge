@@ -1,4 +1,4 @@
-import { useCallback, DragEvent, useRef, useEffect } from 'react'
+import { useCallback, DragEvent, useRef, useEffect, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -9,15 +9,17 @@ import {
   ReactFlowProvider,
   applyNodeChanges,
   applyEdgeChanges,
-  Node
+  Node,
+  Edge
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useModelBuilderStore } from '@/lib/store'
-import { getBlockDefinition, validateBlockConnection } from '@/lib/blockDefinitions'
-import { BlockData } from '@/lib/types'
+import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
+import { BlockData, BlockType } from '@/lib/types'
 import BlockNode from './BlockNode'
 import CustomConnectionLine from './CustomConnectionLine'
 import { HistoryToolbar } from './HistoryToolbar'
+import { ContextMenu } from './ContextMenu'
 import { toast } from 'sonner'
 
 const nodeTypes = {
@@ -38,7 +40,13 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
     addNode,
     addEdge,
     removeEdge,
+    removeNode,
+    selectedNodeId,
     setSelectedNodeId,
+    selectedEdgeId,
+    setSelectedEdgeId,
+    duplicateNode,
+    recentlyUsedNodes,
     validateConnection,
     undo,
     redo
@@ -46,89 +54,51 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
 
   const { screenToFlowPosition, getViewport } = useReactFlow()
   const nextPositionOffset = useRef({ x: 0, y: 0 })
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: 'canvas' | 'node'; nodeId?: string } | null>(null)
 
-  // Keyboard shortcuts for undo/redo
+  // Keyboard shortcuts for undo/redo/delete
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Check for Ctrl (Windows/Linux) or Cmd (Mac)
       const isMod = e.ctrlKey || e.metaKey
-      
+
       if (isMod && e.key === 'z' && !e.shiftKey) {
         e.preventDefault()
         undo()
       } else if (isMod && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
         e.preventDefault()
         redo()
+      } else if ((e.key === 'Delete' || e.key === 'Backspace')) {
+        // Only delete if not typing in an input field
+        const target = e.target as HTMLElement
+        if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA' && !target.isContentEditable) {
+          e.preventDefault()
+          if (selectedNodeId) {
+            removeNode(selectedNodeId)
+          } else if (selectedEdgeId) {
+            removeEdge(selectedEdgeId)
+            setSelectedEdgeId(null)
+          }
+        }
       }
     }
-    
+
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo])
-
-  // Helper function to check if a position overlaps with existing nodes
-  const isPositionOverlapping = useCallback((x: number, y: number, nodes: Node<BlockData>[]) => {
-    const NODE_WIDTH = 200
-    const NODE_HEIGHT = 80
-    const MARGIN = 20
-
-    return nodes.some(node => {
-      const nodeX = node.position.x
-      const nodeY = node.position.y
-      
-      return (
-        x < nodeX + NODE_WIDTH + MARGIN &&
-        x + NODE_WIDTH + MARGIN > nodeX &&
-        y < nodeY + NODE_HEIGHT + MARGIN &&
-        y + NODE_HEIGHT + MARGIN > nodeY
-      )
-    })
-  }, [])
+  }, [undo, redo, removeNode, removeEdge, selectedNodeId, selectedEdgeId, setSelectedEdgeId])
 
   // Find a suitable position for a new node
   const findAvailablePosition = useCallback(() => {
     const viewport = getViewport()
-    const NODE_WIDTH = 200
-    const NODE_HEIGHT = 80
     const GRID_SIZE = 50
     
     // Start from center of viewport
     const centerX = -viewport.x / viewport.zoom + (window.innerWidth / 2) / viewport.zoom
     const centerY = -viewport.y / viewport.zoom + (window.innerHeight / 2) / viewport.zoom
     
-    // Try positions in a spiral pattern from center
-    let x = centerX + nextPositionOffset.current.x
-    let y = centerY + nextPositionOffset.current.y
-    
-    // If this position overlaps, try nearby positions
-    let attempts = 0
-    const maxAttempts = 100
-    
-    while (isPositionOverlapping(x, y, nodes) && attempts < maxAttempts) {
-      attempts++
-      // Try in a grid pattern
-      const offset = Math.ceil(attempts / 4) * GRID_SIZE
-      const direction = attempts % 4
-      
-      switch (direction) {
-        case 0: // right
-          x = centerX + offset
-          y = centerY
-          break
-        case 1: // down
-          x = centerX
-          y = centerY + offset
-          break
-        case 2: // left
-          x = centerX - offset
-          y = centerY
-          break
-        case 3: // up
-          x = centerX
-          y = centerY - offset
-          break
-      }
-    }
+    // Use offset for new nodes (allows overlapping)
+    const x = centerX + nextPositionOffset.current.x
+    const y = centerY + nextPositionOffset.current.y
     
     // Update offset for next node
     nextPositionOffset.current = {
@@ -141,13 +111,13 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
     }
     
     return { x, y }
-  }, [getViewport, isPositionOverlapping, nodes])
+  }, [getViewport])
 
   // Handle block click from palette
   useEffect(() => {
     const handleBlockClickInternal = (blockType: string) => {
-      const definition = getBlockDefinition(blockType)
-      if (!definition) return
+      const nodeDef = getNodeDefinition(blockType as BlockType, BackendFramework.PyTorch)
+      if (!nodeDef) return
 
       const position = findAvailablePosition()
 
@@ -156,14 +126,14 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
         type: 'custom',
         position,
         data: {
-          blockType: definition.type,
-          label: definition.label,
+          blockType: nodeDef.metadata.type,
+          label: nodeDef.metadata.label,
           config: {},
-          category: definition.category
+          category: nodeDef.metadata.category
         } as BlockData
       }
 
-      Object.values(definition.configSchema).forEach((field) => {
+      nodeDef.configSchema.forEach((field) => {
         if (field.default !== undefined) {
           newNode.data.config[field.name] = field.default
         }
@@ -175,7 +145,7 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
         useModelBuilderStore.getState().inferDimensions()
       }, 0)
 
-      toast.success(`Added ${definition.label}`, {
+      toast.success(`Added ${nodeDef.metadata.label}`, {
         description: 'Block added to canvas'
       })
     }
@@ -196,8 +166,8 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
       const type = (window as any).draggedBlockTypeGlobal
       if (!type) return
 
-      const definition = getBlockDefinition(type)
-      if (!definition) return
+      const nodeDef = getNodeDefinition(type as BlockType, BackendFramework.PyTorch)
+      if (!nodeDef) return
 
       const position = screenToFlowPosition({
         x: event.clientX,
@@ -209,14 +179,14 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
         type: 'custom',
         position,
         data: {
-          blockType: definition.type,
-          label: definition.label,
+          blockType: nodeDef.metadata.type,
+          label: nodeDef.metadata.label,
           config: {},
-          category: definition.category
+          category: nodeDef.metadata.category
         } as BlockData
       }
 
-      Object.values(definition.configSchema).forEach((field) => {
+      nodeDef.configSchema.forEach((field) => {
         if (field.default !== undefined) {
           newNode.data.config[field.name] = field.default
         }
@@ -243,10 +213,22 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
 
         // Use the validation function to get specific error message
         if (sourceNode && targetNode) {
-          const errorMessage = validateBlockConnection(
-            sourceNode.data.blockType,
-            targetNode.data.blockType,
-            sourceNode.data.outputShape
+          const targetNodeDef = getNodeDefinition(
+            targetNode.data.blockType as BlockType,
+            BackendFramework.PyTorch
+          )
+          
+          if (!targetNodeDef) {
+            toast.error('Connection Invalid', {
+              description: 'Invalid target node type'
+            })
+            return
+          }
+          
+          const errorMessage = targetNodeDef.validateIncomingConnection(
+            sourceNode.data.blockType as BlockType,
+            sourceNode.data.outputShape,
+            targetNode.data.config
           )
           
           if (errorMessage) {
@@ -288,79 +270,12 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
     [validateConnection, addEdge, nodes, edges]
   )
 
-  const checkCollision = useCallback((nodeA: any, nodeB: any) => {
-    const padding = 20 // Extra space between nodes
-    const nodeWidth = 220
-    const nodeHeight = 100 // Approximate height
-
-    const aLeft = nodeA.position.x
-    const aRight = nodeA.position.x + nodeWidth
-    const aTop = nodeA.position.y
-    const aBottom = nodeA.position.y + nodeHeight
-
-    const bLeft = nodeB.position.x
-    const bRight = nodeB.position.x + nodeWidth
-    const bTop = nodeB.position.y
-    const bBottom = nodeB.position.y + nodeHeight
-
-    return !(
-      aRight + padding < bLeft ||
-      aLeft - padding > bRight ||
-      aBottom + padding < bTop ||
-      aTop - padding > bBottom
-    )
-  }, [])
-
-  const resolveCollisions = useCallback((updatedNodes: any[]) => {
-    const resolvedNodes = [...updatedNodes]
-
-    for (let i = 0; i < resolvedNodes.length; i++) {
-      for (let j = i + 1; j < resolvedNodes.length; j++) {
-        const nodeA = resolvedNodes[i]
-        const nodeB = resolvedNodes[j]
-
-        if (checkCollision(nodeA, nodeB)) {
-          // Calculate push direction
-          const dx = nodeB.position.x - nodeA.position.x
-          const dy = nodeB.position.y - nodeA.position.y
-          const distance = Math.sqrt(dx * dx + dy * dy)
-
-          if (distance === 0) continue
-
-          // Normalize and apply bounce
-          const pushDistance = 240 // How far to push apart
-          const nx = (dx / distance) * pushDistance
-          const ny = (dy / distance) * pushDistance
-
-          // Push the node being dragged (nodeB is typically the one being moved)
-          resolvedNodes[j] = {
-            ...nodeB,
-            position: {
-              x: nodeA.position.x + nx,
-              y: nodeA.position.y + ny
-            }
-          }
-        }
-      }
-    }
-
-    return resolvedNodes
-  }, [checkCollision])
-
   const onNodesChange = useCallback(
     (changes: any) => {
-      let updatedNodes = applyNodeChanges(changes, nodes)
-
-      // Check if any position changes occurred
-      const hasPositionChange = changes.some((change: any) => change.type === 'position')
-
-      if (hasPositionChange) {
-        updatedNodes = resolveCollisions(updatedNodes)
-      }
-
+      const updatedNodes = applyNodeChanges(changes, nodes)
       setNodes(updatedNodes)
     },
-    [nodes, setNodes, resolveCollisions]
+    [nodes, setNodes]
   )
 
   const onEdgesChange = useCallback(
@@ -385,7 +300,139 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
 
   const onPaneClick = useCallback(() => {
     setSelectedNodeId(null)
-  }, [setSelectedNodeId])
+    setSelectedEdgeId(null)
+  }, [setSelectedNodeId, setSelectedEdgeId])
+
+  const onEdgeClick = useCallback(
+    (_event: React.MouseEvent, edge: Edge) => {
+      setSelectedEdgeId(edge.id)
+    },
+    [setSelectedEdgeId]
+  )
+
+  const onPaneContextMenu = useCallback((event: React.MouseEvent) => {
+    event.preventDefault()
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      type: 'canvas'
+    })
+  }, [])
+
+  const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
+    event.preventDefault()
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      type: 'node',
+      nodeId: node.id
+    })
+  }, [])
+
+  const onReconnect = useCallback(
+    (oldEdge: Edge, newConnection: Connection) => {
+      const isValid = validateConnection(newConnection)
+
+      if (!isValid) {
+        toast.error('Connection not allowed', {
+          description: 'This reconnection is not valid'
+        })
+        return
+      }
+
+      // Remove old edge
+      removeEdge(oldEdge.id)
+
+      // Add new edge
+      const edge = {
+        ...newConnection,
+        id: `e${newConnection.source}-${newConnection.target}-${Date.now()}`,
+        animated: true,
+        style: { stroke: 'var(--color-accent)', strokeWidth: 2 }
+      }
+
+      addEdge(edge)
+
+      toast.success('Connection reconnected', {
+        description: 'Edge successfully reconnected'
+      })
+    },
+    [validateConnection, removeEdge, addEdge]
+  )
+
+  const handleAddNodeFromContextMenu = useCallback(
+    (nodeType: BlockType, x: number, y: number) => {
+      const nodeDef = getNodeDefinition(nodeType, BackendFramework.PyTorch)
+      if (!nodeDef) return
+
+      const position = screenToFlowPosition({ x, y })
+
+      const newNode = {
+        id: `${nodeType}-${Date.now()}`,
+        type: 'custom',
+        position,
+        data: {
+          blockType: nodeDef.metadata.type,
+          label: nodeDef.metadata.label,
+          config: {},
+          category: nodeDef.metadata.category
+        } as BlockData
+      }
+
+      nodeDef.configSchema.forEach((field) => {
+        if (field.default !== undefined) {
+          newNode.data.config[field.name] = field.default
+        }
+      })
+
+      addNode(newNode)
+
+      setTimeout(() => {
+        useModelBuilderStore.getState().inferDimensions()
+      }, 0)
+
+      toast.success(`Added ${nodeDef.metadata.label}`, {
+        description: 'Block added to canvas'
+      })
+    },
+    [addNode, screenToFlowPosition]
+  )
+
+  const handleReplicateNode = useCallback(
+    (nodeId: string) => {
+      const node = nodes.find(n => n.id === nodeId)
+      if (!node) return
+
+      const nodeDef = getNodeDefinition(node.data.blockType as BlockType, BackendFramework.PyTorch)
+      if (!nodeDef) return
+
+      const newNode = {
+        id: `custom-${Date.now()}`,
+        type: 'custom',
+        position: {
+          x: node.position.x + 50,
+          y: node.position.y + 50
+        },
+        data: {
+          blockType: 'custom' as BlockType,
+          label: `Custom ${nodeDef.metadata.label}`,
+          config: { ...node.data.config },
+          category: node.data.category
+        } as BlockData
+      }
+
+      addNode(newNode)
+
+      setTimeout(() => {
+        useModelBuilderStore.getState().inferDimensions()
+      }, 0)
+
+      toast.success('Node replicated as custom', {
+        description: 'Custom node created from original'
+      })
+    },
+    [nodes, addNode]
+  )
 
   return (
     <div
@@ -401,7 +448,12 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
+        onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
+        onPaneContextMenu={onPaneContextMenu}
+        onNodeContextMenu={onNodeContextMenu}
+        onReconnect={onReconnect}
+        edgesReconnectable={true}
         nodeTypes={nodeTypes}
         connectionLineComponent={CustomConnectionLine}
         fitView
@@ -416,12 +468,18 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
         <Controls />
         <MiniMap
           nodeColor={(node) => {
-            const def = getBlockDefinition((node.data as BlockData).blockType)
-            return def?.color || '#3b82f6'
+            const nodeDef = getNodeDefinition(
+              (node.data as BlockData).blockType as BlockType,
+              BackendFramework.PyTorch
+            )
+            return nodeDef?.metadata.color || '#3b82f6'
           }}
           nodeStrokeColor={(node) => {
-            const def = getBlockDefinition((node.data as BlockData).blockType)
-            const baseColor = def?.color || '#3b82f6'
+            const nodeDef = getNodeDefinition(
+              (node.data as BlockData).blockType as BlockType,
+              BackendFramework.PyTorch
+            )
+            const baseColor = nodeDef?.metadata.color || '#3b82f6'
             // Return a slightly darker version for the stroke
             return baseColor
           }}
@@ -438,6 +496,20 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
           position="bottom-right"
         />
       </ReactFlow>
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          type={contextMenu.type}
+          nodeId={contextMenu.nodeId}
+          recentlyUsedNodes={recentlyUsedNodes}
+          onClose={() => setContextMenu(null)}
+          onAddNode={handleAddNodeFromContextMenu}
+          onDeleteNode={removeNode}
+          onDuplicateNode={duplicateNode}
+          onReplicateNode={handleReplicateNode}
+        />
+      )}
     </div>
   )
 }

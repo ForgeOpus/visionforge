@@ -51,7 +51,7 @@ export interface BlockDefinition {
 export interface ConfigField {
   name: string
   label: string
-  type: 'number' | 'select' | 'boolean' | 'tuple' | 'text'
+  type: 'number' | 'select' | 'boolean' | 'tuple' | 'text' | 'file'
   required?: boolean
   default?: number | string | boolean | number[]
   min?: number
@@ -59,6 +59,7 @@ export interface ConfigField {
   options?: { value: string | number; label: string }[]
   description?: string
   placeholder?: string
+  accept?: string  // For file inputs, e.g., ".csv,.txt"
 }
 
 export interface Project {

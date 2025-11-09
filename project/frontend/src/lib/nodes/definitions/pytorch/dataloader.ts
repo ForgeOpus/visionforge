@@ -28,6 +28,23 @@ export class DataLoaderNode extends SourceNodeDefinition {
       description: 'Input tensor dimensions as JSON array'
     },
     {
+      name: 'num_input_outlets',
+      label: 'Number of Input Outlets',
+      type: 'number',
+      default: 1,
+      min: 1,
+      max: 5,
+      description: 'Number of input data outlets (for multi-input models)'
+    },
+    {
+      name: 'input_shapes',
+      label: 'Additional Input Shapes',
+      type: 'text',
+      default: '',
+      placeholder: '[[1, 3, 64, 64], [1, 10]]',
+      description: 'JSON array of shapes for additional inputs (2nd, 3rd, etc.). First outlet uses "Input Shape" field.'
+    },
+    {
       name: 'has_ground_truth',
       label: 'Include Ground Truth Output',
       type: 'boolean',
@@ -51,10 +68,17 @@ export class DataLoaderNode extends SourceNodeDefinition {
     },
     {
       name: 'csv_file',
-      label: 'CSV File Path',
+      label: 'CSV File',
+      type: 'file',
+      accept: '.csv',
+      description: 'Upload a CSV file for data loading (optional)'
+    },
+    {
+      name: 'csv_filename',
+      label: 'Uploaded File Name',
       type: 'text',
-      placeholder: 'data/dataset.csv',
-      description: 'Path to CSV file for data loading (optional)'
+      placeholder: 'No file uploaded',
+      description: 'Name of the uploaded CSV file (read-only)'
     }
   ]
 
@@ -80,6 +104,41 @@ export class DataLoaderNode extends SourceNodeDefinition {
     const dims = this.parseShapeString(shapeStr)
     if (!dims) {
       errors.push('Input Shape must be a valid JSON array of positive numbers')
+    }
+
+    // Validate number of outlets
+    const numOutlets = Number(config.num_input_outlets || 1)
+    if (numOutlets < 1 || numOutlets > 5) {
+      errors.push('Number of Input Outlets must be between 1 and 5')
+    }
+
+    // Validate additional input shapes if multiple outlets
+    if (numOutlets > 1) {
+      const inputShapesStr = String(config.input_shapes || '').trim()
+      if (inputShapesStr) {
+        try {
+          const parsedShapes = JSON.parse(inputShapesStr)
+          if (!Array.isArray(parsedShapes)) {
+            errors.push('Additional Input Shapes must be a JSON array of shape arrays')
+          } else {
+            // Validate each shape
+            parsedShapes.forEach((shape, idx) => {
+              if (!Array.isArray(shape) || !shape.every((d: any) => typeof d === 'number' && d > 0)) {
+                errors.push(`Input shape ${idx + 2} must be an array of positive numbers`)
+              }
+            })
+
+            // Check if we have enough shapes
+            if (parsedShapes.length < numOutlets - 1) {
+              errors.push(`Need ${numOutlets - 1} additional shape(s) for ${numOutlets} outlets`)
+            }
+          }
+        } catch (e) {
+          errors.push('Additional Input Shapes must be valid JSON')
+        }
+      } else if (numOutlets > 1) {
+        errors.push(`Additional Input Shapes required for ${numOutlets} outlets`)
+      }
     }
 
     // Validate ground truth shape if enabled

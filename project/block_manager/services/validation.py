@@ -188,8 +188,8 @@ class ArchitectureValidator:
                     ))
             
             elif block_type == 'input':
-                input_shape = node.get('data', {}).get('inputShape')
-                if not input_shape or not input_shape.get('dims'):
+                input_shape = eval(config.get('shape'))
+                if not input_shape:
                     self.errors.append(ValidationError(
                         message='Input block requires input shape configuration',
                         node_id=node_id,

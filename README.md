@@ -6,6 +6,7 @@
 - Python 3.8+
 - Node.js 16+
 - npm or yarn
+- Google Gemini API key (for AI chatbot - [Get one here](https://aistudio.google.com/app/apikey))
 
 ### 1. Setup Backend
 
@@ -14,6 +15,10 @@ cd project
 
 # Install Python dependencies (if not already done)
 pip install -r requirements.txt
+
+# Configure environment (REQUIRED for AI chatbot)
+cp .env.example .env
+# Edit .env and add your GEMINI_API_KEY
 
 # Run migrations
 python manage.py makemigrations
@@ -103,7 +108,32 @@ Open browser: `http://localhost:5173`
 
 ---
 
-## 🎨 New Features
+## 🎨 Features
+
+### AI-Powered Chatbot
+
+**NEW!** VisionForge now includes an intelligent AI assistant powered by Google Gemini.
+
+**Two Modes:**
+- **Q&A Mode**: Ask questions, get explanations, learn about neural networks
+- **Modification Mode**: Let AI suggest and apply changes to your workflow
+
+**Key Features:**
+- Full workflow context awareness
+- One-click application of AI suggestions
+- Real-time architecture modifications
+- Persistent chat history during session
+- Markdown-formatted responses
+
+**Quick Start:**
+1. Click the chat bubble icon (bottom-right)
+2. Toggle "Modification Mode" to enable workflow changes
+3. Ask: "Add a Conv2D layer with 64 filters"
+4. Click "Apply Change" on suggestions
+
+**See [QUICKSTART.md](./QUICKSTART.md) and [CHATBOT_SETUP.md](./CHATBOT_SETUP.md) for detailed setup.**
+
+---
 
 ### New Block Types
 
@@ -209,6 +239,7 @@ python manage.py migrate
 
 ## 📚 Additional Resources
 
+- **AI Chatbot Setup**: [QUICKSTART.md](./QUICKSTART.md) & [CHATBOT_SETUP.md](./CHATBOT_SETUP.md)
 - **Backend API**: http://localhost:8000/api/
 - **Django Admin**: http://localhost:8000/admin/
 - **Implementation Details**: See `IMPLEMENTATION_SUMMARY.md`

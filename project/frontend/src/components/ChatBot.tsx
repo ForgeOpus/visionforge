@@ -3,31 +3,49 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card } from '@/components/ui/card'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import * as Icons from '@phosphor-icons/react'
 import ReactMarkdown from 'react-markdown'
 import { sendChatMessage } from '@/lib/api'
 import { toast } from 'sonner'
+import { useModelBuilderStore } from '@/lib/store'
+import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
+import { BlockType } from '@/lib/types'
 
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
+  modifications?: any[]
+  attachedFile?: {
+    name: string
+    type: string
+    geminiUri?: string
+  }
 }
 
 export default function ChatBot() {
   const [isOpen, setIsOpen] = useState(false)
+  const [modificationMode, setModificationMode] = useState(false)
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
       role: 'assistant',
-      content: 'Hello! I\'m your VisionForge assistant. How can I help you build your neural network today?',
+      content: 'Hello! I\'m your VisionForge assistant. How can I help you build your neural network today?\n\nToggle **Modification Mode** above to allow me to suggest changes to your workflow.',
       timestamp: new Date()
     }
   ])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [isUploadingFile, setIsUploadingFile] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Get workflow state from store
+  const { nodes, edges, addNode, updateNode, removeNode, addEdge, removeEdge } = useModelBuilderStore()
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -39,33 +57,107 @@ export default function ChatBot() {
     }
   }, [messages])
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim() || isLoading) return
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      // Validate file type
+      const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'application/pdf', 'text/plain']
+      if (!validTypes.includes(file.type)) {
+        toast.error('Invalid file type', {
+          description: 'Only images (PNG, JPG, WEBP), PDFs, and text files are supported'
+        })
+        return
+      }
 
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('File too large', {
+          description: 'Maximum file size is 10MB'
+        })
+        return
+      }
+
+      setUploadedFile(file)
+      toast.success('File attached', {
+        description: file.name
+      })
+    }
+  }
+
+  const removeAttachedFile = () => {
+    setUploadedFile(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const handleSendMessage = async () => {
+    if ((!inputValue.trim() && !uploadedFile) || isLoading) return
+
+    const currentFile = uploadedFile
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: inputValue,
-      timestamp: new Date()
+      content: inputValue || (currentFile ? `[Attached file: ${currentFile.name}]` : ''),
+      timestamp: new Date(),
+      attachedFile: currentFile ? {
+        name: currentFile.name,
+        type: currentFile.type
+      } : undefined
     }
 
     setMessages(prev => [...prev, userMessage])
     const currentInput = inputValue
     setInputValue('')
+    setUploadedFile(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
     setIsLoading(true)
 
     try {
-      // Send message to backend API
-      const response = await sendChatMessage(currentInput, messages)
-      
+      // Prepare workflow state for context
+      const workflowState = {
+        nodes: nodes.map(node => ({
+          id: node.id,
+          type: node.type,
+          data: node.data,
+          position: node.position
+        })),
+        edges: edges.map(edge => ({
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          sourceHandle: edge.sourceHandle,
+          targetHandle: edge.targetHandle
+        }))
+      }
+
+      // Send message to backend API with workflow context
+      const response = await sendChatMessage(
+        currentInput,
+        messages,
+        modificationMode,
+        workflowState,
+        currentFile || undefined
+      )
+
       if (response.success && response.data) {
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
           content: response.data.response,
-          timestamp: new Date()
+          timestamp: new Date(),
+          modifications: response.data.modifications || undefined
         }
         setMessages(prev => [...prev, assistantMessage])
+
+        // If modifications were suggested, show notification
+        if (response.data.modifications && response.data.modifications.length > 0) {
+          toast.info('Workflow modifications suggested', {
+            description: 'Check the chat for suggested changes to your workflow'
+          })
+        }
       } else {
         // Show error message
         const errorMessage: Message = {
@@ -102,6 +194,104 @@ export default function ChatBot() {
     }
   }
 
+  const applyModification = (modification: any) => {
+    try {
+      const { action, details } = modification
+
+      switch (action) {
+        case 'add_node': {
+          const { nodeType, config, position } = details
+
+          // Get the node definition to populate proper metadata
+          const nodeDef = getNodeDefinition(nodeType as BlockType, BackendFramework.PyTorch)
+          if (!nodeDef) {
+            toast.error('Invalid node type', {
+              description: `Node type '${nodeType}' is not recognized`
+            })
+            return
+          }
+
+          // Create properly structured node with all metadata
+          const newNode = {
+            id: `node-${Date.now()}`,
+            type: 'block',
+            position: position || { x: 100, y: 100 },
+            data: {
+              blockType: nodeType,
+              label: nodeDef.metadata.label,
+              category: nodeDef.metadata.category,
+              config: config || nodeDef.getDefaultConfig(),
+              inputShape: undefined,
+              outputShape: undefined
+            }
+          }
+          addNode(newNode)
+          toast.success('Node added', {
+            description: `Added ${nodeDef.metadata.label} to the workflow`
+          })
+          break
+        }
+
+        case 'remove_node': {
+          const { nodeId } = details
+          removeNode(nodeId)
+          toast.success('Node removed', {
+            description: 'Removed node from workflow'
+          })
+          break
+        }
+
+        case 'modify_node': {
+          const { nodeId, config } = details
+          const node = nodes.find(n => n.id === nodeId)
+          if (node) {
+            updateNode(nodeId, {
+              ...node.data,
+              config: { ...node.data.config, ...config }
+            })
+            toast.success('Node updated', {
+              description: 'Node configuration updated'
+            })
+          }
+          break
+        }
+
+        case 'add_connection': {
+          const { source, target, sourceHandle, targetHandle } = details
+          addEdge({
+            id: `edge-${Date.now()}`,
+            source,
+            target,
+            sourceHandle: sourceHandle || null,
+            targetHandle: targetHandle || null
+          })
+          toast.success('Connection added', {
+            description: 'Added new connection between nodes'
+          })
+          break
+        }
+
+        case 'remove_connection': {
+          const { edgeId } = details
+          removeEdge(edgeId)
+          toast.success('Connection removed', {
+            description: 'Removed connection from workflow'
+          })
+          break
+        }
+
+        default:
+          toast.warning('Unknown modification type', {
+            description: `Action '${action}' is not supported`
+          })
+      }
+    } catch (error) {
+      toast.error('Failed to apply modification', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
+  }
+
   return (
     <>
       {/* Floating Chat Button */}
@@ -117,25 +307,47 @@ export default function ChatBot() {
 
       {/* Chat Panel - Right Side */}
       {isOpen && (
-        <Card className="fixed right-0 top-0 h-full w-[400px] z-40 flex flex-col shadow-2xl border-l rounded-none animate-in slide-in-from-right duration-300">
+        <Card className="fixed right-0 top-0 h-full w-[400px] z-40 flex flex-col shadow-2xl border-l rounded-none animate-in slide-in-from-right duration-300 overflow-hidden">
           {/* Header */}
-          <div className="p-4 border-b flex items-center justify-between bg-card">
-            <div className="flex items-center gap-2">
-              <Icons.Robot size={24} className="text-primary" />
-              <h3 className="font-semibold text-lg">VisionForge Assistant</h3>
+          <div className="p-2 border-b bg-card flex-shrink-0">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Icons.Robot size={24} className="text-primary" />
+                <h3 className="font-semibold text-lg">VisionForge Assistant</h3>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsOpen(false)}
+                className="h-8 w-8 hover:bg-destructive/10"
+              >
+                <Icons.X size={20} />
+              </Button>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsOpen(false)}
-              className="h-8 w-8 hover:bg-destructive/10"
-            >
-              <Icons.X size={20} />
-            </Button>
+
+            {/* Modification Mode Toggle */}
+            <div className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+              <div className="flex items-center gap-2">
+                <Icons.Wrench size={16} className={modificationMode ? 'text-primary' : 'text-muted-foreground'} />
+                <Label htmlFor="modification-mode" className="text-sm cursor-pointer">
+                  Modification Mode
+                </Label>
+              </div>
+              <Switch
+                id="modification-mode"
+                checked={modificationMode}
+                onCheckedChange={setModificationMode}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              {modificationMode
+                ? 'AI can suggest changes to your workflow'
+                : 'AI will only answer questions (no workflow changes)'}
+            </p>
           </div>
 
           {/* Messages Area */}
-          <ScrollArea className="flex-1 px-4" ref={scrollAreaRef}>
+          <ScrollArea className="flex-1 min-h-0 px-4" ref={scrollAreaRef}>
             <div className="space-y-4 py-4">
               {messages.map((message) => (
                 <div
@@ -149,12 +361,53 @@ export default function ChatBot() {
                         : 'bg-muted'
                     }`}
                   >
-                    <div className="flex items-start gap-2">
+                    <div className="flex items-start gap-2 min-w-0">
                       {message.role === 'assistant' && (
                         <Icons.Robot size={18} className="shrink-0 mt-0.5" />
                       )}
-                      <div className="flex-1 prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-sm">
-                        <ReactMarkdown>{message.content}</ReactMarkdown>
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        {/* Show attached file if present */}
+                        {message.attachedFile && (
+                          <div className="mb-2 p-2 bg-background/50 border rounded-md flex items-center gap-2">
+                            <Icons.Paperclip size={14} className="shrink-0" />
+                            <span className="text-xs font-medium truncate">{message.attachedFile.name}</span>
+                          </div>
+                        )}
+
+                        <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-sm break-words [&_pre]:overflow-x-auto [&_code]:break-words [&_p]:break-words">
+                          <ReactMarkdown>{message.content}</ReactMarkdown>
+                        </div>
+
+                        {/* Modification Actions */}
+                        {message.role === 'assistant' && message.modifications && message.modifications.length > 0 && (
+                          <div className="mt-3 space-y-2 min-w-0">
+                            <div className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                              <Icons.Wrench size={12} className="shrink-0" />
+                              <span className="truncate">Suggested Modifications:</span>
+                            </div>
+                            {message.modifications.map((mod, idx) => (
+                              <div key={idx} className="bg-background/50 border rounded p-2 space-y-1 min-w-0">
+                                <div className="text-xs font-medium break-words">
+                                  {mod.action.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                                </div>
+                                {mod.explanation && (
+                                  <div className="text-xs text-muted-foreground break-words">
+                                    {mod.explanation}
+                                  </div>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="w-full text-xs h-7"
+                                  onClick={() => applyModification(mod)}
+                                >
+                                  <Icons.Play size={12} className="mr-1" />
+                                  Apply Change
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       {message.role === 'user' && (
                         <Icons.User size={18} className="shrink-0 mt-0.5" />
@@ -191,10 +444,51 @@ export default function ChatBot() {
           </ScrollArea>
 
           {/* Input Area */}
-          <div className="p-4 border-t bg-card">
+          <div className="p-4 border-t bg-card flex-shrink-0">
+            {/* Attached file preview */}
+            {uploadedFile && (
+              <div className="mb-2 p-2 bg-muted rounded-md flex items-center justify-between">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <Icons.Paperclip size={16} className="text-muted-foreground shrink-0" />
+                  <span className="text-sm truncate">{uploadedFile.name}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    ({(uploadedFile.size / 1024).toFixed(1)} KB)
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0"
+                  onClick={removeAttachedFile}
+                >
+                  <Icons.X size={14} />
+                </Button>
+              </div>
+            )}
+
             <div className="flex gap-2">
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf,text/plain"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+
+              {/* File attachment button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading || !!uploadedFile}
+                title="Attach file"
+              >
+                <Icons.Paperclip size={18} />
+              </Button>
+
               <Input
-                placeholder="Ask me anything..."
+                placeholder={uploadedFile ? "Add a message (optional)..." : "Ask me anything..."}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={handleKeyPress}
@@ -203,7 +497,7 @@ export default function ChatBot() {
               />
               <Button
                 onClick={handleSendMessage}
-                disabled={!inputValue.trim() || isLoading}
+                disabled={(!inputValue.trim() && !uploadedFile) || isLoading}
                 size="icon"
               >
                 <Icons.PaperPlaneRight size={18} />
