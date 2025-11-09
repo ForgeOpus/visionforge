@@ -6,9 +6,19 @@ import { useModelBuilderStore } from '@/lib/store'
 import * as Icons from '@phosphor-icons/react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 interface BlockNodeProps {
-  data: BlockData
+  data: BlockData & {
+    onViewCode?: (nodeId: string) => void
+    onReplicate?: (nodeId: string) => void
+  }
   selected?: boolean
   id: string
 }
@@ -46,6 +56,49 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
           <div className="bg-red-500 rounded-full p-1 shadow-lg">
             <Icons.Warning size={16} weight="fill" className="text-white" />
           </div>
+        </div>
+      )}
+
+      {/* Action Buttons - Only shown when selected */}
+      {selected && (
+        <div className="absolute top-2 right-2 flex gap-1 z-30 animate-in fade-in duration-200">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 bg-background/80 backdrop-blur-sm hover:bg-accent shadow-sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    data.onViewCode?.(id)
+                  }}
+                >
+                  <Icons.Eye size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>View Code</TooltipContent>
+            </Tooltip>
+
+            {data.blockType !== 'custom' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 bg-background/80 backdrop-blur-sm hover:bg-accent shadow-sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      data.onReplicate?.(id)
+                    }}
+                  >
+                    <Icons.Copy size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Replicate as Custom</TooltipContent>
+              </Tooltip>
+            )}
+          </TooltipProvider>
         </div>
       )}
 

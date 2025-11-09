@@ -1,4 +1,4 @@
-import { useCallback, DragEvent, useRef, useEffect, useState } from 'react'
+import { useCallback, DragEvent, useRef, useEffect, useState, useMemo } from 'react'
 import {
   ReactFlow,
   Background,
@@ -20,6 +20,8 @@ import BlockNode from './BlockNode'
 import CustomConnectionLine from './CustomConnectionLine'
 import { HistoryToolbar } from './HistoryToolbar'
 import { ContextMenu } from './ContextMenu'
+import ViewCodeModal from './ViewCodeModal'
+import { renderNodeCode } from '@/lib/api'
 import { toast } from 'sonner'
 
 const nodeTypes = {
@@ -55,6 +57,16 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
   const { screenToFlowPosition, getViewport } = useReactFlow()
   const nextPositionOffset = useRef({ x: 0, y: 0 })
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: 'canvas' | 'node'; nodeId?: string } | null>(null)
+  
+  // ViewCodeModal state
+  const [isViewCodeModalOpen, setIsViewCodeModalOpen] = useState(false)
+  const [viewCodeData, setViewCodeData] = useState({
+    code: '',
+    nodeType: '',
+    framework: 'pytorch' as 'pytorch' | 'tensorflow'
+  })
+  const [isLoadingCode, setIsLoadingCode] = useState(false)
+  const currentProject = useModelBuilderStore((state) => state.currentProject)
 
   // Keyboard shortcuts for undo/redo/delete
   useEffect(() => {
@@ -398,6 +410,115 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
     [addNode, screenToFlowPosition]
   )
 
+  const handleViewCode = useCallback(async (nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId)
+    if (!node) return
+
+    setIsLoadingCode(true)
+    setIsViewCodeModalOpen(true)
+
+    try {
+      const response = await renderNodeCode(
+        node.data.blockType,
+        currentProject?.framework || 'pytorch',
+        node.data.config,
+        { node_id: nodeId }
+      )
+
+      if (response.success && response.data) {
+        setViewCodeData({
+          code: response.data.code,
+          nodeType: node.data.label,
+          framework: currentProject?.framework || 'pytorch'
+        })
+      } else {
+        throw new Error(response.error || 'Failed to fetch code')
+      }
+    } catch (error) {
+      toast.error('Failed to fetch code', {
+        description: error instanceof Error ? error.message : 'Network error - check backend connection'
+      })
+      setIsViewCodeModalOpen(false)
+    } finally {
+      setIsLoadingCode(false)
+    }
+  }, [nodes, currentProject])
+
+  const handleReplicateAsCustom = useCallback(async (nodeId: string) => {
+    const sourceNode = nodes.find(n => n.id === nodeId)
+    if (!sourceNode || sourceNode.data.blockType === 'custom') {
+      toast.error('Cannot replicate custom blocks')
+      return
+    }
+
+    const toastId = toast.loading('Replicating block...')
+
+    try {
+      // 1. Fetch code from backend
+      const response = await renderNodeCode(
+        sourceNode.data.blockType,
+        currentProject?.framework || 'pytorch',
+        sourceNode.data.config,
+        { node_id: nodeId }
+      )
+
+      if (!response.success || !response.data) {
+        throw new Error(response.error || 'Failed to fetch code')
+      }
+
+      // 2. Create new custom block positioned near original
+      const newPosition = {
+        x: sourceNode.position.x + 250,
+        y: sourceNode.position.y
+      }
+
+      const customNodeId = `custom-${Date.now()}`
+      const customNode = {
+        id: customNodeId,
+        type: 'custom',
+        position: newPosition,
+        data: {
+          blockType: 'custom' as BlockType,
+          label: `Custom ${sourceNode.data.label}`,
+          config: {
+            name: `custom_${sourceNode.data.blockType}`,
+            code: response.data.code,
+            output_shape: sourceNode.data.outputShape 
+              ? JSON.stringify(sourceNode.data.outputShape.dims) 
+              : undefined,
+            description: `Replicated from ${sourceNode.data.label}`,
+            // Preserve original config parameters
+            ...sourceNode.data.config
+          },
+          category: 'utility' as const,
+          inputShape: sourceNode.data.inputShape,
+          outputShape: sourceNode.data.outputShape
+        } as BlockData
+      }
+
+      // 3. Add to canvas
+      addNode(customNode)
+
+      // 4. Select new node (triggers ConfigPanel to show CustomLayerModal)
+      setSelectedNodeId(customNodeId)
+
+      // 5. Trigger dimension inference
+      setTimeout(() => {
+        useModelBuilderStore.getState().inferDimensions()
+      }, 0)
+
+      toast.dismiss(toastId)
+      toast.success('Block replicated as custom layer', {
+        description: 'Click on the new block to edit its code'
+      })
+    } catch (error) {
+      toast.dismiss(toastId)
+      toast.error('Replication failed', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
+  }, [nodes, currentProject, addNode, setSelectedNodeId])
+
   const handleReplicateNode = useCallback(
     (nodeId: string) => {
       const node = nodes.find(n => n.id === nodeId)
@@ -434,6 +555,18 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
     [nodes, addNode]
   )
 
+  // Memoized nodes with action handlers attached
+  const nodesWithHandlers = useMemo(() => {
+    return nodes.map(node => ({
+      ...node,
+      data: {
+        ...node.data,
+        onViewCode: handleViewCode,
+        onReplicate: handleReplicateAsCustom
+      }
+    }))
+  }, [nodes, handleViewCode, handleReplicateAsCustom])
+
   return (
     <div
       className="flex-1 h-full"
@@ -442,7 +575,7 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
     >
       <HistoryToolbar />
       <ReactFlow
-        nodes={nodes}
+        nodes={nodesWithHandlers}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
@@ -510,6 +643,14 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
           onReplicateNode={handleReplicateNode}
         />
       )}
+      <ViewCodeModal
+        isOpen={isViewCodeModalOpen}
+        onClose={() => setIsViewCodeModalOpen(false)}
+        code={viewCodeData.code}
+        nodeType={viewCodeData.nodeType}
+        framework={viewCodeData.framework}
+        isLoading={isLoadingCode}
+      />
     </div>
   )
 }
