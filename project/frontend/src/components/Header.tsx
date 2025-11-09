@@ -43,10 +43,14 @@ export default function Header() {
   const [isManageProjectOpen, setIsManageProjectOpen] = useState(false)
   const [managingProject, setManagingProject] = useState<projectApi.ProjectResponse | null>(null)
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
+  const [isSaveAsDialogOpen, setIsSaveAsDialogOpen] = useState(false)
 
   const [newProjectName, setNewProjectName] = useState('')
   const [newProjectDesc, setNewProjectDesc] = useState('')
   const [newProjectFramework, setNewProjectFramework] = useState<'pytorch' | 'tensorflow'>('pytorch')
+
+  const [saveAsProjectName, setSaveAsProjectName] = useState('')
+  const [saveAsProjectDesc, setSaveAsProjectDesc] = useState('')
 
   const [editProjectName, setEditProjectName] = useState('')
   const [editProjectDesc, setEditProjectDesc] = useState('')
@@ -86,8 +90,9 @@ export default function Header() {
         framework: newProjectFramework
       })
 
-      // Create in local store
-      createProjectInStore(newProjectName, newProjectDesc, newProjectFramework)
+      // Load the project in the store
+      const projectData = projectApi.convertToFrontendProject(backendProject, [], [])
+      loadProject(projectData)
 
       setIsNewProjectOpen(false)
       setNewProjectName('')
@@ -95,12 +100,59 @@ export default function Header() {
 
       toast.success('Project created!')
 
+      // Reload projects list
+      await loadProjectsList()
+
       // Navigate to the new project
       navigate(`/project/${backendProject.id}`)
+    } catch (error) {
+      toast.error('Failed to create project', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
+  }
+
+  const handleSaveAsProject = async () => {
+    if (!saveAsProjectName.trim()) {
+      toast.error('Please enter a project name')
+      return
+    }
+
+    const loadingToast = toast.loading('Creating and saving project...')
+
+    try {
+      // Create project on backend
+      const backendProject = await projectApi.createProject({
+        name: saveAsProjectName,
+        description: saveAsProjectDesc,
+        framework: 'pytorch'
+      })
+
+      // Save architecture immediately to the newly created project
+      await projectApi.saveArchitecture(backendProject.id, nodes, edges)
+
+      // Fetch the saved project with architecture
+      const { nodes: savedNodes, edges: savedEdges } = await projectApi.loadArchitecture(backendProject.id)
+      const projectData = projectApi.convertToFrontendProject(backendProject, savedNodes, savedEdges)
+
+      // Load into store
+      loadProject(projectData)
+
+      // Close dialog and reset fields
+      setIsSaveAsDialogOpen(false)
+      setSaveAsProjectName('')
+      setSaveAsProjectDesc('')
+
+      toast.dismiss(loadingToast)
+      toast.success('Project created and saved!')
 
       // Reload projects list
-      loadProjectsList()
+      await loadProjectsList()
+
+      // Navigate to the new project
+      navigate(`/project/${backendProject.id}`, { replace: true })
     } catch (error) {
+      toast.dismiss(loadingToast)
       toast.error('Failed to create project', {
         description: error instanceof Error ? error.message : 'Unknown error'
       })
@@ -113,15 +165,31 @@ export default function Header() {
       return
     }
 
-    const project = currentProject
-    if (!project) {
-      toast.error('No active project')
-      return
-    }
-
     try {
-      // Save to backend
-      await projectApi.saveArchitecture(project.id, nodes, edges)
+      let project = currentProject
+      let projectIdToSave = project?.id
+
+      // Check if project ID is a timestamp (invalid) - treat as no project
+      const isTimestampId = project?.id && /^\d{13}$/.test(project.id)
+
+      // If no project exists or project has invalid timestamp ID, show dialog to create one
+      if (!project || isTimestampId) {
+        // Generate default name suggestion
+        const timestamp = new Date().toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        })
+        setSaveAsProjectName(`Untitled Project - ${timestamp}`)
+        setSaveAsProjectDesc('')
+        setIsSaveAsDialogOpen(true)
+        return
+      }
+
+      // Save to backend for existing project
+      await projectApi.saveArchitecture(projectIdToSave, nodes, edges)
 
       // Save to local store
       saveProject()
@@ -131,6 +199,7 @@ export default function Header() {
       // Reload projects list
       loadProjectsList()
     } catch (error) {
+      toast.dismiss()
       toast.error('Failed to save project', {
         description: error instanceof Error ? error.message : 'Unknown error'
       })
@@ -459,9 +528,11 @@ export default function Header() {
       setIsManageProjectOpen(false)
       loadProjectsList()
 
-      // If we deleted the current project, navigate to home
+      // If we deleted the current project, clear the store and go to blank canvas
       if (currentProject?.id === managingProject.id) {
-        navigate('/')
+        const { reset } = useModelBuilderStore.getState()
+        reset()
+        navigate('/project')
       }
     } catch (error) {
       toast.error('Failed to delete project', {
@@ -619,6 +690,61 @@ export default function Header() {
           </DialogContent>
         </Dialog>
 
+        {/* Save As Dialog */}
+        <Dialog open={isSaveAsDialogOpen} onOpenChange={setIsSaveAsDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Save Project</DialogTitle>
+              <DialogDescription>
+                Name your project to save your architecture
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 pt-4">
+              <div>
+                <Label htmlFor="save-as-name">Project Name *</Label>
+                <Input
+                  id="save-as-name"
+                  placeholder="My Model"
+                  value={saveAsProjectName}
+                  onChange={(e) => setSaveAsProjectName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSaveAsProject()
+                    }
+                  }}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <Label htmlFor="save-as-desc">Description (Optional)</Label>
+                <Textarea
+                  id="save-as-desc"
+                  placeholder="Describe your model architecture..."
+                  value={saveAsProjectDesc}
+                  onChange={(e) => setSaveAsProjectDesc(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsSaveAsDialogOpen(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSaveAsProject}
+                  className="flex-1"
+                >
+                  <FloppyDisk size={16} className="mr-2" />
+                  Save Project
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Import Button */}
         <Button
           variant="outline"
@@ -633,7 +759,7 @@ export default function Header() {
           variant="outline"
           size="sm"
           onClick={handleSaveProject}
-          disabled={nodes.length === 0 || !currentProject}
+          disabled={nodes.length === 0}
         >
           <FloppyDisk size={16} className="mr-2" />
           Save
