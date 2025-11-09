@@ -21,6 +21,7 @@ A browser-based visual interface for designing neural network architectures thro
 - Shape compatibility checked before connection creation
 - Required parameters highlighted
 - Architecture validation before code export
+- Visual error indicators (red exclamation badges) on nodes with errors
 
 ### 💾 Project Management
 - Save and load multiple projects
@@ -28,11 +29,11 @@ A browser-based visual interface for designing neural network architectures thro
 - Track architecture changes over time
 - Framework selection (PyTorch/TensorFlow)
 
-### 🚀 PyTorch Code Generation
-- Complete model class with all layers
-- Training script with standard PyTorch patterns
-- Configuration file with hyperparameters
-- Copy to clipboard or download as files
+### 🚀 Export & Import
+- **PyTorch Code**: Complete model class, training script, and configuration file
+- **JSON Architecture**: Export/import entire architectures in a secure, readable format
+- Copy code to clipboard or download as files
+- Import previously exported architectures to continue working
 
 ## Available Blocks
 
@@ -72,18 +73,22 @@ Click "New Project" in the header and provide:
 
 ### 3. Validate Your Design
 - Invalid connections are prevented automatically
-- Red borders indicate configuration errors
+- Red exclamation badges appear on nodes with errors
 - Orange text shows missing required parameters
-- Green checkmarks when everything is valid
+- Click "Validate" button to check entire architecture
 
-### 4. Export Your Code
-1. Click "Export Code" in the header
-2. View generated model.py, train.py, and config.py
+### 4. Export Your Architecture
+1. Click "Export" dropdown in the header
+2. Choose export format:
+   - **PyTorch Code**: View generated model.py, train.py, and config.py
+   - **JSON Architecture**: Download architecture as a portable JSON file
 3. Copy code to clipboard or download files
 4. Use the code in your own projects!
 
-### 5. Save Your Work
-Click "Save" to persist your project in browser storage. Load it later from the "Load" menu.
+### 5. Save & Share Your Work
+- **Save**: Click "Save" to persist your project in browser storage
+- **Import**: Click "Import" to load a previously exported JSON architecture
+- **Load**: Access saved projects from the project dropdown menu
 
 ## Example Architectures
 

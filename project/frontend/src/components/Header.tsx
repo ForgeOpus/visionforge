@@ -1,32 +1,45 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useModelBuilderStore } from '@/lib/store'
-import { useKV } from '@github/spark/hooks'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
-  DialogTitle,
-  DialogTrigger
+  DialogTitle
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Download, FloppyDisk, FolderOpen, Code, Flask } from '@phosphor-icons/react'
+import { Plus, Download, FloppyDisk, CaretDown, Code, Flask, CheckCircle, GitBranch, Upload, FileCode, FilePy } from '@phosphor-icons/react'
 import { toast } from 'sonner'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { generatePyTorchCode } from '@/lib/codeGenerator'
-import { Project } from '@/lib/types'
+import { validateModel } from '@/lib/api'
+import { exportToJSON, importFromJSON, downloadJSON, readJSONFile } from '@/lib/exportImport'
+import * as projectApi from '@/lib/projectApi'
 
 export default function Header() {
-  const { currentProject, nodes, edges, createProject, saveProject, loadProject, updateProjectInfo, validateArchitecture } = useModelBuilderStore()
-  const [projects, setProjects] = useKV<Project[]>('model-builder-projects', [])
+  const navigate = useNavigate()
+  const { projectId } = useParams<{ projectId: string }>()
+  const { currentProject, nodes, edges, createProject: createProjectInStore, saveProject, loadProject, validateArchitecture, setNodes, setEdges } = useModelBuilderStore()
+
+  const [projects, setProjects] = useState<projectApi.ProjectResponse[]>([])
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false)
 
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false)
-  const [isLoadProjectOpen, setIsLoadProjectOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
 
   const [newProjectName, setNewProjectName] = useState('')
@@ -35,51 +48,107 @@ export default function Header() {
 
   const [exportCode, setExportCode] = useState<{model: string, train: string, config: string} | null>(null)
 
-  const handleCreateProject = () => {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Load projects list on mount
+  useEffect(() => {
+    loadProjectsList()
+  }, [])
+
+  const loadProjectsList = async () => {
+    setIsLoadingProjects(true)
+    try {
+      const projectsList = await projectApi.fetchProjects()
+      setProjects(projectsList)
+    } catch (error) {
+      console.error('Failed to load projects:', error)
+      toast.error('Failed to load projects list')
+    } finally {
+      setIsLoadingProjects(false)
+    }
+  }
+
+  const handleCreateProject = async () => {
     if (!newProjectName.trim()) {
       toast.error('Please enter a project name')
       return
     }
 
-    createProject(newProjectName, newProjectDesc, newProjectFramework)
-    setIsNewProjectOpen(false)
-    setNewProjectName('')
-    setNewProjectDesc('')
-    toast.success('Project created!')
+    try {
+      const backendProject = await projectApi.createProject({
+        name: newProjectName,
+        description: newProjectDesc,
+        framework: newProjectFramework
+      })
+
+      // Create in local store
+      createProjectInStore(newProjectName, newProjectDesc, newProjectFramework)
+
+      setIsNewProjectOpen(false)
+      setNewProjectName('')
+      setNewProjectDesc('')
+
+      toast.success('Project created!')
+
+      // Navigate to the new project
+      navigate(`/project/${backendProject.id}`)
+
+      // Reload projects list
+      loadProjectsList()
+    } catch (error) {
+      toast.error('Failed to create project', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
   }
 
-  const handleSaveProject = () => {
-    if (!currentProject) {
-      toast.error('No active project to save')
+  const handleSaveProject = async () => {
+    if (nodes.length === 0) {
+      toast.error('No architecture to save')
       return
     }
 
-    saveProject()
+    const project = currentProject
+    if (!project) {
+      toast.error('No active project')
+      return
+    }
 
-    setProjects((prevProjects) => {
-      const projectList = prevProjects || []
-      const existingIndex = projectList.findIndex((p) => p.id === currentProject.id)
-      const updatedProject = { ...currentProject, nodes, edges, updatedAt: Date.now() }
+    try {
+      // Save to backend
+      await projectApi.saveArchitecture(project.id, nodes, edges)
 
-      if (existingIndex >= 0) {
-        const updated = [...projectList]
-        updated[existingIndex] = updatedProject
-        return updated
-      } else {
-        return [...projectList, updatedProject]
-      }
-    })
+      // Save to local store
+      saveProject()
 
-    toast.success('Project saved!')
+      toast.success('Project saved!')
+
+      // Reload projects list
+      loadProjectsList()
+    } catch (error) {
+      toast.error('Failed to save project', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
   }
 
-  const handleLoadProject = (project: Project) => {
-    loadProject(project)
-    setIsLoadProjectOpen(false)
-    toast.success(`Loaded "${project.name}"`)
+  const handleLoadProject = async (project: projectApi.ProjectResponse) => {
+    try {
+      // Fetch full project details
+      const fullProject = await projectApi.fetchProject(project.id)
+
+      // Navigate to project URL
+      navigate(`/project/${project.id}`)
+
+      toast.success(`Loaded "${project.name}"`)
+    } catch (error) {
+      toast.error('Failed to load project', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
   }
 
-  const handleExport = () => {
+  const handleExportPyTorch = () => {
     const errors = validateArchitecture()
     const criticalErrors = errors.filter((e) => e.type === 'error')
 
@@ -107,6 +176,177 @@ export default function Header() {
     }
   }
 
+  const handleExportJSON = () => {
+    if (nodes.length === 0) {
+      toast.error('Cannot export: No blocks in architecture')
+      return
+    }
+
+    try {
+      const exportData = exportToJSON(nodes, edges, currentProject)
+      downloadJSON(exportData)
+      toast.success('JSON exported successfully!')
+    } catch (error) {
+      toast.error('JSON export failed', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
+  }
+
+  const handleImportJSON = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      const jsonData = await readJSONFile(file)
+
+      // Check if we're in an existing project or on the home page
+      if (projectId && currentProject) {
+        // CASE 1: Importing into an existing project
+        // Only import nodes/edges, preserve project metadata
+        // Pass existing nodes to handle ID conflicts
+        const { nodes: importedNodes, edges: importedEdges } = importFromJSON(
+          jsonData,
+          nodes,
+          edges
+        )
+
+        // Merge with existing nodes and edges
+        const mergedNodes = [...nodes, ...importedNodes]
+        const mergedEdges = [...edges, ...importedEdges]
+
+        // Update the canvas
+        setNodes(mergedNodes)
+        setEdges(mergedEdges)
+
+        // Save to backend
+        await projectApi.saveArchitecture(projectId, mergedNodes, mergedEdges)
+
+        toast.success('Architecture imported into current project!', {
+          description: `Added ${importedNodes.length} blocks to "${currentProject.name}"`
+        })
+      } else {
+        // CASE 2: No active project - create a new one from import
+        const { nodes: importedNodes, edges: importedEdges, project } = importFromJSON(jsonData)
+
+        if (project.name && project.description !== undefined) {
+          const backendProject = await projectApi.createProject({
+            name: project.name,
+            description: project.description,
+            framework: project.framework || 'pytorch'
+          })
+
+          // Save the architecture
+          await projectApi.saveArchitecture(backendProject.id, importedNodes, importedEdges)
+
+          // Navigate to new project
+          navigate(`/project/${backendProject.id}`)
+
+          toast.success('Project created from import!', {
+            description: `Created project "${project.name}" with ${importedNodes.length} blocks`
+          })
+
+          // Reload projects list
+          loadProjectsList()
+        }
+      }
+
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    } catch (error) {
+      toast.error('Import failed', {
+        description: error instanceof Error ? error.message : 'Invalid JSON file'
+      })
+
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
+  const triggerFileInput = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleValidate = async () => {
+    if (nodes.length === 0) {
+      toast.error('Cannot validate: No architecture to validate')
+      return
+    }
+
+    try {
+      toast.loading('Validating architecture...')
+
+      const result = await validateModel({
+        nodes: nodes.map(node => ({
+          id: node.id,
+          type: node.data.blockType,
+          data: node.data,
+          position: node.position
+        })),
+        edges: edges.map(edge => ({
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          sourceHandle: edge.sourceHandle || '',
+          targetHandle: edge.targetHandle || ''
+        }))
+      })
+
+      toast.dismiss()
+
+      if (result.success && result.data) {
+        if (result.data.isValid) {
+          toast.success('Architecture is valid!', {
+            description: result.data.warnings && result.data.warnings.length > 0
+              ? `${result.data.warnings.length} warning(s) found`
+              : 'No issues detected'
+          })
+
+          // Show warnings if any
+          if (result.data.warnings && result.data.warnings.length > 0) {
+            result.data.warnings.forEach((warning: any, index: number) => {
+              setTimeout(() => {
+                toast.warning(warning.message || `Warning ${index + 1}`, {
+                  description: warning.suggestion || warning.nodeId ? `Node: ${warning.nodeId}` : undefined
+                })
+              }, index * 100)
+            })
+          }
+        } else {
+          toast.error('Architecture validation failed', {
+            description: result.data.errors && result.data.errors.length > 0
+              ? `${result.data.errors.length} error(s) found`
+              : 'Invalid architecture'
+          })
+
+          // Show errors
+          if (result.data.errors && result.data.errors.length > 0) {
+            result.data.errors.forEach((error: any, index: number) => {
+              setTimeout(() => {
+                toast.error(error.message || `Error ${index + 1}`, {
+                  description: error.suggestion || error.nodeId ? `Node: ${error.nodeId}` : undefined
+                })
+              }, index * 100)
+            })
+          }
+        }
+      } else {
+        toast.error('Validation request failed', {
+          description: result.error || 'Could not connect to validation service'
+        })
+      }
+    } catch (error) {
+      toast.dismiss()
+      toast.error('Validation error', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred'
+      })
+    }
+  }
+
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text)
     toast.success(`${label} copied to clipboard!`)
@@ -117,25 +357,95 @@ export default function Header() {
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <Flask size={28} weight="fill" className="text-primary" />
-          <h1 className="text-xl font-semibold">Visual AI Model Builder</h1>
+          <h1 className="text-xl font-semibold">VisionForge</h1>
         </div>
 
-        {currentProject && (
-          <div className="ml-4 px-3 py-1 bg-muted rounded text-sm">
-            <span className="font-medium">{currentProject.name}</span>
-            <span className="text-muted-foreground ml-2">({currentProject.framework})</span>
-          </div>
-        )}
+        {/* Project Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="h-8 gap-2">
+              <GitBranch size={16} />
+              <span className="font-medium">
+                {currentProject ? currentProject.name : 'No Project'}
+              </span>
+              {currentProject && (
+                <span className="text-xs text-muted-foreground">
+                  ({currentProject.framework})
+                </span>
+              )}
+              <CaretDown size={14} className="text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-xs">
+            <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+              Switch project or create new
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+
+            {/* New Project Option */}
+            <DropdownMenuItem
+              className="gap-2 cursor-pointer"
+              onSelect={() => setIsNewProjectOpen(true)}
+            >
+              <Plus size={16} className="text-primary" />
+              <div className="flex-1">
+                <div className="font-medium">Create New Project</div>
+                <div className="text-xs text-muted-foreground">
+                  Start building a new architecture
+                </div>
+              </div>
+            </DropdownMenuItem>
+
+            {/* Saved Projects List */}
+            {projects && projects.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                  Recent Projects
+                </DropdownMenuLabel>
+                <ScrollArea className="max-h-[300px]">
+                  {projects.slice(0, 10).map((project) => (
+                    <DropdownMenuItem
+                      key={project.id}
+                      className="cursor-pointer flex-col items-start gap-1 py-2"
+                      onSelect={() => handleLoadProject(project)}
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <GitBranch size={14} className="text-muted-foreground" />
+                        <span className="font-medium flex-1">{project.name}</span>
+                        {currentProject?.id === project.id && (
+                          <CheckCircle size={14} weight="fill" className="text-primary" />
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground pl-5">
+                        {project.description || 'No description'} • {project.framework}
+                      </div>
+                      <div className="text-xs text-muted-foreground pl-5">
+                        Updated {new Date(project.updated_at).toLocaleDateString()}
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </ScrollArea>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="flex items-center gap-2">
+        <ThemeToggle />
+        
+        {/* Hidden file input for JSON import */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          onChange={handleImportJSON}
+          className="hidden"
+        />
+
+        {/* New Project Dialog */}
         <Dialog open={isNewProjectOpen} onOpenChange={setIsNewProjectOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Plus size={16} className="mr-2" />
-              New Project
-            </Button>
-          </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create New Project</DialogTitle>
@@ -181,77 +491,72 @@ export default function Header() {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={isLoadProjectOpen} onOpenChange={setIsLoadProjectOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm">
-              <FolderOpen size={16} className="mr-2" />
-              Load
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Load Project</DialogTitle>
-              <DialogDescription>
-                Select a previously saved project
-              </DialogDescription>
-            </DialogHeader>
-            <ScrollArea className="max-h-[400px] pr-4">
-              {!projects || projects.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No saved projects yet
-                </div>
-              ) : (
-                <div className="space-y-2 pt-4">
-                  {projects.map((project) => (
-                    <div
-                      key={project.id}
-                      className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
-                      onClick={() => handleLoadProject(project)}
-                    >
-                      <div className="font-medium">{project.name}</div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        {project.description || 'No description'}
-                      </div>
-                      <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                        <span className="px-2 py-0.5 bg-primary/10 text-primary rounded">
-                          {project.framework}
-                        </span>
-                        <span>
-                          {project.nodes.length} blocks
-                        </span>
-                        <span>•</span>
-                        <span>
-                          {new Date(project.updatedAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-          </DialogContent>
-        </Dialog>
+        {/* Import Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={triggerFileInput}
+        >
+          <Upload size={16} className="mr-2" />
+          Import
+        </Button>
 
         <Button
           variant="outline"
           size="sm"
           onClick={handleSaveProject}
-          disabled={!currentProject}
+          disabled={nodes.length === 0 || !currentProject}
         >
           <FloppyDisk size={16} className="mr-2" />
           Save
         </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleValidate}
+          disabled={nodes.length === 0}
+        >
+          <CheckCircle size={16} className="mr-2" />
+          Validate
+        </Button>
 
+        {/* Export Dropdown */}
         <Dialog open={isExportOpen} onOpenChange={setIsExportOpen}>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={handleExport}
-            disabled={!currentProject || nodes.length === 0}
-          >
-            <Download size={16} className="mr-2" />
-            Export Code
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="default"
+                size="sm"
+                disabled={nodes.length === 0}
+              >
+                <Download size={16} className="mr-2" />
+                Export
+                <CaretDown size={14} className="ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Export Options</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleExportPyTorch} className="gap-2 cursor-pointer">
+                <FilePy size={16} />
+                <div>
+                  <div className="font-medium">PyTorch Code</div>
+                  <div className="text-xs text-muted-foreground">
+                    Generate model.py, train.py, config.py
+                  </div>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportJSON} className="gap-2 cursor-pointer">
+                <FileCode size={16} />
+                <div>
+                  <div className="font-medium">JSON Architecture</div>
+                  <div className="text-xs text-muted-foreground">
+                    Export as importable JSON file
+                  </div>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <DialogContent className="max-w-4xl max-h-[80vh]">
             <DialogHeader>
               <DialogTitle>Export PyTorch Code</DialogTitle>

@@ -1,4 +1,4 @@
-import { useCallback, DragEvent } from 'react'
+import { useCallback, DragEvent, useRef, useEffect } from 'react'
 import {
   ReactFlow,
   Background,
@@ -6,20 +6,30 @@ import {
   MiniMap,
   Connection,
   useReactFlow,
-  ReactFlowProvider
+  ReactFlowProvider,
+  applyNodeChanges,
+  applyEdgeChanges,
+  Node
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useModelBuilderStore } from '@/lib/store'
-import { getBlockDefinition } from '@/lib/blockDefinitions'
-import { BlockData } from '@/lib/types'
+import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
+import { BlockData, BlockType } from '@/lib/types'
 import BlockNode from './BlockNode'
+import CustomConnectionLine from './CustomConnectionLine'
+import { HistoryToolbar } from './HistoryToolbar'
 import { toast } from 'sonner'
 
 const nodeTypes = {
   custom: BlockNode
 }
 
-function FlowCanvas() {
+interface CanvasProps {
+  onDragStart: (type: string) => void
+  onRegisterAddNode: (handler: (blockType: string) => void) => void
+}
+
+function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (blockType: string) => void) => void }) {
   const {
     nodes,
     edges,
@@ -29,10 +39,99 @@ function FlowCanvas() {
     addEdge,
     removeEdge,
     setSelectedNodeId,
-    validateConnection
+    validateConnection,
+    undo,
+    redo
   } = useModelBuilderStore()
 
-  const { screenToFlowPosition } = useReactFlow()
+  const { screenToFlowPosition, getViewport } = useReactFlow()
+  const nextPositionOffset = useRef({ x: 0, y: 0 })
+
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Ctrl (Windows/Linux) or Cmd (Mac)
+      const isMod = e.ctrlKey || e.metaKey
+      
+      if (isMod && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+      } else if (isMod && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault()
+        redo()
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [undo, redo])
+
+  // Find a suitable position for a new node
+  const findAvailablePosition = useCallback(() => {
+    const viewport = getViewport()
+    const GRID_SIZE = 50
+    
+    // Start from center of viewport
+    const centerX = -viewport.x / viewport.zoom + (window.innerWidth / 2) / viewport.zoom
+    const centerY = -viewport.y / viewport.zoom + (window.innerHeight / 2) / viewport.zoom
+    
+    // Use offset for new nodes (allows overlapping)
+    const x = centerX + nextPositionOffset.current.x
+    const y = centerY + nextPositionOffset.current.y
+    
+    // Update offset for next node
+    nextPositionOffset.current = {
+      x: (nextPositionOffset.current.x + GRID_SIZE) % (GRID_SIZE * 4),
+      y: nextPositionOffset.current.y
+    }
+    
+    if (nextPositionOffset.current.x === 0) {
+      nextPositionOffset.current.y = (nextPositionOffset.current.y + GRID_SIZE) % (GRID_SIZE * 4)
+    }
+    
+    return { x, y }
+  }, [getViewport])
+
+  // Handle block click from palette
+  useEffect(() => {
+    const handleBlockClickInternal = (blockType: string) => {
+      const nodeDef = getNodeDefinition(blockType as BlockType, BackendFramework.PyTorch)
+      if (!nodeDef) return
+
+      const position = findAvailablePosition()
+
+      const newNode = {
+        id: `${blockType}-${Date.now()}`,
+        type: 'custom',
+        position,
+        data: {
+          blockType: nodeDef.metadata.type,
+          label: nodeDef.metadata.label,
+          config: {},
+          category: nodeDef.metadata.category
+        } as BlockData
+      }
+
+      nodeDef.configSchema.forEach((field) => {
+        if (field.default !== undefined) {
+          newNode.data.config[field.name] = field.default
+        }
+      })
+
+      addNode(newNode)
+
+      setTimeout(() => {
+        useModelBuilderStore.getState().inferDimensions()
+      }, 0)
+
+      toast.success(`Added ${nodeDef.metadata.label}`, {
+        description: 'Block added to canvas'
+      })
+    }
+    
+    // Register the handler with parent
+    onRegisterAddNode(handleBlockClickInternal)
+  }, [addNode, findAvailablePosition, onRegisterAddNode])
 
   const onDragOver = useCallback((event: DragEvent) => {
     event.preventDefault()
@@ -46,8 +145,8 @@ function FlowCanvas() {
       const type = (window as any).draggedBlockTypeGlobal
       if (!type) return
 
-      const definition = getBlockDefinition(type)
-      if (!definition) return
+      const nodeDef = getNodeDefinition(type as BlockType, BackendFramework.PyTorch)
+      if (!nodeDef) return
 
       const position = screenToFlowPosition({
         x: event.clientX,
@@ -59,14 +158,14 @@ function FlowCanvas() {
         type: 'custom',
         position,
         data: {
-          blockType: definition.type,
-          label: definition.label,
+          blockType: nodeDef.metadata.type,
+          label: nodeDef.metadata.label,
           config: {},
-          category: definition.category
+          category: nodeDef.metadata.category
         } as BlockData
       }
 
-      Object.values(definition.configSchema).forEach((field) => {
+      nodeDef.configSchema.forEach((field) => {
         if (field.default !== undefined) {
           newNode.data.config[field.name] = field.default
         }
@@ -91,37 +190,40 @@ function FlowCanvas() {
         const sourceNode = nodes.find((n) => n.id === connection.source)
         const targetNode = nodes.find((n) => n.id === connection.target)
 
-        if (targetNode?.data.blockType !== 'concat' && targetNode?.data.blockType !== 'add') {
-          const hasInput = edges.some((e) => e.target === connection.target)
-          if (hasInput) {
-            toast.error('Block already has an input connection', {
-              description: 'Use a Concatenate or Add block for multiple inputs'
+        // Use the validation function to get specific error message
+        if (sourceNode && targetNode) {
+          const targetNodeDef = getNodeDefinition(
+            targetNode.data.blockType as BlockType,
+            BackendFramework.PyTorch
+          )
+          
+          if (!targetNodeDef) {
+            toast.error('Connection Invalid', {
+              description: 'Invalid target node type'
+            })
+            return
+          }
+          
+          const errorMessage = targetNodeDef.validateIncomingConnection(
+            sourceNode.data.blockType as BlockType,
+            sourceNode.data.outputShape,
+            targetNode.data.config
+          )
+          
+          if (errorMessage) {
+            toast.error('Connection Invalid', {
+              description: errorMessage
             })
             return
           }
         }
 
-        if (sourceNode?.data.outputShape && targetNode) {
-          const sourceShape = sourceNode.data.outputShape
-          const targetType = targetNode.data.blockType
-
-          if (targetType === 'linear' && sourceShape.dims.length !== 2) {
-            toast.error('Shape incompatible with Linear layer', {
-              description: 'Linear requires 2D input. Add a Flatten layer first.'
-            })
-            return
-          }
-
-          if (targetType === 'conv2d' && sourceShape.dims.length !== 4) {
-            toast.error('Shape incompatible with Conv2D layer', {
-              description: 'Conv2D requires 4D input [B, C, H, W]'
-            })
-            return
-          }
-
-          if (targetType === 'add') {
-            toast.error('Shape incompatible for addition', {
-              description: 'All inputs to Add must have the same shape'
+        // Fallback for other validation errors
+        if (targetNode?.data.blockType !== 'concat' && targetNode?.data.blockType !== 'add') {
+          const hasInput = edges.some((e) => e.target === connection.target)
+          if (hasInput) {
+            toast.error('Block already has an input connection', {
+              description: 'Use a Concatenate or Add block for multiple inputs'
             })
             return
           }
@@ -149,18 +251,7 @@ function FlowCanvas() {
 
   const onNodesChange = useCallback(
     (changes: any) => {
-      const updatedNodes = [...nodes]
-      changes.forEach((change: any) => {
-        if (change.type === 'position' && change.dragging === false) {
-          const nodeIndex = updatedNodes.findIndex((n) => n.id === change.id)
-          if (nodeIndex !== -1) {
-            updatedNodes[nodeIndex] = {
-              ...updatedNodes[nodeIndex],
-              position: change.position
-            }
-          }
-        }
-      })
+      const updatedNodes = applyNodeChanges(changes, nodes)
       setNodes(updatedNodes)
     },
     [nodes, setNodes]
@@ -168,13 +259,15 @@ function FlowCanvas() {
 
   const onEdgesChange = useCallback(
     (changes: any) => {
+      setEdges(applyEdgeChanges(changes, edges))
+      // Handle edge removal for store cleanup
       changes.forEach((change: any) => {
         if (change.type === 'remove') {
           removeEdge(change.id)
         }
       })
     },
-    [removeEdge]
+    [edges, setEdges, removeEdge]
   )
 
   const onNodeClick = useCallback(
@@ -194,6 +287,7 @@ function FlowCanvas() {
       onDrop={onDrop}
       onDragOver={onDragOver}
     >
+      <HistoryToolbar />
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -203,6 +297,7 @@ function FlowCanvas() {
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
+        connectionLineComponent={CustomConnectionLine}
         fitView
         minZoom={0.5}
         maxZoom={1.5}
@@ -215,20 +310,42 @@ function FlowCanvas() {
         <Controls />
         <MiniMap
           nodeColor={(node) => {
-            const def = getBlockDefinition((node.data as BlockData).blockType)
-            return def?.color || '#ccc'
+            const nodeDef = getNodeDefinition(
+              (node.data as BlockData).blockType as BlockType,
+              BackendFramework.PyTorch
+            )
+            return nodeDef?.metadata.color || '#3b82f6'
           }}
-          className="bg-card border border-border"
+          nodeStrokeColor={(node) => {
+            const nodeDef = getNodeDefinition(
+              (node.data as BlockData).blockType as BlockType,
+              BackendFramework.PyTorch
+            )
+            const baseColor = nodeDef?.metadata.color || '#3b82f6'
+            // Return a slightly darker version for the stroke
+            return baseColor
+          }}
+          nodeStrokeWidth={2}
+          nodeBorderRadius={4}
+          maskColor="rgba(0, 0, 0, 0.05)"
+          className="bg-card border border-border rounded-lg shadow-lg"
+          style={{
+            backgroundColor: 'var(--card)',
+            borderColor: 'var(--border)',
+          }}
+          zoomable
+          pannable
+          position="bottom-right"
         />
       </ReactFlow>
     </div>
   )
 }
 
-export default function Canvas({ onDragStart }: { onDragStart: (type: string) => void }) {
+export default function Canvas({ onDragStart, onRegisterAddNode }: CanvasProps) {
   return (
     <ReactFlowProvider>
-      <FlowCanvas />
+      <FlowCanvas onRegisterAddNode={onRegisterAddNode} />
     </ReactFlowProvider>
   )
 }

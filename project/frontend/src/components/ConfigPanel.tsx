@@ -1,5 +1,6 @@
+import { useState, useEffect } from 'react'
 import { useModelBuilderStore } from '@/lib/store'
-import { getBlockDefinition } from '@/lib/blockDefinitions'
+import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -7,12 +8,57 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card } from '@/components/ui/card'
-import { X } from '@phosphor-icons/react'
+import { X, Code } from '@phosphor-icons/react'
+import CustomLayerModal from './CustomLayerModal'
 
 export default function ConfigPanel() {
   const { nodes, selectedNodeId, updateNode, setSelectedNodeId, removeNode } = useModelBuilderStore()
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false)
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)
+
+  const handleCustomLayerSave = (config: {
+    name: string
+    code: string
+    output_shape?: string
+    description?: string
+  }) => {
+    if (selectedNode) {
+      updateNode(selectedNode.id, {
+        config: {
+          ...selectedNode.data.config,
+          ...config
+        }
+      })
+    }
+  }
+
+  // Automatically open modal when custom block is selected
+  useEffect(() => {
+    if (selectedNode?.data.blockType === 'custom') {
+      setIsCustomModalOpen(true)
+    }
+  }, [selectedNode?.id, selectedNode?.data.blockType])
+
+  // For custom blocks, don't show the sidebar at all - only the modal
+  if (selectedNode?.data.blockType === 'custom') {
+    return (
+      <CustomLayerModal
+        isOpen={isCustomModalOpen}
+        onClose={() => {
+          setIsCustomModalOpen(false)
+          setSelectedNodeId(null) // Deselect the node when modal closes
+        }}
+        onSave={handleCustomLayerSave}
+        initialConfig={{
+          name: selectedNode.data.config.name as string | undefined,
+          code: selectedNode.data.config.code as string | undefined,
+          output_shape: selectedNode.data.config.output_shape as string | undefined,
+          description: selectedNode.data.config.description as string | undefined
+        }}
+      />
+    )
+  }
 
   if (!selectedNode) {
     return (
@@ -24,8 +70,14 @@ export default function ConfigPanel() {
     )
   }
 
-  const definition = getBlockDefinition(selectedNode.data.blockType)
-  if (!definition) return null
+  const nodeDef = getNodeDefinition(selectedNode.data.blockType, BackendFramework.PyTorch)
+  if (!nodeDef) return null
+  
+  const definition = {
+    label: nodeDef.metadata.label,
+    description: nodeDef.metadata.description,
+    configSchema: nodeDef.configSchema
+  }
 
   const handleConfigChange = (fieldName: string, value: any) => {
     updateNode(selectedNode.id, {
@@ -50,8 +102,8 @@ export default function ConfigPanel() {
   }
 
   return (
-    <div className="w-80 bg-card border-l border-border h-full flex flex-col">
-      <div className="p-4 border-b border-border flex items-center justify-between">
+    <div className="w-80 bg-card border-l border-border h-full flex flex-col overflow-hidden">
+      <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
         <div>
           <h2 className="font-semibold text-lg">{definition.label}</h2>
           <p className="text-xs text-muted-foreground">{definition.description}</p>
@@ -65,10 +117,12 @@ export default function ConfigPanel() {
         </Button>
       </div>
 
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         <div className="p-4 space-y-6">
           {definition.configSchema.length > 0 ? (
-            definition.configSchema.map((field) => (
+            definition.configSchema
+              .filter(field => field.name !== 'code') // Skip code field, it's handled in modal
+              .map((field) => (
               <div key={field.name} className="space-y-2">
                 <Label className="text-sm font-medium">
                   {field.label}
@@ -199,9 +253,9 @@ export default function ConfigPanel() {
             </Card>
           )}
         </div>
-      </ScrollArea>
+      </div>
 
-      <div className="p-4 border-t border-border">
+      <div className="p-4 border-t border-border shrink-0">
         <Button
           variant="destructive"
           className="w-full"

@@ -1,5 +1,9 @@
 export type BlockType =
   | 'input'
+  | 'dataloader'
+  | 'output'
+  | 'loss'
+  | 'empty'
   | 'linear'
   | 'conv2d'
   | 'dropout'
@@ -13,7 +17,7 @@ export type BlockType =
   | 'add'
   | 'custom'
 
-export type BlockCategory = 'input' | 'basic' | 'advanced' | 'merge'
+export type BlockCategory = 'input' | 'output' | 'basic' | 'advanced' | 'merge' | 'utility'
 
 export interface TensorShape {
   dims: (number | string)[]

@@ -1,0 +1,92 @@
+/**
+ * PyTorch Custom Layer Node Definition
+ */
+
+import { NodeDefinition } from '../../base'
+import { NodeMetadata, BackendFramework } from '../../contracts'
+import { TensorShape, BlockConfig, ConfigField } from '../../../types'
+
+export class CustomNode extends NodeDefinition {
+  readonly metadata: NodeMetadata = {
+    type: 'custom',
+    label: 'Custom Layer',
+    category: 'advanced',
+    color: 'var(--color-purple)',
+    icon: 'Code',
+    description: 'Custom layer with user-defined code',
+    framework: BackendFramework.PyTorch
+  }
+
+  readonly configSchema: ConfigField[] = [
+    {
+      name: 'name',
+      label: 'Layer Name',
+      type: 'text',
+      required: true,
+      placeholder: 'my_custom_layer',
+      description: 'Name for your custom layer'
+    },
+    {
+      name: 'code',
+      label: 'Python Code',
+      type: 'text',
+      default: '# Define your forward pass\n# Input: x\n# Output: return x\nreturn x',
+      description: 'Custom forward pass implementation'
+    },
+    {
+      name: 'output_shape',
+      label: 'Output Shape',
+      type: 'text',
+      placeholder: '[batch, features]',
+      description: 'Expected output shape (optional, leave empty to match input)'
+    },
+    {
+      name: 'description',
+      label: 'Description',
+      type: 'text',
+      placeholder: 'Describe what this layer does',
+      description: 'Brief description of the layer functionality'
+    }
+  ]
+
+  computeOutputShape(inputShape: TensorShape | undefined, config: BlockConfig): TensorShape | undefined {
+    // If user specified output shape, use it
+    if (config.output_shape) {
+      const dims = this.parseShapeString(String(config.output_shape))
+      if (dims) {
+        return {
+          dims,
+          description: String(config.description || 'Custom output')
+        }
+      }
+    }
+
+    // Otherwise pass through input shape
+    return inputShape
+  }
+
+  validateIncomingConnection(): string | undefined {
+    // Custom nodes are flexible and accept connections from any source
+    return undefined
+  }
+
+  validateConfig(config: BlockConfig): string[] {
+    const errors = super.validateConfig(config)
+
+    // Validate name format (should be valid Python identifier)
+    const name = String(config.name || '')
+    if (name && !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+      errors.push('Layer Name must be a valid Python identifier')
+    }
+
+    // Validate output shape format if provided
+    if (config.output_shape && config.output_shape !== '') {
+      const dims = this.parseShapeString(String(config.output_shape))
+      if (!dims) {
+        errors.push('Output Shape must be a valid JSON array of positive numbers')
+      }
+    }
+
+    return errors
+  }
+}
