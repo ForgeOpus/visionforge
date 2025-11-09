@@ -850,6 +850,62 @@ def generate_layer_class(
         x, _ = self.attention(x, x, x)
         return x'''
 
+    elif node_type == 'custom':
+        name = config.get('name', 'CustomLayer')
+        description = config.get('description', 'User-defined custom layer')
+
+        # Generate proper class name from user's layer name
+        safe_name = name.replace(' ', '_').replace('-', '_')
+        custom_class_name = f"CustomLayer_{safe_name}"
+
+        return f'''class {custom_class_name}(nn.Module):
+    """
+    Custom User-Defined Layer: {name}
+
+    {description}
+
+    TODO: Implement your custom layer logic below.
+    This class provides the basic structure following PyTorch conventions.
+    Add your initialization and forward pass logic.
+
+    Shape:
+        - Input: [batch, *] (Define your input shape)
+        - Output: [batch, *] (Define your output shape)
+    """
+
+    def __init__(self):
+        """Initialize the custom layer."""
+        super({custom_class_name}, self).__init__()
+
+        # TODO: Define your layer parameters here
+        # Examples:
+        # self.linear = nn.Linear(in_features, out_features)
+        # self.conv = nn.Conv2d(in_channels, out_channels, kernel_size)
+        # self.activation = nn.ReLU()
+        # self.dropout = nn.Dropout(p=0.5)
+
+        pass
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the custom layer.
+
+        Args:
+            x: Input tensor
+
+        Returns:
+            Output tensor
+        """
+        # TODO: Implement your forward pass logic here
+        # Examples:
+        # x = self.linear(x)
+        # x = self.activation(x)
+        # x = self.dropout(x)
+
+        # Placeholder: returns input unchanged
+        # Replace this with your custom logic
+        return x'''
+
     return None
 
 

@@ -826,6 +826,66 @@ def generate_layer_class(
         x = self.add(inputs)
         return x'''
 
+    elif node_type == 'custom':
+        name = config.get('name', 'CustomLayer')
+        description = config.get('description', 'User-defined custom layer')
+
+        # Generate proper class name from user's layer name
+        safe_name = name.replace(' ', '_').replace('-', '_')
+        custom_class_name = f"CustomLayer_{safe_name}"
+
+        return f'''class {custom_class_name}(layers.Layer):
+    """
+    Custom User-Defined Layer: {name}
+
+    {description}
+
+    TODO: Implement your custom layer logic below.
+    This class provides the basic structure following TensorFlow/Keras conventions.
+    Add your initialization and call method logic.
+
+    Note: TensorFlow uses NHWC format (batch, height, width, channels)
+
+    Shape:
+        - Input: [batch, *] (Define your input shape in NHWC format)
+        - Output: [batch, *] (Define your output shape)
+    """
+
+    def __init__(self):
+        """Initialize the custom layer."""
+        super({custom_class_name}, self).__init__()
+
+        # TODO: Define your layer components here
+        # Examples:
+        # self.dense = layers.Dense(units=128)
+        # self.conv = layers.Conv2D(filters=64, kernel_size=3)
+        # self.activation = layers.ReLU()
+        # self.dropout = layers.Dropout(rate=0.5)
+
+        pass
+
+    def call(self, inputs: tf.Tensor, training: Optional[bool] = None) -> tf.Tensor:
+        """
+        Forward pass through the custom layer.
+
+        Args:
+            inputs: Input tensor in NHWC format
+            training: Whether in training mode
+
+        Returns:
+            Output tensor
+        """
+        # TODO: Implement your call method logic here
+        # Examples:
+        # x = self.dense(inputs)
+        # x = self.activation(x)
+        # x = self.dropout(x, training=training)
+
+        # Placeholder: returns input unchanged
+        # Replace this with your custom logic
+        x = inputs
+        return x'''
+
     return None
 
 
