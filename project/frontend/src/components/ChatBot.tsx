@@ -211,21 +211,39 @@ export default function ChatBot() {
             return
           }
 
-          // Create properly structured node with all metadata
+          // Create properly structured node with all metadata (matching drag-and-drop format)
           const newNode = {
-            id: `node-${Date.now()}`,
-            type: 'block',
+            id: `${nodeType}-${Date.now()}`,
+            type: 'custom',
             position: position || { x: 100, y: 100 },
             data: {
-              blockType: nodeType,
+              blockType: nodeDef.metadata.type,
               label: nodeDef.metadata.label,
               category: nodeDef.metadata.category,
-              config: config || nodeDef.getDefaultConfig(),
+              config: config || {},
               inputShape: undefined,
               outputShape: undefined
             }
           }
+
+          // Apply default config values from schema
+          nodeDef.configSchema.forEach((field) => {
+            if (field.default !== undefined && !config?.[field.name]) {
+              newNode.data.config[field.name] = field.default
+            }
+          })
+
+          // Merge provided config
+          if (config) {
+            newNode.data.config = { ...newNode.data.config, ...config }
+          }
+
           addNode(newNode)
+
+          // Infer dimensions after adding node
+          setTimeout(() => {
+            useModelBuilderStore.getState().inferDimensions()
+          }, 0)
           toast.success('Node added', {
             description: `Added ${nodeDef.metadata.label} to the workflow`
           })
@@ -374,7 +392,7 @@ export default function ChatBot() {
                           </div>
                         )}
 
-                        <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-sm break-words [&_pre]:overflow-x-auto [&_code]:break-words [&_p]:break-words">
+                        <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-sm break-words [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_code]:break-words [&_code]:whitespace-pre-wrap [&_p]:break-words">
                           <ReactMarkdown>{message.content}</ReactMarkdown>
                         </div>
 

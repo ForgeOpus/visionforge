@@ -12,8 +12,8 @@ export class ConcatNode extends MergeNodeDefinition {
     label: 'Concatenate',
     category: 'merge',
     color: 'var(--color-cyan)',
-    icon: 'GitMerge',
-    description: 'Concatenate multiple tensors along a dimension',
+    icon: 'GitBranch',
+    description: 'Concatenate multiple tensors',
     framework: BackendFramework.PyTorch
   }
 

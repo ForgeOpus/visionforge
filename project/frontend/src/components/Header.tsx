@@ -97,7 +97,7 @@ export default function Header() {
       toast.success('Project created!')
 
       // Navigate to the new project
-      navigate(`/app/project/${backendProject.id}`)
+      navigate(`/project/${backendProject.id}`)
 
       // Reload projects list
       loadProjectsList()
@@ -144,7 +144,7 @@ export default function Header() {
       const fullProject = await projectApi.fetchProject(project.id)
 
       // Navigate to project URL
-      navigate(`/app/project/${project.id}`)
+      navigate(`/project/${project.id}`)
 
       toast.success(`Loaded "${project.name}"`)
     } catch (error) {
@@ -246,7 +246,7 @@ export default function Header() {
           await projectApi.saveArchitecture(backendProject.id, importedNodes, importedEdges)
 
           // Navigate to new project
-          navigate(`/app/project/${backendProject.id}`)
+          navigate(`/project/${backendProject.id}`)
 
           toast.success('Project created from import!', {
             description: `Created project "${project.name}" with ${importedNodes.length} blocks`
@@ -356,6 +356,19 @@ export default function Header() {
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text)
     toast.success(`${label} copied to clipboard!`)
+  }
+
+  const downloadFile = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    toast.success(`${filename} downloaded!`)
   }
 
   const handleOpenProjectManagement = (project: projectApi.ProjectResponse, e: React.MouseEvent) => {
@@ -632,7 +645,7 @@ export default function Header() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogContent className="max-w-4xl max-h-[90vh] w-full overflow-hidden flex flex-col">
             <DialogHeader>
               <DialogTitle>Export PyTorch Code</DialogTitle>
               <DialogDescription>
@@ -640,56 +653,92 @@ export default function Header() {
               </DialogDescription>
             </DialogHeader>
             {exportCode && (
-              <Tabs defaultValue="model" className="w-full">
-                <TabsList>
-                  <TabsTrigger value="model">model.py</TabsTrigger>
-                  <TabsTrigger value="train">train.py</TabsTrigger>
-                  <TabsTrigger value="config">config.py</TabsTrigger>
+              <Tabs defaultValue="model" className="w-full flex-1 flex flex-col min-h-0">
+                <TabsList className="w-full shrink-0">
+                  <TabsTrigger value="model" className="flex-1">model.py</TabsTrigger>
+                  <TabsTrigger value="train" className="flex-1">train.py</TabsTrigger>
+                  <TabsTrigger value="config" className="flex-1">config.py</TabsTrigger>
                 </TabsList>
-                <TabsContent value="model">
-                  <ScrollArea className="h-[400px] w-full">
-                    <pre className="text-xs font-mono bg-muted p-4 rounded">
-                      <code>{exportCode.model}</code>
-                    </pre>
-                  </ScrollArea>
-                  <Button
-                    className="w-full mt-2"
-                    variant="outline"
-                    onClick={() => copyToClipboard(exportCode.model, 'model.py')}
-                  >
-                    <Code size={16} className="mr-2" />
-                    Copy model.py
-                  </Button>
+                <TabsContent value="model" className="mt-4 flex-1 flex flex-col min-h-0">
+                  <div className="flex-1 w-full border rounded-md overflow-auto bg-muted">
+                    <div className="min-w-max">
+                      <pre className="text-xs font-mono p-4 whitespace-pre">
+                        <code>{exportCode.model}</code>
+                      </pre>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3 shrink-0">
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      onClick={() => copyToClipboard(exportCode.model, 'model.py')}
+                    >
+                      <Code size={16} className="mr-2" />
+                      Copy
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      onClick={() => downloadFile(exportCode.model, 'model.py')}
+                    >
+                      <Download size={16} className="mr-2" />
+                      Download
+                    </Button>
+                  </div>
                 </TabsContent>
-                <TabsContent value="train">
-                  <ScrollArea className="h-[400px] w-full">
-                    <pre className="text-xs font-mono bg-muted p-4 rounded">
-                      <code>{exportCode.train}</code>
-                    </pre>
-                  </ScrollArea>
-                  <Button
-                    className="w-full mt-2"
-                    variant="outline"
-                    onClick={() => copyToClipboard(exportCode.train, 'train.py')}
-                  >
-                    <Code size={16} className="mr-2" />
-                    Copy train.py
-                  </Button>
+                <TabsContent value="train" className="mt-4 flex-1 flex flex-col min-h-0">
+                  <div className="flex-1 w-full border rounded-md overflow-auto bg-muted">
+                    <div className="min-w-max">
+                      <pre className="text-xs font-mono p-4 whitespace-pre">
+                        <code>{exportCode.train}</code>
+                      </pre>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3 shrink-0">
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      onClick={() => copyToClipboard(exportCode.train, 'train.py')}
+                    >
+                      <Code size={16} className="mr-2" />
+                      Copy
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      onClick={() => downloadFile(exportCode.train, 'train.py')}
+                    >
+                      <Download size={16} className="mr-2" />
+                      Download
+                    </Button>
+                  </div>
                 </TabsContent>
-                <TabsContent value="config">
-                  <ScrollArea className="h-[400px] w-full">
-                    <pre className="text-xs font-mono bg-muted p-4 rounded">
-                      <code>{exportCode.config}</code>
-                    </pre>
-                  </ScrollArea>
-                  <Button
-                    className="w-full mt-2"
-                    variant="outline"
-                    onClick={() => copyToClipboard(exportCode.config, 'config.py')}
-                  >
-                    <Code size={16} className="mr-2" />
-                    Copy config.py
-                  </Button>
+                <TabsContent value="config" className="mt-4 flex-1 flex flex-col min-h-0">
+                  <div className="flex-1 w-full border rounded-md overflow-auto bg-muted">
+                    <div className="min-w-max">
+                      <pre className="text-xs font-mono p-4 whitespace-pre">
+                        <code>{exportCode.config}</code>
+                      </pre>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3 shrink-0">
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      onClick={() => copyToClipboard(exportCode.config, 'config.py')}
+                    >
+                      <Code size={16} className="mr-2" />
+                      Copy
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      onClick={() => downloadFile(exportCode.config, 'config.py')}
+                    >
+                      <Download size={16} className="mr-2" />
+                      Download
+                    </Button>
+                  </div>
                 </TabsContent>
               </Tabs>
             )}

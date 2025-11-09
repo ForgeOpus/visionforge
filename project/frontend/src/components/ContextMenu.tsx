@@ -55,10 +55,10 @@ export function ContextMenu({
     return (
       <Card
         ref={menuRef}
-        className="fixed z-[100] p-1 min-w-[200px] shadow-lg border"
+        className="fixed z-[100] py-1 gap-0 min-w-[200px] shadow-lg border rounded-md"
         style={{ left: `${x}px`, top: `${y}px` }}
       >
-        <div className="text-xs font-semibold text-muted-foreground px-2 py-1">
+        <div className="text-xs font-semibold text-muted-foreground px-2 py-1.5">
           Recently Used Nodes
         </div>
         {recentlyUsedNodes.length > 0 ? (
@@ -71,7 +71,7 @@ export function ContextMenu({
             return (
               <button
                 key={nodeType}
-                className="w-full flex items-center px-2 hover:bg-accent rounded text-sm transition-colors"
+                className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-accent rounded-sm text-sm transition-colors"
                 onClick={() => {
                   onAddNode?.(nodeType, x, y)
                   onClose()
@@ -83,7 +83,7 @@ export function ContextMenu({
             )
           })
         ) : (
-          <div className="text-xs text-muted-foreground px-2 py-2">
+          <div className="text-xs text-muted-foreground px-2 py-1.5">
             No recently used nodes
           </div>
         )}
@@ -95,11 +95,11 @@ export function ContextMenu({
   return (
     <Card
       ref={menuRef}
-      className="fixed z-[100] p-1 min-w-[180px] shadow-lg border"
+      className="fixed z-[100] py-1 gap-0 min-w-[180px] shadow-lg border rounded-md"
       style={{ left: `${x}px`, top: `${y}px` }}
     >
       <button
-        className="w-full flex items-center gap-2 px-2 py-1 hover:bg-accent rounded text-sm transition-colors"
+        className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-accent rounded-sm text-sm transition-colors"
         onClick={() => {
           if (nodeId) onDuplicateNode?.(nodeId)
           onClose()
@@ -109,7 +109,7 @@ export function ContextMenu({
         <span>Duplicate</span>
       </button>
       <button
-        className="w-full flex items-center gap-2 px-2 py-1 hover:bg-accent rounded text-sm transition-colors"
+        className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-accent rounded-sm text-sm transition-colors"
         onClick={() => {
           if (nodeId) onReplicateNode?.(nodeId)
           onClose()
@@ -118,9 +118,9 @@ export function ContextMenu({
         <Icons.Code size={16} />
         <span>Replicate as Custom</span>
       </button>
-      <div className="h-px bg-border my-1" />
+      <div className="h-px bg-border my-1 -mx-1" />
       <button
-        className="w-full flex items-center gap-2 px-2 py-1 hover:bg-destructive/10 hover:text-destructive rounded text-sm transition-colors"
+        className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-destructive/10 hover:text-destructive rounded-sm text-sm transition-colors"
         onClick={() => {
           if (nodeId) onDeleteNode?.(nodeId)
           onClose()

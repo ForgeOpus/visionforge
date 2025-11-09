@@ -13,7 +13,7 @@ export class DataLoaderNode extends SourceNodeDefinition {
     category: 'input',
     color: 'var(--color-teal)',
     icon: 'Database',
-    description: 'Load and prepare input data with optional ground truth',
+    description: 'Load and prepare input data',
     framework: BackendFramework.PyTorch
   }
 
