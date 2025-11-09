@@ -25,7 +25,7 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
 
   return (
     <Card
-      className="min-w-[200px] transition-all relative"
+      className="min-w-[200px] w-[220px] transition-all duration-200 relative"
       style={{
         borderColor: selected ? 'var(--color-accent)' : definition.color,
         borderWidth: selected ? 3 : 2,
