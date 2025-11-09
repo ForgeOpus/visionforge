@@ -14,6 +14,8 @@ echo "📦 Installing frontend dependencies..."
 npm install
 
 echo "🔨 Building React app..."
+# Ensure VITE_API_URL defaults to /api for single-service deployment
+export VITE_API_URL="${VITE_API_URL:-/api}"
 npm run build
 
 echo "🗑️  Cleaning old build..."
