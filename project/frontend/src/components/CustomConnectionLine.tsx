@@ -20,8 +20,8 @@ export default function CustomConnectionLine({
   const midX = (fromX + toX) / 2
   const midY = (fromY + toY) / 2
   
-  // Default to valid (green) connection line
-  let strokeColor = 'var(--color-accent)'
+  // Default to valid connection line
+  let strokeColor = '#6366f1'
   let errorMessage: string | null = null
   
   // Check if we're hovering over a target node

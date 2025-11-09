@@ -270,7 +270,7 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
         ...connection,
         id: `e${connection.source}-${connection.target}-${Date.now()}`,
         animated: true,
-        style: { stroke: 'var(--color-accent)', strokeWidth: 2 }
+        style: { stroke: '#6366f1', strokeWidth: 2 }
       }
 
       addEdge(edge)
@@ -360,7 +360,7 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
         ...newConnection,
         id: `e${newConnection.source}-${newConnection.target}-${Date.now()}`,
         animated: true,
-        style: { stroke: 'var(--color-accent)', strokeWidth: 2 }
+        style: { stroke: '#6366f1', strokeWidth: 2 }
       }
 
       addEdge(edge)
@@ -602,7 +602,7 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
         maxZoom={1.5}
         defaultEdgeOptions={{
           animated: true,
-          style: { stroke: 'var(--color-accent)', strokeWidth: 2 }
+          style: { stroke: '#6366f1', strokeWidth: 2 }
         }}
       >
         <Background gap={20} size={1} />
