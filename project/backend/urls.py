@@ -33,6 +33,7 @@ urlpatterns = [
     # Serve assets directory (React build files)
     re_path(r'^assets/(?P<path>.*)$', serve, {'document_root': settings.BASE_DIR / 'frontend_build' / 'assets'}),
     # Catch-all pattern to serve React app for any route not matched above
+    # Excludes /api/ and /admin/ paths with negative lookahead
     # This must be last to allow Django routes to take precedence
-    re_path(r'^.*$', ReactAppView.as_view(), name='react-app'),
+    re_path(r'^(?!api/|admin/).*$', ReactAppView.as_view(), name='react-app'),
 ]
