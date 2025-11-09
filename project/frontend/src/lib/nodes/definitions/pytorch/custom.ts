@@ -30,7 +30,40 @@ export class CustomNode extends NodeDefinition {
       name: 'code',
       label: 'Python Code',
       type: 'text',
-      default: '# Define your forward pass\n# Input: x\n# Output: return x\nreturn x',
+      default: `"""Custom Layer Template - PyTorch
+
+TODO: Implement your custom layer following PyTorch conventions.
+"""
+import torch
+import torch.nn as nn
+
+class CustomLayer(nn.Module):
+    """
+    Custom User-Defined Layer
+
+    Shape:
+        - Input: [batch, *] (Define your input shape)
+        - Output: [batch, *] (Define your output shape)
+    """
+
+    def __init__(self):
+        """Initialize the custom layer."""
+        super(CustomLayer, self).__init__()
+
+        # TODO: Define your layer parameters here
+        # Examples:
+        # self.linear = nn.Linear(in_features, out_features)
+        # self.conv = nn.Conv2d(in_channels, out_channels, kernel_size)
+        # self.activation = nn.ReLU()
+
+        pass
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through the custom layer."""
+        # TODO: Implement your forward pass logic here
+
+        # Placeholder: returns input unchanged
+        return x`,
       description: 'Custom forward pass implementation'
     },
     {
