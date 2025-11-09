@@ -10,6 +10,7 @@ import {
   DimensionRequirement
 } from './contracts'
 import { TensorShape, BlockConfig, ConfigField, BlockType } from '../types'
+import { PortDefinition, DEFAULT_INPUT_PORT, DEFAULT_OUTPUT_PORT } from './ports'
 
 /**
  * Abstract base class that all node definitions extend
@@ -18,6 +19,22 @@ import { TensorShape, BlockConfig, ConfigField, BlockType } from '../types'
 export abstract class NodeDefinition implements INodeDefinition {
   abstract readonly metadata: NodeMetadata
   abstract readonly configSchema: ConfigField[]
+  
+  /**
+   * Get input ports for this node based on configuration
+   * Override in subclasses for nodes with multiple or dynamic inputs
+   */
+  getInputPorts(config: BlockConfig): PortDefinition[] {
+    return [DEFAULT_INPUT_PORT]
+  }
+  
+  /**
+   * Get output ports for this node based on configuration
+   * Override in subclasses for nodes with multiple or dynamic outputs
+   */
+  getOutputPorts(config: BlockConfig): PortDefinition[] {
+    return [DEFAULT_OUTPUT_PORT]
+  }
 
   /**
    * Default implementation: pass through input shape
