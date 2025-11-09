@@ -1,7 +1,6 @@
 import { Node, Edge } from '@xyflow/react'
 import { BlockData, Project } from './types'
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+import { API_BASE_URL, createFetchOptions } from './apiUtils'
 
 export interface ProjectResponse {
   id: string
@@ -39,6 +38,7 @@ export async function fetchProjects(): Promise<ProjectResponse[]> {
     headers: {
       'Content-Type': 'application/json',
     },
+    credentials: 'include',
   })
 
   if (!response.ok) {
@@ -58,6 +58,7 @@ export async function fetchProject(projectId: string): Promise<ProjectDetailResp
     headers: {
       'Content-Type': 'application/json',
     },
+    credentials: 'include',
   })
 
   if (!response.ok) {
@@ -75,13 +76,10 @@ export async function createProject(data: {
   description: string
   framework: 'pytorch' | 'tensorflow'
 }): Promise<ProjectResponse> {
-  const response = await fetch(`${API_BASE_URL}/projects/`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  })
+  const response = await fetch(
+    `${API_BASE_URL}/projects/`,
+    createFetchOptions('POST', data)
+  )
 
   if (!response.ok) {
     throw new Error(`Failed to create project: ${response.statusText}`)
@@ -101,13 +99,10 @@ export async function updateProject(
     framework: 'pytorch' | 'tensorflow'
   }>
 ): Promise<ProjectResponse> {
-  const response = await fetch(`${API_BASE_URL}/projects/${projectId}/`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  })
+  const response = await fetch(
+    `${API_BASE_URL}/projects/${projectId}/`,
+    createFetchOptions('PATCH', data)
+  )
 
   if (!response.ok) {
     throw new Error(`Failed to update project: ${response.statusText}`)
@@ -120,12 +115,10 @@ export async function updateProject(
  * Delete a project
  */
 export async function deleteProject(projectId: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/projects/${projectId}/`, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  })
+  const response = await fetch(
+    `${API_BASE_URL}/projects/${projectId}/`,
+    createFetchOptions('DELETE')
+  )
 
   if (!response.ok) {
     throw new Error(`Failed to delete project: ${response.statusText}`)
@@ -140,13 +133,10 @@ export async function saveArchitecture(
   nodes: Node<BlockData>[],
   edges: Edge[]
 ): Promise<{ success: boolean; architecture_id: string }> {
-  const response = await fetch(`${API_BASE_URL}/projects/${projectId}/save-architecture`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ nodes, edges }),
-  })
+  const response = await fetch(
+    `${API_BASE_URL}/projects/${projectId}/save-architecture`,
+    createFetchOptions('POST', { nodes, edges })
+  )
 
   if (!response.ok) {
     throw new Error(`Failed to save architecture: ${response.statusText}`)
@@ -167,6 +157,7 @@ export async function loadArchitecture(projectId: string): Promise<{
     headers: {
       'Content-Type': 'application/json',
     },
+    credentials: 'include',
   })
 
   if (!response.ok) {
