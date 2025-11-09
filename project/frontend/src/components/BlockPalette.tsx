@@ -93,13 +93,52 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
 
   if (isCollapsed) {
     return (
-      <div className="w-16 bg-card border-r border-border h-full flex flex-col items-center py-4 relative">
-        <button
-          className="p-2 hover:bg-accent rounded transition-colors"
-          title="Block Palette"
-        >
-          <Icons.Cube size={24} />
-        </button>
+      <div className="w-16 bg-card border-r border-border h-full flex flex-col items-center relative">
+        {/* Header Icon */}
+        <div className="p-4 border-b border-border w-full flex justify-center">
+          <Icons.Cube size={24} className="text-primary" />
+        </div>
+        
+        {/* Scrollable Block Icons */}
+        <ScrollArea className="flex-1 w-full">
+          <div className="py-2 space-y-1 flex flex-col items-center px-2">
+            {allBlocks.map((block) => {
+              const IconComponent = (Icons as any)[block.icon] || Icons.Cube
+              
+              return (
+                <button
+                  key={block.type}
+                  className="w-12 h-12 rounded flex items-center justify-center hover:bg-accent transition-colors cursor-pointer group relative"
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = 'move'
+                    handleDragStart(block.type)
+                  }}
+                  onClick={() => onBlockClick(block.type)}
+                  title={block.label}
+                  style={{
+                    backgroundColor: 'transparent'
+                  }}
+                >
+                  <div
+                    className="w-8 h-8 rounded flex items-center justify-center"
+                    style={{
+                      backgroundColor: block.color,
+                      color: 'white'
+                    }}
+                  >
+                    <IconComponent size={18} weight="bold" />
+                  </div>
+                  
+                  {/* Tooltip on hover */}
+                  <div className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded shadow-md border border-border whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+                    {block.label}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </ScrollArea>
         
         {/* Toggle Button - Right Edge */}
         <button

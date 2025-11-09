@@ -15,6 +15,7 @@ import { getBlockDefinition, validateBlockConnection } from '@/lib/blockDefiniti
 import { BlockData } from '@/lib/types'
 import BlockNode from './BlockNode'
 import CustomConnectionLine from './CustomConnectionLine'
+import { HistoryToolbar } from './HistoryToolbar'
 import { toast } from 'sonner'
 
 const nodeTypes = {
@@ -36,11 +37,32 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
     addEdge,
     removeEdge,
     setSelectedNodeId,
-    validateConnection
+    validateConnection,
+    undo,
+    redo
   } = useModelBuilderStore()
 
   const { screenToFlowPosition, getViewport } = useReactFlow()
   const nextPositionOffset = useRef({ x: 0, y: 0 })
+
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Ctrl (Windows/Linux) or Cmd (Mac)
+      const isMod = e.ctrlKey || e.metaKey
+      
+      if (isMod && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+      } else if (isMod && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault()
+        redo()
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [undo, redo])
 
   // Helper function to check if a position overlaps with existing nodes
   const isPositionOverlapping = useCallback((x: number, y: number, nodes: Node<BlockData>[]) => {
@@ -311,6 +333,7 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
       onDrop={onDrop}
       onDragOver={onDragOver}
     >
+      <HistoryToolbar />
       <ReactFlow
         nodes={nodes}
         edges={edges}
