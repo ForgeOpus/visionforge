@@ -70,14 +70,25 @@ export async function validateModel(modelData: {
 }
 
 /**
- * Send chat message to AI assistant
+ * Send chat message to AI assistant with workflow context
  */
-export async function sendChatMessage(message: string, history?: any[]): Promise<ApiResponse<{
+export async function sendChatMessage(
+  message: string,
+  history?: any[],
+  modificationMode?: boolean,
+  workflowState?: { nodes: any[], edges: any[] }
+): Promise<ApiResponse<{
   response: string
+  modifications?: any[]
 }>> {
   return apiFetch('/chat', {
     method: 'POST',
-    body: JSON.stringify({ message, history }),
+    body: JSON.stringify({
+      message,
+      history: history || [],
+      modificationMode: modificationMode || false,
+      workflowState: workflowState || null
+    }),
   })
 }
 

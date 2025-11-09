@@ -109,22 +109,22 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
 
   if (isCollapsed) {
     return (
-      <div className="w-16 bg-card border-r border-border h-full flex flex-col items-center relative">
+      <div className="w-16 bg-card border-r border-border h-full flex flex-col items-center relative overflow-hidden">
         {/* Header Icon */}
-        <div className="p-4 border-b border-border w-full flex justify-center">
+        <div className="p-4 border-b border-border w-full flex justify-center flex-shrink-0">
           <Icons.Cube size={24} className="text-primary" />
         </div>
-        
+
         {/* Scrollable Block Icons */}
-        <ScrollArea className="flex-1 w-full">
+        <ScrollArea className="flex-1 w-full min-h-0">
           <div className="py-2 space-y-1 flex flex-col items-center px-2">
             {allBlocks.map((block) => {
               const IconComponent = (Icons as any)[block.icon] || Icons.Cube
-              
+
               return (
                 <button
                   key={block.type}
-                  className="w-12 h-12 rounded flex items-center justify-center hover:bg-accent transition-colors cursor-pointer group relative"
+                  className="w-12 h-12 rounded flex items-center justify-center hover:bg-accent transition-colors cursor-pointer group relative flex-shrink-0"
                   draggable
                   onDragStart={(e) => {
                     e.dataTransfer.effectAllowed = 'move'
@@ -143,9 +143,9 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
                       color: 'white'
                     }}
                   >
-                    <IconComponent size={18} weight="bold" />
+                    <IconComponent size={16} weight="bold" />
                   </div>
-                  
+
                   {/* Tooltip on hover */}
                   <div className="absolute left-full ml-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded shadow-md border border-border whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
                     {block.label}
@@ -155,7 +155,7 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
             })}
           </div>
         </ScrollArea>
-        
+
         {/* Toggle Button - Right Edge */}
         <button
           onClick={onToggleCollapse}
