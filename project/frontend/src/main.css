@@ -170,6 +170,15 @@
       height: 0;
     }
   }
+
+  /*
+  ---break---
+*/
+  @keyframes dash {
+    to {
+      stroke-dashoffset: -10;
+    }
+  }
 }
 
 /*
@@ -182,5 +191,10 @@
 
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Animated dashed connection line */
+  .animated-dash {
+    animation: dash 0.5s linear infinite;
   }
 }

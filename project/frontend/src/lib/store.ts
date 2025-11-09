@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { Node, Edge, Connection } from '@xyflow/react'
 import { BlockData, Project, ValidationError, TensorShape } from './types'
-import { getBlockDefinition } from './blockDefinitions'
+import { getBlockDefinition, validateBlockConnection, allowsMultipleInputs } from './blockDefinitions'
 
 interface ModelBuilderState {
   nodes: Node<BlockData>[]
@@ -153,24 +153,33 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     const sourceNode = nodes.find((n) => n.id === connection.source)
     if (!sourceNode) return false
     
-    if (targetNode.data.blockType !== 'concat' && targetNode.data.blockType !== 'add') {
+    // Check if target allows multiple inputs
+    if (!allowsMultipleInputs(targetNode.data.blockType)) {
       const hasExistingInput = edges.some((e) => e.target === connection.target)
       if (hasExistingInput) return false
     }
     
-    if (!sourceNode.data.outputShape) return true
+    // Use the new validation function
+    const validationError = validateBlockConnection(
+      sourceNode.data.blockType,
+      targetNode.data.blockType,
+      sourceNode.data.outputShape
+    )
     
-    const targetDef = getBlockDefinition(targetNode.data.blockType)
-    if (!targetDef) return false
+    if (validationError) {
+      // Could show toast here with the error message if desired
+      console.warn('Connection validation failed:', validationError)
+      return false
+    }
     
-    const sourceShape = sourceNode.data.outputShape
-    
+    // Special validation for add blocks - all inputs must have same shape
     if (targetNode.data.blockType === 'add') {
       const incomingEdges = edges.filter((e) => e.target === connection.target)
       if (incomingEdges.length > 0) {
         const firstSourceNode = nodes.find((n) => n.id === incomingEdges[0].source)
-        if (firstSourceNode?.data.outputShape) {
+        if (firstSourceNode?.data.outputShape && sourceNode.data.outputShape) {
           const firstShape = firstSourceNode.data.outputShape
+          const sourceShape = sourceNode.data.outputShape
           if (firstShape.dims.length !== sourceShape.dims.length) {
             return false
           }

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { useModelBuilderStore } from '@/lib/store'
 import { getBlockDefinition } from '@/lib/blockDefinitions'
 import { Input } from '@/components/ui/input'
@@ -7,12 +8,57 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card } from '@/components/ui/card'
-import { X } from '@phosphor-icons/react'
+import { X, Code } from '@phosphor-icons/react'
+import CustomLayerModal from './CustomLayerModal'
 
 export default function ConfigPanel() {
   const { nodes, selectedNodeId, updateNode, setSelectedNodeId, removeNode } = useModelBuilderStore()
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState(false)
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)
+
+  const handleCustomLayerSave = (config: {
+    name: string
+    code: string
+    output_shape?: string
+    description?: string
+  }) => {
+    if (selectedNode) {
+      updateNode(selectedNode.id, {
+        config: {
+          ...selectedNode.data.config,
+          ...config
+        }
+      })
+    }
+  }
+
+  // Automatically open modal when custom block is selected
+  useEffect(() => {
+    if (selectedNode?.data.blockType === 'custom') {
+      setIsCustomModalOpen(true)
+    }
+  }, [selectedNode?.id, selectedNode?.data.blockType])
+
+  // For custom blocks, don't show the sidebar at all - only the modal
+  if (selectedNode?.data.blockType === 'custom') {
+    return (
+      <CustomLayerModal
+        isOpen={isCustomModalOpen}
+        onClose={() => {
+          setIsCustomModalOpen(false)
+          setSelectedNodeId(null) // Deselect the node when modal closes
+        }}
+        onSave={handleCustomLayerSave}
+        initialConfig={{
+          name: selectedNode.data.config.name as string | undefined,
+          code: selectedNode.data.config.code as string | undefined,
+          output_shape: selectedNode.data.config.output_shape as string | undefined,
+          description: selectedNode.data.config.description as string | undefined
+        }}
+      />
+    )
+  }
 
   if (!selectedNode) {
     return (
@@ -68,7 +114,9 @@ export default function ConfigPanel() {
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-6">
           {definition.configSchema.length > 0 ? (
-            definition.configSchema.map((field) => (
+            definition.configSchema
+              .filter(field => field.name !== 'code') // Skip code field, it's handled in modal
+              .map((field) => (
               <div key={field.name} className="space-y-2">
                 <Label className="text-sm font-medium">
                   {field.label}
