@@ -104,8 +104,8 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
-      <Route path="/app" element={<ProjectCanvas />} />
-      <Route path="/app/project/:projectId" element={<ProjectCanvas />} />
+      <Route path="/project" element={<ProjectCanvas />} />
+      <Route path="/project/:projectId" element={<ProjectCanvas />} />
     </Routes>
   )
 }

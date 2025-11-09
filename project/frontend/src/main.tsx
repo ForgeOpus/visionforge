@@ -1,7 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import { ErrorBoundary } from "react-error-boundary";
 import { BrowserRouter } from 'react-router-dom'
-import "@github/spark/spark"
 import { ThemeProvider } from "next-themes";
 
 import App from './App.tsx'
