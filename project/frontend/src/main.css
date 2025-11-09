@@ -186,10 +186,10 @@ html.dark {
 /*
   ---break---
 */
-/* Instant theme color changes - no transitions on colors */
-*,
-*::before,
-*::after {
+/* Instant theme color changes - scoped to .instant-transition class */
+.instant-transition,
+.instant-transition::before,
+.instant-transition::after {
   transition-property: transform, opacity, box-shadow, filter !important;
   transition-duration: 0.2s !important;
 }
