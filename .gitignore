@@ -43,3 +43,5 @@ pids
 /project/*.lock
 
 */project/frontend/*.lock
+.github/copilot-instructions.md
+.github/project-spec.md
