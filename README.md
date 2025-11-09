@@ -243,7 +243,7 @@ This project is licensed under the MIT License.
 
 ## 🙏 Acknowledgments
 
-Built with ❤️ using [GitHub Spark](https://github.com/github/spark)
+Built with ❤️
 
 <br />
 
