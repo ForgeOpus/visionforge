@@ -3,7 +3,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { getBlocksByCategory, blockDefinitions } from '@/lib/blockDefinitions'
+import { blockDefinitions, getBlocksByCategory } from '@/lib/blockDefinitions'
+import { getAllNodeDefinitions, BackendFramework } from '@/lib/nodes/registry'
 import { BlockDefinition } from '@/lib/types'
 import * as Icons from '@phosphor-icons/react'
 import Fuse from 'fuse.js'
@@ -28,6 +29,7 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
   ]
 
   // Prepare all blocks for fuzzy search
+  // Using new registry system (falls back to legacy adapter internally)
   const allBlocks = useMemo(() => {
     return Object.values(blockDefinitions)
   }, [])

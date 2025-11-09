@@ -20,8 +20,8 @@ createRoot(document.getElementById('root')!).render(
       enableColorScheme={false}
     >
       <BrowserRouter>
-      <App />
-    </BrowserRouter>
+        <App />
+      </BrowserRouter>
     </ThemeProvider>
    </ErrorBoundary>
 )
