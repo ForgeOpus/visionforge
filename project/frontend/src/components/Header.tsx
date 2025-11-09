@@ -81,8 +81,12 @@ export default function Header() {
     }
 
     setProjects(updatedProjects)
-    localStorage.setItem('model-builder-projects', JSON.stringify(updatedProjects))
-
+    try {
+      localStorage.setItem('model-builder-projects', JSON.stringify(updatedProjects))
+    } catch (e) {
+      console.error('Failed to save projects to localStorage', e)
+      toast.error('Failed to save project: storage error')
+    }
     toast.success('Project saved!')
   }
 
