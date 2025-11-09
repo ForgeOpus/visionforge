@@ -8,8 +8,6 @@
   Build production-ready AI models visually. Export clean PyTorch or TensorFlow code in minutes.
 
   [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-  [![Built with Spark](https://img.shields.io/badge/Built%20with-Spark-orange)](https://github.com/github/spark)
-
 </div>
 
 ---
