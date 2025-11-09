@@ -15,12 +15,21 @@ def chat_message(request):
 
     Endpoint: POST /api/chat
 
-    Request body:
+    Request body (JSON or FormData):
+    - JSON format:
     {
         "message": str,
         "history": [{"role": "user"|"assistant", "content": str}],
         "modificationMode": bool,
         "workflowState": {"nodes": [...], "edges": [...]}
+    }
+    - FormData format (when file is included):
+    {
+        "file": File,
+        "message": str,
+        "history": JSON string,
+        "modificationMode": str ("true"/"false"),
+        "workflowState": JSON string
     }
 
     Response:
@@ -29,14 +38,38 @@ def chat_message(request):
         "modifications": [{"action": str, "details": {...}, "explanation": str}] | null
     }
     """
-    message = request.data.get('message', '')
-    history = request.data.get('history', [])
-    modification_mode = request.data.get('modificationMode', False)
-    workflow_state = request.data.get('workflowState', None)
+    import json as json_lib
 
-    if not message:
+    # Check if request has file upload (FormData)
+    uploaded_file = request.FILES.get('file', None)
+
+    if uploaded_file:
+        # Parse FormData parameters
+        message = request.POST.get('message', '')
+        try:
+            history = json_lib.loads(request.POST.get('history', '[]'))
+        except:
+            history = []
+
+        try:
+            modification_mode = request.POST.get('modificationMode', 'false').lower() == 'true'
+        except:
+            modification_mode = False
+
+        try:
+            workflow_state = json_lib.loads(request.POST.get('workflowState', 'null'))
+        except:
+            workflow_state = None
+    else:
+        # Parse JSON body
+        message = request.data.get('message', '')
+        history = request.data.get('history', [])
+        modification_mode = request.data.get('modificationMode', False)
+        workflow_state = request.data.get('workflowState', None)
+
+    if not message and not uploaded_file:
         return Response(
-            {'error': 'No message provided'},
+            {'error': 'No message or file provided'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
@@ -44,12 +77,28 @@ def chat_message(request):
         # Initialize Gemini service
         gemini_service = GeminiChatService()
 
+        # Handle file upload if present
+        gemini_file = None
+        if uploaded_file:
+            logger.info(f"Uploading file to Gemini: {uploaded_file.name}")
+            gemini_file = gemini_service.upload_file_to_gemini(uploaded_file)
+
+            if not gemini_file:
+                return Response(
+                    {
+                        'error': 'Failed to upload file to Gemini',
+                        'response': 'Sorry, I could not process the uploaded file. Please try again.'
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
         # Get chat response
         result = gemini_service.chat(
             message=message,
             history=history,
             modification_mode=modification_mode,
-            workflow_state=workflow_state
+            workflow_state=workflow_state,
+            gemini_file=gemini_file
         )
 
         return Response(result)

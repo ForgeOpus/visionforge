@@ -5,7 +5,7 @@ import { useModelBuilderStore } from '../lib/store'
 import { toast } from 'sonner'
 
 export function HistoryToolbar() {
-  const { undo, redo, canUndo, canRedo, reset, nodes } = useModelBuilderStore()
+  const { undo, redo, canUndo, canRedo, reset, removeNode, selectedNodeId, nodes } = useModelBuilderStore()
 
   const handleReset = () => {
     if (nodes.length === 0) {
@@ -19,8 +19,23 @@ export function HistoryToolbar() {
     }
   }
 
+  const handleDeleteSelected = () => {
+    if (!selectedNodeId) {
+      toast.info('No node selected')
+      return
+    }
+
+    const selectedNode = nodes.find(n => n.id === selectedNodeId)
+    if (selectedNode) {
+      removeNode(selectedNodeId)
+      toast.success('Node deleted', {
+        description: `Removed ${selectedNode.data.label}`
+      })
+    }
+  }
+
   return (
-    <div className="fixed top-20 right-4 z-50 flex items-center gap-2 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-lg p-2">
+    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-lg p-2">
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -63,15 +78,34 @@ export function HistoryToolbar() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={handleReset}
-              disabled={nodes.length === 0}
+              onClick={handleDeleteSelected}
+              disabled={!selectedNodeId}
               className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
             >
               <TrashSimple className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Reset Canvas</p>
+            <p>Delete Selected Node (Delete)</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <div className="w-px h-6 bg-gray-300" />
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleReset}
+              disabled={nodes.length === 0}
+              className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
+            >
+              <TrashSimple className="h-4 w-4" weight="fill" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Reset Canvas (Clear All)</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

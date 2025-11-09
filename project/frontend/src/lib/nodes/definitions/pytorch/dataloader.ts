@@ -68,10 +68,17 @@ export class DataLoaderNode extends SourceNodeDefinition {
     },
     {
       name: 'csv_file',
-      label: 'CSV File Path',
+      label: 'CSV File',
+      type: 'file',
+      accept: '.csv',
+      description: 'Upload a CSV file for data loading (optional)'
+    },
+    {
+      name: 'csv_filename',
+      label: 'Uploaded File Name',
       type: 'text',
-      placeholder: 'data/dataset.csv',
-      description: 'Path to CSV file for data loading (optional)'
+      placeholder: 'No file uploaded',
+      description: 'Name of the uploaded CSV file (read-only)'
     }
   ]
 

@@ -1,4 +1,4 @@
-import { useCallback, DragEvent, useRef, useEffect, useState } from 'react'
+import { useCallback, DragEvent, useRef, useEffect } from 'react'
 import {
   ReactFlow,
   Background,
@@ -9,8 +9,7 @@ import {
   ReactFlowProvider,
   applyNodeChanges,
   applyEdgeChanges,
-  Node,
-  Edge
+  Node
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useModelBuilderStore } from '@/lib/store'
@@ -19,7 +18,6 @@ import { BlockData, BlockType } from '@/lib/types'
 import BlockNode from './BlockNode'
 import CustomConnectionLine from './CustomConnectionLine'
 import { HistoryToolbar } from './HistoryToolbar'
-import { ContextMenu } from './ContextMenu'
 import { toast } from 'sonner'
 
 const nodeTypes = {
@@ -43,10 +41,6 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
     removeNode,
     selectedNodeId,
     setSelectedNodeId,
-    selectedEdgeId,
-    setSelectedEdgeId,
-    duplicateNode,
-    recentlyUsedNodes,
     validateConnection,
     undo,
     redo
@@ -54,7 +48,6 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
 
   const { screenToFlowPosition, getViewport } = useReactFlow()
   const nextPositionOffset = useRef({ x: 0, y: 0 })
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: 'canvas' | 'node'; nodeId?: string } | null>(null)
 
   // Keyboard shortcuts for undo/redo/delete
   useEffect(() => {
@@ -68,24 +61,19 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
       } else if (isMod && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
         e.preventDefault()
         redo()
-      } else if ((e.key === 'Delete' || e.key === 'Backspace')) {
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeId) {
         // Only delete if not typing in an input field
         const target = e.target as HTMLElement
         if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA' && !target.isContentEditable) {
           e.preventDefault()
-          if (selectedNodeId) {
-            removeNode(selectedNodeId)
-          } else if (selectedEdgeId) {
-            removeEdge(selectedEdgeId)
-            setSelectedEdgeId(null)
-          }
+          removeNode(selectedNodeId)
         }
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, removeNode, removeEdge, selectedNodeId, selectedEdgeId, setSelectedEdgeId])
+  }, [undo, redo, removeNode, selectedNodeId])
 
   // Find a suitable position for a new node
   const findAvailablePosition = useCallback(() => {
@@ -300,139 +288,7 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
 
   const onPaneClick = useCallback(() => {
     setSelectedNodeId(null)
-    setSelectedEdgeId(null)
-  }, [setSelectedNodeId, setSelectedEdgeId])
-
-  const onEdgeClick = useCallback(
-    (_event: React.MouseEvent, edge: Edge) => {
-      setSelectedEdgeId(edge.id)
-    },
-    [setSelectedEdgeId]
-  )
-
-  const onPaneContextMenu = useCallback((event: React.MouseEvent) => {
-    event.preventDefault()
-    setContextMenu({
-      x: event.clientX,
-      y: event.clientY,
-      type: 'canvas'
-    })
-  }, [])
-
-  const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
-    event.preventDefault()
-    setContextMenu({
-      x: event.clientX,
-      y: event.clientY,
-      type: 'node',
-      nodeId: node.id
-    })
-  }, [])
-
-  const onReconnect = useCallback(
-    (oldEdge: Edge, newConnection: Connection) => {
-      const isValid = validateConnection(newConnection)
-
-      if (!isValid) {
-        toast.error('Connection not allowed', {
-          description: 'This reconnection is not valid'
-        })
-        return
-      }
-
-      // Remove old edge
-      removeEdge(oldEdge.id)
-
-      // Add new edge
-      const edge = {
-        ...newConnection,
-        id: `e${newConnection.source}-${newConnection.target}-${Date.now()}`,
-        animated: true,
-        style: { stroke: 'var(--color-accent)', strokeWidth: 2 }
-      }
-
-      addEdge(edge)
-
-      toast.success('Connection reconnected', {
-        description: 'Edge successfully reconnected'
-      })
-    },
-    [validateConnection, removeEdge, addEdge]
-  )
-
-  const handleAddNodeFromContextMenu = useCallback(
-    (nodeType: BlockType, x: number, y: number) => {
-      const nodeDef = getNodeDefinition(nodeType, BackendFramework.PyTorch)
-      if (!nodeDef) return
-
-      const position = screenToFlowPosition({ x, y })
-
-      const newNode = {
-        id: `${nodeType}-${Date.now()}`,
-        type: 'custom',
-        position,
-        data: {
-          blockType: nodeDef.metadata.type,
-          label: nodeDef.metadata.label,
-          config: {},
-          category: nodeDef.metadata.category
-        } as BlockData
-      }
-
-      nodeDef.configSchema.forEach((field) => {
-        if (field.default !== undefined) {
-          newNode.data.config[field.name] = field.default
-        }
-      })
-
-      addNode(newNode)
-
-      setTimeout(() => {
-        useModelBuilderStore.getState().inferDimensions()
-      }, 0)
-
-      toast.success(`Added ${nodeDef.metadata.label}`, {
-        description: 'Block added to canvas'
-      })
-    },
-    [addNode, screenToFlowPosition]
-  )
-
-  const handleReplicateNode = useCallback(
-    (nodeId: string) => {
-      const node = nodes.find(n => n.id === nodeId)
-      if (!node) return
-
-      const nodeDef = getNodeDefinition(node.data.blockType as BlockType, BackendFramework.PyTorch)
-      if (!nodeDef) return
-
-      const newNode = {
-        id: `custom-${Date.now()}`,
-        type: 'custom',
-        position: {
-          x: node.position.x + 50,
-          y: node.position.y + 50
-        },
-        data: {
-          blockType: 'custom' as BlockType,
-          label: `Custom ${nodeDef.metadata.label}`,
-          config: { ...node.data.config },
-          category: node.data.category
-        } as BlockData
-      }
-
-      addNode(newNode)
-
-      setTimeout(() => {
-        useModelBuilderStore.getState().inferDimensions()
-      }, 0)
-
-      toast.success('Node replicated as custom', {
-        description: 'Custom node created from original'
-      })
-    },
-    [nodes, addNode]
-  )
+  }, [setSelectedNodeId])
 
   return (
     <div
@@ -448,12 +304,7 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
-        onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
-        onPaneContextMenu={onPaneContextMenu}
-        onNodeContextMenu={onNodeContextMenu}
-        onReconnect={onReconnect}
-        edgesReconnectable={true}
         nodeTypes={nodeTypes}
         connectionLineComponent={CustomConnectionLine}
         fitView
@@ -496,20 +347,6 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
           position="bottom-right"
         />
       </ReactFlow>
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          type={contextMenu.type}
-          nodeId={contextMenu.nodeId}
-          recentlyUsedNodes={recentlyUsedNodes}
-          onClose={() => setContextMenu(null)}
-          onAddNode={handleAddNodeFromContextMenu}
-          onDeleteNode={removeNode}
-          onDuplicateNode={duplicateNode}
-          onReplicateNode={handleReplicateNode}
-        />
-      )}
     </div>
   )
 }

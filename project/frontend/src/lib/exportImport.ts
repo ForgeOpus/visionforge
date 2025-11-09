@@ -2,9 +2,8 @@ import { Node, Edge } from '@xyflow/react'
 import { BlockData, Project } from './types'
 
 /**
- * Sanitized project export format
- * This format excludes position data and internal IDs to keep the export clean
- * but includes all necessary configuration to rebuild the architecture
+ * Complete project export format
+ * This format includes ALL data needed to perfectly restore the architecture
  */
 export interface ExportData {
   version: string
@@ -15,15 +14,22 @@ export interface ExportData {
     nodes: Array<{
       id: string
       type: string
-      label: string
-      category: string
-      config: Record<string, any>
-      inputShape?: { dims: (number | string)[] }
-      outputShape?: { dims: (number | string)[] }
+      position: { x: number; y: number }
+      data: {
+        blockType: string
+        label: string
+        category: string
+        config: Record<string, any>
+        inputShape?: { dims: (number | string)[]; description?: string }
+        outputShape?: { dims: (number | string)[]; description?: string }
+      }
     }>
     connections: Array<{
-      from: string
-      to: string
+      id: string
+      source: string
+      target: string
+      sourceHandle?: string | null
+      targetHandle?: string | null
     }>
   }
   metadata: {
@@ -34,8 +40,8 @@ export interface ExportData {
 }
 
 /**
- * Export nodes and edges to a sanitized JSON format
- * Removes implementation details and internal React Flow state
+ * Export nodes and edges to complete JSON format
+ * Includes ALL data for perfect restoration
  */
 export function exportToJSON(
   nodes: Node<BlockData>[],
@@ -50,16 +56,23 @@ export function exportToJSON(
     architecture: {
       nodes: nodes.map((node) => ({
         id: node.id,
-        type: node.data.blockType,
-        label: node.data.label,
-        category: node.data.category,
-        config: node.data.config,
-        inputShape: node.data.inputShape,
-        outputShape: node.data.outputShape
+        type: node.type || 'block',
+        position: node.position,
+        data: {
+          blockType: node.data.blockType,
+          label: node.data.label,
+          category: node.data.category,
+          config: node.data.config,
+          inputShape: node.data.inputShape,
+          outputShape: node.data.outputShape
+        }
       })),
       connections: edges.map((edge) => ({
-        from: edge.source,
-        to: edge.target
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle,
+        targetHandle: edge.targetHandle
       }))
     },
     metadata: {
@@ -71,7 +84,7 @@ export function exportToJSON(
 }
 
 /**
- * Import from sanitized JSON format and reconstruct nodes and edges
+ * Import from complete JSON format and reconstruct nodes and edges
  * Validates the data structure before importing
  *
  * @param jsonData - The exported JSON data
@@ -101,8 +114,8 @@ export function importFromJSON(
   const existingNodeIds = new Set(existingNodes?.map(n => n.id) || [])
   const idMapping = new Map<string, string>()
 
-  // Reconstruct nodes with proper React Flow format
-  const nodes: Node<BlockData>[] = jsonData.architecture.nodes.map((nodeData, index) => {
+  // Reconstruct nodes with complete data restoration
+  const nodes: Node<BlockData>[] = jsonData.architecture.nodes.map((nodeData) => {
     let nodeId = nodeData.id
 
     // If there's an ID conflict, generate a new unique ID
@@ -122,32 +135,30 @@ export function importFromJSON(
 
     return {
       id: nodeId,
-      type: 'block',
-      position: {
-        // Create a grid layout for imported nodes
-        x: (index % 4) * 250,
-        y: Math.floor(index / 4) * 150
-      },
+      type: nodeData.type || 'block',
+      position: nodeData.position || { x: 0, y: 0 },
       data: {
-        blockType: nodeData.type as any,
-        label: nodeData.label,
-        category: nodeData.category as any,
-        config: nodeData.config,
-        inputShape: nodeData.inputShape,
-        outputShape: nodeData.outputShape
+        blockType: nodeData.data?.blockType || (nodeData as any).type,
+        label: nodeData.data?.label || (nodeData as any).label || 'Node',
+        category: nodeData.data?.category || (nodeData as any).category || 'basic',
+        config: nodeData.data?.config || (nodeData as any).config || {},
+        inputShape: nodeData.data?.inputShape || (nodeData as any).inputShape,
+        outputShape: nodeData.data?.outputShape || (nodeData as any).outputShape
       }
     }
   })
 
-  // Reconstruct edges, updating IDs if there were conflicts
-  const edges: Edge[] = jsonData.architecture.connections.map((conn, index) => {
-    const sourceId = idMapping.get(conn.from) || conn.from
-    const targetId = idMapping.get(conn.to) || conn.to
+  // Reconstruct edges with complete data
+  const edges: Edge[] = jsonData.architecture.connections.map((conn) => {
+    const sourceId = idMapping.get(conn.source || (conn as any).from) || conn.source || (conn as any).from
+    const targetId = idMapping.get(conn.target || (conn as any).to) || conn.target || (conn as any).to
 
     return {
-      id: `e${sourceId}-${targetId}-${index}`,
+      id: conn.id || `e${sourceId}-${targetId}`,
       source: sourceId,
       target: targetId,
+      sourceHandle: conn.sourceHandle,
+      targetHandle: conn.targetHandle,
       animated: true
     }
   })

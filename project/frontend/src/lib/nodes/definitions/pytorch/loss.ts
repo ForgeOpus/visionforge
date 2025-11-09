@@ -2,11 +2,11 @@
  * PyTorch Loss Function Node Definition
  */
 
-import { TerminalNodeDefinition } from '../../base'
+import { NodeDefinition } from '../../base'
 import { NodeMetadata, BackendFramework } from '../../contracts'
-import { TensorShape, BlockConfig, ConfigField } from '../../../types'
+import { TensorShape, BlockConfig, ConfigField, BlockType } from '../../../types'
 
-export class LossNode extends TerminalNodeDefinition {
+export class LossNode extends NodeDefinition {
   readonly metadata: NodeMetadata = {
     type: 'loss',
     label: 'Loss Function',
@@ -57,8 +57,24 @@ export class LossNode extends TerminalNodeDefinition {
     }
   ]
 
+  /**
+   * Loss node accepts multiple inputs but always outputs a scalar loss
+   */
+  allowsMultipleInputs(): boolean {
+    return true
+  }
+
   computeOutputShape(inputShape: TensorShape | undefined, config: BlockConfig): TensorShape | undefined {
     return { dims: [1], description: 'Scalar loss' }
+  }
+
+  validateIncomingConnection(
+    sourceNodeType: BlockType,
+    sourceOutputShape: TensorShape | undefined,
+    targetConfig: BlockConfig
+  ): string | undefined {
+    // Loss node accepts any input shape (predictions and labels)
+    return undefined
   }
 
   validateConfig(config: BlockConfig): string[] {

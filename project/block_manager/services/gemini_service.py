@@ -4,8 +4,10 @@ Gemini AI Service for chat functionality and workflow modifications.
 import google.generativeai as genai
 import json
 import os
+import tempfile
 from typing import List, Dict, Any, Optional
 from django.conf import settings
+from django.core.files.uploadedfile import UploadedFile
 
 
 class GeminiChatService:
@@ -166,12 +168,141 @@ You cannot modify the workflow in this mode. If users want to make changes, sugg
 
         return formatted_history
 
+    def upload_file_to_gemini(self, uploaded_file: UploadedFile) -> Optional[Any]:
+        """
+        Upload a file to Gemini's File API.
+
+        Args:
+            uploaded_file: Django UploadedFile object
+
+        Returns:
+            Gemini file object or None if upload failed
+        """
+        try:
+            # Save uploaded file to temporary location
+            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as temp_file:
+                for chunk in uploaded_file.chunks():
+                    temp_file.write(chunk)
+                temp_path = temp_file.name
+
+            # Upload to Gemini
+            gemini_file = genai.upload_file(temp_path, display_name=uploaded_file.name)
+
+            # Clean up temporary file
+            os.unlink(temp_path)
+
+            return gemini_file
+
+        except Exception as e:
+            print(f"Error uploading file to Gemini: {e}")
+            # Clean up temp file if it exists
+            if 'temp_path' in locals():
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
+            return None
+
+    def analyze_file_for_architecture(
+        self,
+        gemini_file: Any,
+        user_message: str = "",
+        workflow_state: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Analyze an uploaded file (image/document) to generate architecture suggestions.
+
+        Args:
+            gemini_file: Gemini file object from upload
+            user_message: Optional message from user
+            workflow_state: Current workflow state
+
+        Returns:
+            {
+                'response': str,
+                'modifications': Optional[List[Dict]] - suggested workflow changes
+            }
+        """
+        try:
+            workflow_context = self._format_workflow_context(workflow_state)
+
+            analysis_prompt = f"""You are analyzing a file uploaded by the user to help them build a neural network architecture in VisionForge.
+
+{workflow_context}
+
+Available node types include:
+- Input nodes: Input, DataLoader
+- Convolutional layers: Conv1D, Conv2D, Conv3D
+- Linear layers: Linear, Embedding
+- Activation functions: ReLU, Softmax, Sigmoid, Tanh, LeakyReLU, Dropout
+- Pooling layers: MaxPool2D, AvgPool2D, AdaptiveAvgPool2D
+- Normalization: BatchNorm2D
+- Merge operations: Concat, Add
+- Utility: Flatten, Attention, Output, Loss
+
+TASK: Analyze the uploaded file (could be an architecture diagram, sketch, description, or reference) and:
+1. Understand what neural network architecture the user wants to build
+2. Generate a complete workflow with nodes and connections
+3. Provide a natural language explanation
+4. Return JSON modification blocks for each node and connection
+
+User's message: {user_message if user_message else "Please analyze this file and create an architecture"}
+
+CRITICAL: You MUST provide actionable workflow modifications in JSON format.
+
+For each node you want to add, use this exact format:
+```json
+{{
+  "action": "add_node",
+  "details": {{
+    "nodeType": "Input",
+    "config": {{"shape": "[1, 3, 224, 224]"}},
+    "position": {{"x": 100, "y": 100}}
+  }},
+  "explanation": "Adding an Input node for image data"
+}}
+```
+
+For connections between nodes, you need to first add all nodes, then in subsequent messages you can connect them.
+Since this is the first analysis, focus on creating the nodes. Suggest reasonable positions (spread them out vertically by 100-150 pixels).
+
+EXAMPLE ARCHITECTURE for an image classifier:
+1. Input node (x: 100, y: 100)
+2. Conv2D layer (x: 100, y: 250)
+3. ReLU activation (x: 100, y: 400)
+4. MaxPool2D (x: 100, y: 550)
+5. Flatten (x: 100, y: 700)
+6. Linear layer (x: 100, y: 850)
+7. Output (x: 100, y: 1000)
+
+Provide each node as a separate JSON block with appropriate configurations.
+"""
+
+            # Generate content with the file
+            response = self.model.generate_content([analysis_prompt, gemini_file])
+            response_text = response.text
+
+            # Extract modifications
+            modifications = self._extract_modifications(response_text)
+
+            return {
+                'response': response_text,
+                'modifications': modifications
+            }
+
+        except Exception as e:
+            return {
+                'response': f"Error analyzing file: {str(e)}",
+                'modifications': None
+            }
+
     def chat(
         self,
         message: str,
         history: List[Dict[str, str]],
         modification_mode: bool = False,
-        workflow_state: Optional[Dict[str, Any]] = None
+        workflow_state: Optional[Dict[str, Any]] = None,
+        gemini_file: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
         Send a chat message and get a response from Gemini.
@@ -181,6 +312,7 @@ You cannot modify the workflow in this mode. If users want to make changes, sugg
             history: Previous chat messages [{'role': 'user'|'assistant', 'content': '...'}]
             modification_mode: Whether workflow modification is enabled
             workflow_state: Current workflow state (nodes and edges)
+            gemini_file: Optional Gemini file object (already uploaded)
 
         Returns:
             {
@@ -189,6 +321,14 @@ You cannot modify the workflow in this mode. If users want to make changes, sugg
             }
         """
         try:
+            # If there's a file, use the analyze_file_for_architecture method
+            if gemini_file:
+                return self.analyze_file_for_architecture(
+                    gemini_file=gemini_file,
+                    user_message=message,
+                    workflow_state=workflow_state
+                )
+
             # Build system context
             system_prompt = self._build_system_prompt(modification_mode, workflow_state)
 

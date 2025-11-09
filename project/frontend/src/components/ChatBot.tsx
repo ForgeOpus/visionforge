@@ -10,6 +10,8 @@ import ReactMarkdown from 'react-markdown'
 import { sendChatMessage } from '@/lib/api'
 import { toast } from 'sonner'
 import { useModelBuilderStore } from '@/lib/store'
+import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
+import { BlockType } from '@/lib/types'
 
 interface Message {
   id: string
@@ -17,6 +19,11 @@ interface Message {
   content: string
   timestamp: Date
   modifications?: any[]
+  attachedFile?: {
+    name: string
+    type: string
+    geminiUri?: string
+  }
 }
 
 export default function ChatBot() {
@@ -32,7 +39,10 @@ export default function ChatBot() {
   ])
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [isUploadingFile, setIsUploadingFile] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Get workflow state from store
   const { nodes, edges, addNode, updateNode, removeNode, addEdge, removeEdge } = useModelBuilderStore()
@@ -47,19 +57,62 @@ export default function ChatBot() {
     }
   }, [messages])
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim() || isLoading) return
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      // Validate file type
+      const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'application/pdf', 'text/plain']
+      if (!validTypes.includes(file.type)) {
+        toast.error('Invalid file type', {
+          description: 'Only images (PNG, JPG, WEBP), PDFs, and text files are supported'
+        })
+        return
+      }
 
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('File too large', {
+          description: 'Maximum file size is 10MB'
+        })
+        return
+      }
+
+      setUploadedFile(file)
+      toast.success('File attached', {
+        description: file.name
+      })
+    }
+  }
+
+  const removeAttachedFile = () => {
+    setUploadedFile(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const handleSendMessage = async () => {
+    if ((!inputValue.trim() && !uploadedFile) || isLoading) return
+
+    const currentFile = uploadedFile
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: inputValue,
-      timestamp: new Date()
+      content: inputValue || (currentFile ? `[Attached file: ${currentFile.name}]` : ''),
+      timestamp: new Date(),
+      attachedFile: currentFile ? {
+        name: currentFile.name,
+        type: currentFile.type
+      } : undefined
     }
 
     setMessages(prev => [...prev, userMessage])
     const currentInput = inputValue
     setInputValue('')
+    setUploadedFile(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
     setIsLoading(true)
 
     try {
@@ -85,7 +138,8 @@ export default function ChatBot() {
         currentInput,
         messages,
         modificationMode,
-        workflowState
+        workflowState,
+        currentFile || undefined
       )
 
       if (response.success && response.data) {
@@ -147,21 +201,33 @@ export default function ChatBot() {
       switch (action) {
         case 'add_node': {
           const { nodeType, config, position } = details
+
+          // Get the node definition to populate proper metadata
+          const nodeDef = getNodeDefinition(nodeType as BlockType, BackendFramework.PyTorch)
+          if (!nodeDef) {
+            toast.error('Invalid node type', {
+              description: `Node type '${nodeType}' is not recognized`
+            })
+            return
+          }
+
+          // Create properly structured node with all metadata
           const newNode = {
             id: `node-${Date.now()}`,
             type: 'block',
             position: position || { x: 100, y: 100 },
             data: {
-              label: nodeType,
-              nodeType,
-              config: config || {},
-              inputShape: null,
-              outputShape: null
+              blockType: nodeType,
+              label: nodeDef.metadata.label,
+              category: nodeDef.metadata.category,
+              config: config || nodeDef.getDefaultConfig(),
+              inputShape: undefined,
+              outputShape: undefined
             }
           }
           addNode(newNode)
           toast.success('Node added', {
-            description: `Added ${nodeType} to the workflow`
+            description: `Added ${nodeDef.metadata.label} to the workflow`
           })
           break
         }
@@ -243,7 +309,7 @@ export default function ChatBot() {
       {isOpen && (
         <Card className="fixed right-0 top-0 h-full w-[400px] z-40 flex flex-col shadow-2xl border-l rounded-none animate-in slide-in-from-right duration-300 overflow-hidden">
           {/* Header */}
-          <div className="p-4 border-b bg-card flex-shrink-0">
+          <div className="p-2 border-b bg-card flex-shrink-0">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Icons.Robot size={24} className="text-primary" />
@@ -300,6 +366,14 @@ export default function ChatBot() {
                         <Icons.Robot size={18} className="shrink-0 mt-0.5" />
                       )}
                       <div className="flex-1 min-w-0 overflow-hidden">
+                        {/* Show attached file if present */}
+                        {message.attachedFile && (
+                          <div className="mb-2 p-2 bg-background/50 border rounded-md flex items-center gap-2">
+                            <Icons.Paperclip size={14} className="shrink-0" />
+                            <span className="text-xs font-medium truncate">{message.attachedFile.name}</span>
+                          </div>
+                        )}
+
                         <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-sm break-words [&_pre]:overflow-x-auto [&_code]:break-words [&_p]:break-words">
                           <ReactMarkdown>{message.content}</ReactMarkdown>
                         </div>
@@ -371,9 +445,50 @@ export default function ChatBot() {
 
           {/* Input Area */}
           <div className="p-4 border-t bg-card flex-shrink-0">
+            {/* Attached file preview */}
+            {uploadedFile && (
+              <div className="mb-2 p-2 bg-muted rounded-md flex items-center justify-between">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <Icons.Paperclip size={16} className="text-muted-foreground shrink-0" />
+                  <span className="text-sm truncate">{uploadedFile.name}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    ({(uploadedFile.size / 1024).toFixed(1)} KB)
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0"
+                  onClick={removeAttachedFile}
+                >
+                  <Icons.X size={14} />
+                </Button>
+              </div>
+            )}
+
             <div className="flex gap-2">
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf,text/plain"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+
+              {/* File attachment button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading || !!uploadedFile}
+                title="Attach file"
+              >
+                <Icons.Paperclip size={18} />
+              </Button>
+
               <Input
-                placeholder="Ask me anything..."
+                placeholder={uploadedFile ? "Add a message (optional)..." : "Ask me anything..."}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={handleKeyPress}
@@ -382,7 +497,7 @@ export default function ChatBot() {
               />
               <Button
                 onClick={handleSendMessage}
-                disabled={!inputValue.trim() || isLoading}
+                disabled={(!inputValue.trim() && !uploadedFile) || isLoading}
                 size="icon"
               >
                 <Icons.PaperPlaneRight size={18} />

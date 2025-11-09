@@ -76,11 +76,50 @@ export async function sendChatMessage(
   message: string,
   history?: any[],
   modificationMode?: boolean,
-  workflowState?: { nodes: any[], edges: any[] }
+  workflowState?: { nodes: any[], edges: any[] },
+  file?: File
 ): Promise<ApiResponse<{
   response: string
   modifications?: any[]
 }>> {
+  // If there's a file, use FormData
+  if (file) {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('message', message)
+    formData.append('history', JSON.stringify(history || []))
+    formData.append('modificationMode', String(modificationMode || false))
+    formData.append('workflowState', JSON.stringify(workflowState || null))
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/chat`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: data.error || data.message || 'An error occurred',
+        }
+      }
+
+      return {
+        success: true,
+        data,
+      }
+    } catch (error) {
+      console.error('API Error:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error occurred',
+      }
+    }
+  }
+
+  // No file - use regular JSON
   return apiFetch('/chat', {
     method: 'POST',
     body: JSON.stringify({

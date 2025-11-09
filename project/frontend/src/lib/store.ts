@@ -12,36 +12,41 @@ interface ModelBuilderState {
   nodes: Node<BlockData>[]
   edges: Edge[]
   selectedNodeId: string | null
+  selectedEdgeId: string | null
+  recentlyUsedNodes: BlockType[]
   validationErrors: ValidationError[]
   currentProject: Project | null
-  
+
   // History for undo/redo
   past: HistoryState[]
   future: HistoryState[]
-  
+
   setNodes: (nodes: Node<BlockData>[]) => void
   setEdges: (edges: Edge[]) => void
   addNode: (node: Node<BlockData>) => void
   updateNode: (id: string, data: Partial<BlockData>) => void
   removeNode: (id: string) => void
+  duplicateNode: (id: string) => void
   addEdge: (edge: Edge) => void
   removeEdge: (id: string) => void
   setSelectedNodeId: (id: string | null) => void
-  
+  setSelectedEdgeId: (id: string | null) => void
+  trackRecentlyUsedNode: (nodeType: BlockType) => void
+
   validateConnection: (connection: Connection) => boolean
   validateArchitecture: () => ValidationError[]
   inferDimensions: () => void
-  
+
   undo: () => void
   redo: () => void
   canUndo: () => boolean
   canRedo: () => boolean
-  
+
   createProject: (name: string, description: string, framework: 'pytorch' | 'tensorflow') => void
   saveProject: () => void
   loadProject: (project: Project) => void
   updateProjectInfo: (name: string, description: string) => void
-  
+
   reset: () => void
 }
 
@@ -66,6 +71,8 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
   nodes: [],
   edges: [],
   selectedNodeId: null,
+  selectedEdgeId: null,
+  recentlyUsedNodes: [],
   validationErrors: [],
   currentProject: null,
   past: [],
@@ -77,7 +84,10 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
   addNode: (node) => {
     const state = get()
     const historyUpdate = saveHistory(state)
-    
+
+    // Track recently used node
+    get().trackRecentlyUsedNode(node.data.blockType as BlockType)
+
     // Auto-create default project if none exists
     if (!state.currentProject) {
       const defaultProject: Project = {
@@ -90,7 +100,7 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
         createdAt: Date.now(),
         updatedAt: Date.now()
       }
-      
+
       set({
         currentProject: defaultProject,
         nodes: [node],
@@ -218,7 +228,41 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     }))
   },
 
-  setSelectedNodeId: (id) => set({ selectedNodeId: id }),
+  setSelectedNodeId: (id) => set({ selectedNodeId: id, selectedEdgeId: null }),
+  setSelectedEdgeId: (id) => set({ selectedEdgeId: id, selectedNodeId: null }),
+
+  trackRecentlyUsedNode: (nodeType) => {
+    const { recentlyUsedNodes } = get()
+    const filtered = recentlyUsedNodes.filter(t => t !== nodeType)
+    const updated = [nodeType, ...filtered].slice(0, 5) // Keep last 5
+    set({ recentlyUsedNodes: updated })
+  },
+
+  duplicateNode: (id) => {
+    const state = get()
+    const historyUpdate = saveHistory(state)
+
+    const nodeToDuplicate = state.nodes.find(n => n.id === id)
+    if (!nodeToDuplicate) return
+
+    const newNode: Node<BlockData> = {
+      ...nodeToDuplicate,
+      id: `${nodeToDuplicate.data.blockType}-${Date.now()}`,
+      position: {
+        x: nodeToDuplicate.position.x + 50,
+        y: nodeToDuplicate.position.y + 50
+      },
+      data: {
+        ...nodeToDuplicate.data,
+        config: { ...nodeToDuplicate.data.config }
+      }
+    }
+
+    set((state) => ({
+      nodes: [...state.nodes, newNode],
+      ...historyUpdate
+    }))
+  },
 
   validateConnection: (connection) => {
     const { nodes, edges } = get()

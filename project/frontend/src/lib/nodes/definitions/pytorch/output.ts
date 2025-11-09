@@ -17,29 +17,7 @@ export class OutputNode extends TerminalNodeDefinition {
     framework: BackendFramework.PyTorch
   }
 
-  readonly configSchema: ConfigField[] = [
-    {
-      name: 'output_type',
-      label: 'Output Type',
-      type: 'select',
-      default: 'classification',
-      options: [
-        { value: 'classification', label: 'Classification' },
-        { value: 'regression', label: 'Regression' },
-        { value: 'segmentation', label: 'Segmentation' },
-        { value: 'custom', label: 'Custom' }
-      ],
-      description: 'Type of model output'
-    },
-    {
-      name: 'num_classes',
-      label: 'Number of Classes',
-      type: 'number',
-      default: 10,
-      min: 1,
-      description: 'Number of output classes (for classification)'
-    }
-  ]
+  readonly configSchema: ConfigField[] = []
 
   computeOutputShape(inputShape: TensorShape | undefined, config: BlockConfig): TensorShape | undefined {
     return inputShape
