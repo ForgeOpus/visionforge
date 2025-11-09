@@ -20,12 +20,28 @@ The VisionForge chatbot is an intelligent assistant that helps you build neural 
 
 ## Setup Instructions
 
-### 1. Get a Gemini API Key
+### 1. Choose Your AI Provider
+
+VisionForge supports two AI providers:
+- **Gemini** (Google's Generative AI) - Default
+- **Claude** (Anthropic's Claude AI)
+
+Choose one provider and obtain an API key:
+
+#### Option A: Gemini API Key
 
 1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
 2. Sign in with your Google account
 3. Click "Create API Key"
 4. Copy the generated API key
+
+#### Option B: Claude API Key
+
+1. Go to [Anthropic Console](https://console.anthropic.com/)
+2. Sign in or create an account
+3. Navigate to API Keys section
+4. Click "Create Key"
+5. Copy the generated API key
 
 ### 2. Configure Backend Environment
 
@@ -39,26 +55,48 @@ The VisionForge chatbot is an intelligent assistant that helps you build neural 
    cp .env.example .env
    ```
 
-3. Edit the `.env` file and add your Gemini API key:
+3. Edit the `.env` file and configure your AI provider:
+
+   **For Gemini:**
    ```env
+   # AI Provider Configuration
+   AI_PROVIDER=gemini
+
    # Gemini AI Configuration
-   GEMINI_API_KEY=your-actual-api-key-here
+   GEMINI_API_KEY=your-actual-gemini-api-key-here
    ```
 
-   Replace `your-actual-api-key-here` with your actual API key.
+   **For Claude:**
+   ```env
+   # AI Provider Configuration
+   AI_PROVIDER=claude
+
+   # Claude AI Configuration
+   ANTHROPIC_API_KEY=your-actual-anthropic-api-key-here
+   ```
+
+   Replace the placeholder values with your actual API keys.
 
 ### 3. Install Dependencies
 
-Install the required Python package:
+Install the required Python packages:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Or install the Gemini package directly:
+This will install both AI provider packages:
+- `google-generativeai` (for Gemini)
+- `anthropic` (for Claude)
+
+Or install packages individually:
 
 ```bash
+# For Gemini
 pip install google-generativeai
+
+# For Claude
+pip install anthropic
 ```
 
 ### 4. Start the Backend Server
@@ -329,12 +367,27 @@ When asking questions, reference specific parts of your workflow:
 
 ### Chatbot Not Responding
 
-**Error:** "Gemini API key is not configured"
+**Error:** "API key is not configured" or "AI service not properly configured"
 
 **Solution:**
-1. Ensure you've set `GEMINI_API_KEY` in the `.env` file
+1. Ensure you've set the correct environment variables in the `.env` file:
+   - For Gemini: `AI_PROVIDER=gemini` and `GEMINI_API_KEY`
+   - For Claude: `AI_PROVIDER=claude` and `ANTHROPIC_API_KEY`
 2. Restart the Django server
 3. Verify the API key is correct
+4. Check that `AI_PROVIDER` is set to either `gemini` or `claude`
+
+### Switching Between Providers
+
+To switch from one AI provider to another:
+
+1. Update `AI_PROVIDER` in your `.env` file:
+   ```env
+   AI_PROVIDER=claude  # or gemini
+   ```
+2. Ensure the corresponding API key is set
+3. Restart the Django server
+4. The chatbot will now use the new provider
 
 ### Connection Errors
 
@@ -354,10 +407,17 @@ When asking questions, reference specific parts of your workflow:
 
 ### API Rate Limits
 
-If you exceed Gemini's rate limits:
-1. Wait a few minutes before trying again
-2. Consider upgrading your API plan
-3. Reduce the frequency of requests
+If you exceed your provider's rate limits:
+
+**Gemini:**
+- Free tier: 15 requests per minute
+- Wait a few minutes before trying again
+- Consider upgrading your API plan
+
+**Claude:**
+- Rate limits vary by plan
+- Check [Anthropic's pricing page](https://www.anthropic.com/pricing) for details
+- Consider upgrading your plan if needed
 
 ## Advanced Usage
 
@@ -392,22 +452,56 @@ The workflow state is automatically serialized and sent with each message:
    - Rotate keys periodically
 
 2. **Data Privacy**
-   - Workflow data is sent to Google's Gemini API
-   - Review Google's privacy policy for AI services
+   - Workflow data is sent to your chosen AI provider's API
+   - For Gemini: Review [Google's privacy policy](https://policies.google.com/privacy) for AI services
+   - For Claude: Review [Anthropic's privacy policy](https://www.anthropic.com/legal/privacy)
    - Don't include sensitive information in prompts
 
 3. **Rate Limiting**
    - Implement request throttling for production use
    - Monitor API usage to avoid unexpected costs
 
+## AI Provider Comparison
+
+### Gemini (Google)
+- **Model:** gemini-2.0-flash
+- **Strengths:**
+  - Fast response times
+  - Good at technical explanations
+  - Strong multimodal support (images, PDFs)
+  - Free tier available
+- **API Key:** Get from [Google AI Studio](https://aistudio.google.com/app/apikey)
+
+### Claude (Anthropic)
+- **Model:** claude-3-5-sonnet-20241022
+- **Strengths:**
+  - Excellent reasoning capabilities
+  - Strong code understanding
+  - Detailed explanations
+  - High-quality suggestions
+- **API Key:** Get from [Anthropic Console](https://console.anthropic.com/)
+
+### Choosing a Provider
+
+**Use Gemini if:**
+- You want a free tier option
+- You need fast response times
+- You frequently upload images/PDFs for analysis
+
+**Use Claude if:**
+- You need detailed, high-quality architectural suggestions
+- You prefer thorough explanations
+- You want advanced reasoning capabilities
+
 ## Future Enhancements
 
 Planned features for the chatbot:
 
+- [x] Multi-provider support (Gemini and Claude)
 - [ ] Chat session persistence (save/load conversations)
 - [ ] Export chat history
 - [ ] Multi-user collaboration support
-- [ ] Custom AI model selection (GPT-4, Claude, etc.)
+- [ ] Additional AI providers (GPT-4, etc.)
 - [ ] Voice input/output
 - [ ] Batch modification application
 - [ ] Undo/redo for AI changes

@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 import logging
 
-from block_manager.services.gemini_service import GeminiChatService
+from block_manager.services.ai_service_factory import AIServiceFactory
 
 logger = logging.getLogger(__name__)
 
@@ -74,41 +74,58 @@ def chat_message(request):
         )
 
     try:
-        # Initialize Gemini service
-        gemini_service = GeminiChatService()
+        # Initialize AI service (Gemini or Claude based on AI_PROVIDER)
+        ai_service = AIServiceFactory.create_service()
+        provider_name = AIServiceFactory.get_provider_name()
 
         # Handle file upload if present
-        gemini_file = None
+        file_content = None
         if uploaded_file:
-            logger.info(f"Uploading file to Gemini: {uploaded_file.name}")
-            gemini_file = gemini_service.upload_file_to_gemini(uploaded_file)
+            logger.info(f"Processing file with {provider_name}: {uploaded_file.name}")
 
-            if not gemini_file:
-                return Response(
-                    {
-                        'error': 'Failed to upload file to Gemini',
-                        'response': 'Sorry, I could not process the uploaded file. Please try again.'
-                    },
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
+            # For Gemini, upload file to Gemini API
+            if provider_name == 'Gemini':
+                file_content = ai_service.upload_file_to_gemini(uploaded_file)
+                if not file_content:
+                    return Response(
+                        {
+                            'error': f'Failed to upload file to {provider_name}',
+                            'response': 'Sorry, I could not process the uploaded file. Please try again.'
+                        },
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+            # For Claude, read file content directly
+            elif provider_name == 'Claude':
+                file_content = ai_service._read_file_content(uploaded_file)
+                if file_content.get('type') == 'text' and 'Error' in file_content.get('text', ''):
+                    return Response(
+                        {
+                            'error': f'Failed to process file with {provider_name}',
+                            'response': file_content.get('text', 'Could not process file.')
+                        },
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
 
         # Get chat response
-        result = gemini_service.chat(
+        # Note: For Gemini, file_content is the gemini_file object
+        # For Claude, file_content is the formatted file dict
+        result = ai_service.chat(
             message=message,
             history=history,
             modification_mode=modification_mode,
             workflow_state=workflow_state,
-            gemini_file=gemini_file
+            **({'gemini_file': file_content} if provider_name == 'Gemini' else {'file_content': file_content})
         )
 
         return Response(result)
 
     except ValueError as e:
-        # API key not configured
-        logger.error(f"Gemini API key error: {e}")
+        # API key not configured or invalid provider
+        logger.error(f"AI service configuration error: {e}")
+        error_message = str(e)
         return Response(
             {
-                'error': 'Gemini API key is not configured. Please set GEMINI_API_KEY environment variable.',
+                'error': error_message,
                 'response': 'Sorry, the AI chat service is not properly configured. Please contact the administrator.'
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -153,8 +170,9 @@ def get_suggestions(request):
         })
 
     try:
-        # Initialize Gemini service
-        gemini_service = GeminiChatService()
+        # Initialize AI service (Gemini or Claude based on AI_PROVIDER)
+        ai_service = AIServiceFactory.create_service()
+        provider_name = AIServiceFactory.get_provider_name()
 
         # Get suggestions
         workflow_state = {
@@ -162,7 +180,7 @@ def get_suggestions(request):
             'edges': edges
         }
 
-        suggestions = gemini_service.generate_suggestions(workflow_state)
+        suggestions = ai_service.generate_suggestions(workflow_state)
 
         return Response({
             'suggestions': suggestions,
@@ -170,10 +188,10 @@ def get_suggestions(request):
 
     except ValueError as e:
         # API key not configured - return basic suggestions
-        logger.warning(f"Gemini API key not configured for suggestions: {e}")
+        logger.warning(f"AI service not configured for suggestions: {e}")
         return Response({
             'suggestions': [
-                "Configure GEMINI_API_KEY environment variable to get AI-powered suggestions",
+                "Configure AI_PROVIDER and corresponding API key to get AI-powered suggestions",
                 "Consider adding normalization layers (BatchNorm2D) after convolutional layers",
                 "Add dropout layers to prevent overfitting",
                 "Ensure your architecture has proper input and output nodes"
