@@ -12,7 +12,7 @@ export class AddNode extends MergeNodeDefinition {
     label: 'Add',
     category: 'merge',
     color: 'var(--color-cyan)',
-    icon: 'Plus',
+    icon: 'PlusCircle',
     description: 'Element-wise addition of tensors',
     framework: BackendFramework.PyTorch
   }

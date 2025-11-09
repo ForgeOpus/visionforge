@@ -6,9 +6,19 @@ import { useModelBuilderStore } from '@/lib/store'
 import * as Icons from '@phosphor-icons/react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 interface BlockNodeProps {
-  data: BlockData
+  data: BlockData & {
+    onViewCode?: (nodeId: string) => void
+    onReplicate?: (nodeId: string) => void
+  }
   selected?: boolean
   id: string
 }
@@ -49,7 +59,50 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
         </div>
       )}
 
-      {data.blockType !== 'dataloader' && (
+      {/* Action Buttons - Only shown when selected */}
+      {selected && (
+        <div className="absolute top-2 right-2 flex gap-1 z-30 animate-in fade-in duration-200">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 bg-background/80 backdrop-blur-sm hover:bg-accent shadow-sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    data.onViewCode?.(id)
+                  }}
+                >
+                  <Icons.Eye size={14} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>View Code</TooltipContent>
+            </Tooltip>
+
+            {data.blockType !== 'custom' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 bg-background/80 backdrop-blur-sm hover:bg-accent shadow-sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      data.onReplicate?.(id)
+                    }}
+                  >
+                    <Icons.Copy size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Replicate as Custom</TooltipContent>
+              </Tooltip>
+            )}
+          </TooltipProvider>
+        </div>
+      )}
+
+      {data.blockType !== 'dataloader' && data.blockType !== 'loss' && (
         <>
           <Handle
             type="target"
@@ -110,7 +163,7 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
         {data.blockType === 'dataloader' && (() => {
           const numInputOutlets = Number(data.config?.num_input_outlets || 1)
           const hasGT = data.config?.has_ground_truth
-          const shapes = []
+          const shapes: React.ReactElement[] = []
 
           // Add additional input outlet shapes if configured
           if (numInputOutlets > 1 && data.config?.input_shapes) {
@@ -170,7 +223,7 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
             const totalOutlets = numInputOutlets + (hasGT ? 1 : 0)
             const spacing = 100 / (totalOutlets + 1)
 
-            const outlets = []
+            const outlets: React.ReactElement[] = []
             const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981']
 
             // Add input outlets
@@ -244,6 +297,95 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
 
             return outlets
           })()}
+        </>
+      ) : data.blockType === 'loss' ? (
+        <>
+          {/* Multiple input handles for Loss node based on loss type */}
+          {(() => {
+            // Get input ports from the node definition
+            const lossNodeDef = nodeDef as any
+            const inputPorts = lossNodeDef.getInputPorts ? lossNodeDef.getInputPorts(data.config) : []
+            
+            if (inputPorts.length === 0) {
+              // Fallback to default single input
+              return (
+                <>
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    className="w-3 h-3 !bg-accent transition-all"
+                    style={{
+                      left: -6,
+                      zIndex: 10
+                    }}
+                  />
+                  {selected && (
+                    <div
+                      className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full border-2 border-accent bg-accent/20 animate-pulse pointer-events-none"
+                      style={{ left: -6 }}
+                    />
+                  )}
+                </>
+              )
+            }
+
+            const spacing = 100 / (inputPorts.length + 1)
+            const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6']
+
+            return inputPorts.map((port: any, i: number) => {
+              const topPercent = spacing * (i + 1)
+              const color = colors[i % colors.length]
+
+              return (
+                <div key={`loss-input-${i}`} className="absolute left-0 flex items-center" style={{ top: `${topPercent}%`, transform: 'translateY(-50%)' }}>
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id={`loss-input-${port.id}`}
+                    className="w-3 h-3 transition-all border-2 border-card"
+                    style={{
+                      position: 'relative',
+                      left: -6,
+                      zIndex: 10,
+                      backgroundColor: color
+                    }}
+                  />
+                  <span className="text-[10px] font-medium ml-2 bg-card px-1.5 py-0.5 rounded border" style={{ color, borderColor: color }}>
+                    {port.label}
+                  </span>
+                  {selected && (
+                    <div
+                      className="absolute left-0 w-6 h-6 rounded-full border-2 animate-pulse pointer-events-none"
+                      style={{
+                        top: 0,
+                        left: -6,
+                        transform: 'translate(-50%, -50%)',
+                        borderColor: color,
+                        backgroundColor: `${color}33`
+                      }}
+                    />
+                  )}
+                </div>
+              )
+            })
+          })()}
+          
+          {/* Single output handle for loss value */}
+          <Handle
+            type="source"
+            position={Position.Right}
+            className="w-3 h-3 !bg-red-500 transition-all"
+            style={{
+              right: -6,
+              zIndex: 10
+            }}
+          />
+          {selected && (
+            <div
+              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-6 h-6 rounded-full border-2 border-red-500 bg-red-500/20 animate-pulse pointer-events-none"
+              style={{ right: -6 }}
+            />
+          )}
         </>
       ) : (
         <>

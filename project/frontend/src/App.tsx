@@ -3,7 +3,7 @@ import { Routes, Route, useNavigate, useParams } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { toast } from 'sonner'
 import Header from './components/Header'
-import BlockPalette from './components/BlockPalette'
+import ResizableBlockPalette from './components/ResizableBlockPalette'
 import Canvas from './components/Canvas'
 import ConfigPanel from './components/ConfigPanel'
 import ChatBot from './components/ChatBot'
@@ -14,10 +14,9 @@ import { LandingPage } from './landing'
 function ProjectCanvas() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
-  const { setNodes, setEdges, loadProject, currentProject } = useModelBuilderStore()
+  const { setNodes, setEdges, loadProject, currentProject, reset } = useModelBuilderStore()
   const [isLoading, setIsLoading] = useState(false)
   const [draggedType, setDraggedType] = useState<string | null>(null)
-  const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(false)
   const { selectedNodeId } = useModelBuilderStore()
   const addNodeFromPaletteRef = useRef<((blockType: string) => void) | null>(null)
 
@@ -43,7 +42,7 @@ function ProjectCanvas() {
           toast.error('Failed to load project', {
             description: error instanceof Error ? error.message : 'Unknown error'
           })
-          navigate('/')
+          // Don't navigate away, just show error
         })
         .finally(() => {
           setIsLoading(false)
@@ -81,11 +80,9 @@ function ProjectCanvas() {
       <Header />
 
       <div className="flex-1 flex overflow-hidden relative">
-        <BlockPalette
+        <ResizableBlockPalette
           onDragStart={handleDragStart}
           onBlockClick={handleBlockClick}
-          isCollapsed={isPaletteCollapsed}
-          onToggleCollapse={() => setIsPaletteCollapsed(!isPaletteCollapsed)}
         />
         <Canvas
           onDragStart={handleDragStart}
@@ -104,8 +101,8 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
-      <Route path="/app" element={<ProjectCanvas />} />
-      <Route path="/app/project/:projectId" element={<ProjectCanvas />} />
+      <Route path="/project" element={<ProjectCanvas />} />
+      <Route path="/project/:projectId" element={<ProjectCanvas />} />
     </Routes>
   )
 }

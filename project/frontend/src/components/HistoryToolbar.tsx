@@ -35,7 +35,7 @@ export function HistoryToolbar() {
   }
 
   return (
-    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-lg p-2">
+    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 backdrop-blur-sm border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-2">
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -71,27 +71,9 @@ export function HistoryToolbar() {
           </TooltipContent>
         </Tooltip>
 
-        <div className="w-px h-6 bg-gray-300" />
+        <div className="w-px h-6 bg-gray-300 dark:bg-gray-600" />
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleDeleteSelected}
-              disabled={!selectedNodeId}
-              className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
-            >
-              <TrashSimple className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Delete Selected Node (Delete)</p>
-          </TooltipContent>
-        </Tooltip>
-
-        <div className="w-px h-6 bg-gray-300" />
-
+ 
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

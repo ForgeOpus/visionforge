@@ -4,7 +4,11 @@
       "Bash(npm install:*)",
       "Bash(npm run build:*)",
       "Bash(npx tsc:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(npm run dev:*)",
+      "Bash(node test-icons.js:*)",
+      "Bash(pip install:*)",
+      "Bash(=0.39.0)"
     ],
     "deny": [],
     "ask": []

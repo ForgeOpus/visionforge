@@ -23,11 +23,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Download, FloppyDisk, CaretDown, Code, Flask, CheckCircle, GitBranch, Upload, FileCode, FilePy, GearSix, Trash, Info, PencilSimple } from '@phosphor-icons/react'
+import { Plus, Download, FloppyDisk, CaretDown, Code, CheckCircle, GitBranch, Upload, FileCode, FilePy, GearSix, Trash, Info, PencilSimple } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { generatePyTorchCode } from '@/lib/codeGenerator'
-import { validateModel } from '@/lib/api'
+import { validateModel, exportModel as apiExportModel } from '@/lib/api'
 import { exportToJSON, importFromJSON, downloadJSON, readJSONFile } from '@/lib/exportImport'
 import * as projectApi from '@/lib/projectApi'
 
@@ -44,15 +43,19 @@ export default function Header() {
   const [isManageProjectOpen, setIsManageProjectOpen] = useState(false)
   const [managingProject, setManagingProject] = useState<projectApi.ProjectResponse | null>(null)
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
+  const [isSaveAsDialogOpen, setIsSaveAsDialogOpen] = useState(false)
 
   const [newProjectName, setNewProjectName] = useState('')
   const [newProjectDesc, setNewProjectDesc] = useState('')
   const [newProjectFramework, setNewProjectFramework] = useState<'pytorch' | 'tensorflow'>('pytorch')
 
+  const [saveAsProjectName, setSaveAsProjectName] = useState('')
+  const [saveAsProjectDesc, setSaveAsProjectDesc] = useState('')
+
   const [editProjectName, setEditProjectName] = useState('')
   const [editProjectDesc, setEditProjectDesc] = useState('')
 
-  const [exportCode, setExportCode] = useState<{model: string, train: string, config: string} | null>(null)
+  const [exportCode, setExportCode] = useState<{model: string, train: string, dataset: string, config: string, zip: string, filename: string} | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -87,8 +90,9 @@ export default function Header() {
         framework: newProjectFramework
       })
 
-      // Create in local store
-      createProjectInStore(newProjectName, newProjectDesc, newProjectFramework)
+      // Load the project in the store
+      const projectData = projectApi.convertToFrontendProject(backendProject, [], [])
+      loadProject(projectData)
 
       setIsNewProjectOpen(false)
       setNewProjectName('')
@@ -96,12 +100,59 @@ export default function Header() {
 
       toast.success('Project created!')
 
+      // Reload projects list
+      await loadProjectsList()
+
       // Navigate to the new project
-      navigate(`/app/project/${backendProject.id}`)
+      navigate(`/project/${backendProject.id}`)
+    } catch (error) {
+      toast.error('Failed to create project', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
+  }
+
+  const handleSaveAsProject = async () => {
+    if (!saveAsProjectName.trim()) {
+      toast.error('Please enter a project name')
+      return
+    }
+
+    const loadingToast = toast.loading('Creating and saving project...')
+
+    try {
+      // Create project on backend
+      const backendProject = await projectApi.createProject({
+        name: saveAsProjectName,
+        description: saveAsProjectDesc,
+        framework: 'pytorch'
+      })
+
+      // Save architecture immediately to the newly created project
+      await projectApi.saveArchitecture(backendProject.id, nodes, edges)
+
+      // Fetch the saved project with architecture
+      const { nodes: savedNodes, edges: savedEdges } = await projectApi.loadArchitecture(backendProject.id)
+      const projectData = projectApi.convertToFrontendProject(backendProject, savedNodes, savedEdges)
+
+      // Load into store
+      loadProject(projectData)
+
+      // Close dialog and reset fields
+      setIsSaveAsDialogOpen(false)
+      setSaveAsProjectName('')
+      setSaveAsProjectDesc('')
+
+      toast.dismiss(loadingToast)
+      toast.success('Project created and saved!')
 
       // Reload projects list
-      loadProjectsList()
+      await loadProjectsList()
+
+      // Navigate to the new project
+      navigate(`/project/${backendProject.id}`, { replace: true })
     } catch (error) {
+      toast.dismiss(loadingToast)
       toast.error('Failed to create project', {
         description: error instanceof Error ? error.message : 'Unknown error'
       })
@@ -114,15 +165,31 @@ export default function Header() {
       return
     }
 
-    const project = currentProject
-    if (!project) {
-      toast.error('No active project')
-      return
-    }
-
     try {
-      // Save to backend
-      await projectApi.saveArchitecture(project.id, nodes, edges)
+      let project = currentProject
+      let projectIdToSave = project?.id
+
+      // Check if project ID is a timestamp (invalid) - treat as no project
+      const isTimestampId = project?.id && /^\d{13}$/.test(project.id)
+
+      // If no project exists or project has invalid timestamp ID, show dialog to create one
+      if (!project || isTimestampId) {
+        // Generate default name suggestion
+        const timestamp = new Date().toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        })
+        setSaveAsProjectName(`Untitled Project - ${timestamp}`)
+        setSaveAsProjectDesc('')
+        setIsSaveAsDialogOpen(true)
+        return
+      }
+
+      // Save to backend for existing project
+      await projectApi.saveArchitecture(projectIdToSave, nodes, edges)
 
       // Save to local store
       saveProject()
@@ -132,6 +199,7 @@ export default function Header() {
       // Reload projects list
       loadProjectsList()
     } catch (error) {
+      toast.dismiss()
       toast.error('Failed to save project', {
         description: error instanceof Error ? error.message : 'Unknown error'
       })
@@ -144,7 +212,7 @@ export default function Header() {
       const fullProject = await projectApi.fetchProject(project.id)
 
       // Navigate to project URL
-      navigate(`/app/project/${project.id}`)
+      navigate(`/project/${project.id}`)
 
       toast.success(`Loaded "${project.name}"`)
     } catch (error) {
@@ -154,7 +222,7 @@ export default function Header() {
     }
   }
 
-  const handleExportPyTorch = () => {
+  const handleExportCode = async () => {
     const errors = validateArchitecture()
     const criticalErrors = errors.filter((e) => e.type === 'error')
 
@@ -170,12 +238,53 @@ export default function Header() {
       return
     }
 
+    if (!currentProject) {
+      toast.error('Cannot export: No active project')
+      return
+    }
+
     try {
-      const code = generatePyTorchCode(nodes, edges, currentProject?.name || 'CustomModel')
-      setExportCode(code)
-      setIsExportOpen(true)
-      toast.success('Code generated successfully!')
+      toast.loading('Generating code...')
+
+      // Call backend API with framework selection
+      const result = await apiExportModel({
+        nodes: nodes.map(node => ({
+          id: node.id,
+          type: node.data.blockType,
+          data: node.data,
+          position: node.position
+        })),
+        edges: edges.map(edge => ({
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          sourceHandle: edge.sourceHandle || '',
+          targetHandle: edge.targetHandle || ''
+        })),
+        format: currentProject.framework as 'pytorch' | 'tensorflow',
+        projectName: currentProject.name
+      })
+
+      toast.dismiss()
+
+      if (result.success && result.data) {
+        setExportCode({
+          model: result.data.files['model.py'],
+          train: result.data.files['train.py'],
+          dataset: result.data.files['dataset.py'],
+          config: result.data.files['config.py'],
+          zip: result.data.zip,
+          filename: result.data.filename
+        })
+        setIsExportOpen(true)
+        toast.success(`${result.data.framework.toUpperCase()} code generated successfully!`)
+      } else {
+        toast.error('Code generation failed', {
+          description: result.error || 'Unknown error occurred'
+        })
+      }
     } catch (error) {
+      toast.dismiss()
       toast.error('Code generation failed', {
         description: error instanceof Error ? error.message : 'Unknown error'
       })
@@ -246,7 +355,7 @@ export default function Header() {
           await projectApi.saveArchitecture(backendProject.id, importedNodes, importedEdges)
 
           // Navigate to new project
-          navigate(`/app/project/${backendProject.id}`)
+          navigate(`/project/${backendProject.id}`)
 
           toast.success('Project created from import!', {
             description: `Created project "${project.name}" with ${importedNodes.length} blocks`
@@ -358,6 +467,19 @@ export default function Header() {
     toast.success(`${label} copied to clipboard!`)
   }
 
+  const downloadFile = (content: string, filename: string) => {
+    const blob = new Blob([content], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    toast.success(`${filename} downloaded!`)
+  }
+
   const handleOpenProjectManagement = (project: projectApi.ProjectResponse, e: React.MouseEvent) => {
     e.stopPropagation()
     setManagingProject(project)
@@ -406,9 +528,11 @@ export default function Header() {
       setIsManageProjectOpen(false)
       loadProjectsList()
 
-      // If we deleted the current project, navigate to home
+      // If we deleted the current project, clear the store and go to blank canvas
       if (currentProject?.id === managingProject.id) {
-        navigate('/')
+        const { reset } = useModelBuilderStore.getState()
+        reset()
+        navigate('/project')
       }
     } catch (error) {
       toast.error('Failed to delete project', {
@@ -421,7 +545,7 @@ export default function Header() {
     <header className="h-16 border-b border-border bg-card px-6 flex items-center justify-between">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
-          <Flask size={28} weight="fill" className="text-primary" />
+          <img src="/logo_navbar.png" alt="VisionForge Logo" className="h-10 w-auto" />
           <h1 className="text-xl font-semibold">VisionForge</h1>
         </div>
 
@@ -566,6 +690,61 @@ export default function Header() {
           </DialogContent>
         </Dialog>
 
+        {/* Save As Dialog */}
+        <Dialog open={isSaveAsDialogOpen} onOpenChange={setIsSaveAsDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Save Project</DialogTitle>
+              <DialogDescription>
+                Name your project to save your architecture
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 pt-4">
+              <div>
+                <Label htmlFor="save-as-name">Project Name *</Label>
+                <Input
+                  id="save-as-name"
+                  placeholder="My Model"
+                  value={saveAsProjectName}
+                  onChange={(e) => setSaveAsProjectName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSaveAsProject()
+                    }
+                  }}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <Label htmlFor="save-as-desc">Description (Optional)</Label>
+                <Textarea
+                  id="save-as-desc"
+                  placeholder="Describe your model architecture..."
+                  value={saveAsProjectDesc}
+                  onChange={(e) => setSaveAsProjectDesc(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsSaveAsDialogOpen(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSaveAsProject}
+                  className="flex-1"
+                >
+                  <FloppyDisk size={16} className="mr-2" />
+                  Save Project
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Import Button */}
         <Button
           variant="outline"
@@ -580,7 +759,7 @@ export default function Header() {
           variant="outline"
           size="sm"
           onClick={handleSaveProject}
-          disabled={nodes.length === 0 || !currentProject}
+          disabled={nodes.length === 0}
         >
           <FloppyDisk size={16} className="mr-2" />
           Save
@@ -612,12 +791,14 @@ export default function Header() {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Export Options</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleExportPyTorch} className="gap-2 cursor-pointer">
+              <DropdownMenuItem onClick={handleExportCode} className="gap-2 cursor-pointer">
                 <FilePy size={16} />
                 <div>
-                  <div className="font-medium">PyTorch Code</div>
+                  <div className="font-medium">
+                    {currentProject ? `${currentProject.framework.toUpperCase()} Code` : 'Model Code'}
+                  </div>
                   <div className="text-xs text-muted-foreground">
-                    Generate model.py, train.py, config.py
+                    Generate model.py, train.py, dataset.py, config.py
                   </div>
                 </div>
               </DropdownMenuItem>
@@ -632,66 +813,162 @@ export default function Header() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogContent className="max-w-4xl max-h-[90vh] w-full overflow-hidden flex flex-col">
             <DialogHeader>
-              <DialogTitle>Export PyTorch Code</DialogTitle>
+              <DialogTitle>
+                Export {currentProject ? currentProject.framework.toUpperCase() : 'Model'} Code
+              </DialogTitle>
               <DialogDescription>
-                Copy the generated code files or download them
+                Copy individual files or download all as ZIP
               </DialogDescription>
             </DialogHeader>
             {exportCode && (
-              <Tabs defaultValue="model" className="w-full">
-                <TabsList>
-                  <TabsTrigger value="model">model.py</TabsTrigger>
-                  <TabsTrigger value="train">train.py</TabsTrigger>
-                  <TabsTrigger value="config">config.py</TabsTrigger>
-                </TabsList>
-                <TabsContent value="model">
-                  <ScrollArea className="h-[400px] w-full">
-                    <pre className="text-xs font-mono bg-muted p-4 rounded">
-                      <code>{exportCode.model}</code>
-                    </pre>
-                  </ScrollArea>
+              <div className="flex-1 flex flex-col min-h-0">
+                {/* Download All Button */}
+                <div className="mb-3">
                   <Button
-                    className="w-full mt-2"
-                    variant="outline"
-                    onClick={() => copyToClipboard(exportCode.model, 'model.py')}
+                    className="w-full"
+                    onClick={() => {
+                      // Decode base64 zip and download
+                      const binaryString = atob(exportCode.zip)
+                      const bytes = new Uint8Array(binaryString.length)
+                      for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i)
+                      }
+                      const blob = new Blob([bytes], { type: 'application/zip' })
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = exportCode.filename
+                      document.body.appendChild(a)
+                      a.click()
+                      document.body.removeChild(a)
+                      URL.revokeObjectURL(url)
+                      toast.success(`${exportCode.filename} downloaded!`)
+                    }}
                   >
-                    <Code size={16} className="mr-2" />
-                    Copy model.py
+                    <Download size={16} className="mr-2" />
+                    Download All Files (ZIP)
                   </Button>
+                </div>
+
+                <Tabs defaultValue="model" className="flex-1 flex flex-col min-h-0">
+                  <TabsList className="w-full shrink-0">
+                    <TabsTrigger value="model" className="flex-1">model.py</TabsTrigger>
+                    <TabsTrigger value="train" className="flex-1">train.py</TabsTrigger>
+                    <TabsTrigger value="dataset" className="flex-1">dataset.py</TabsTrigger>
+                    <TabsTrigger value="config" className="flex-1">config.py</TabsTrigger>
+                  </TabsList>
+                <TabsContent value="model" className="mt-4 flex-1 flex flex-col min-h-0">
+                  <div className="flex-1 w-full border rounded-md overflow-auto bg-muted">
+                    <div className="min-w-max">
+                      <pre className="text-xs font-mono p-4 whitespace-pre">
+                        <code>{exportCode.model}</code>
+                      </pre>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3 shrink-0">
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      onClick={() => copyToClipboard(exportCode.model, 'model.py')}
+                    >
+                      <Code size={16} className="mr-2" />
+                      Copy
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      onClick={() => downloadFile(exportCode.model, 'model.py')}
+                    >
+                      <Download size={16} className="mr-2" />
+                      Download
+                    </Button>
+                  </div>
                 </TabsContent>
-                <TabsContent value="train">
-                  <ScrollArea className="h-[400px] w-full">
-                    <pre className="text-xs font-mono bg-muted p-4 rounded">
-                      <code>{exportCode.train}</code>
-                    </pre>
-                  </ScrollArea>
-                  <Button
-                    className="w-full mt-2"
-                    variant="outline"
-                    onClick={() => copyToClipboard(exportCode.train, 'train.py')}
-                  >
-                    <Code size={16} className="mr-2" />
-                    Copy train.py
-                  </Button>
+                <TabsContent value="train" className="mt-4 flex-1 flex flex-col min-h-0">
+                  <div className="flex-1 w-full border rounded-md overflow-auto bg-muted">
+                    <div className="min-w-max">
+                      <pre className="text-xs font-mono p-4 whitespace-pre">
+                        <code>{exportCode.train}</code>
+                      </pre>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3 shrink-0">
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      onClick={() => copyToClipboard(exportCode.train, 'train.py')}
+                    >
+                      <Code size={16} className="mr-2" />
+                      Copy
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      onClick={() => downloadFile(exportCode.train, 'train.py')}
+                    >
+                      <Download size={16} className="mr-2" />
+                      Download
+                    </Button>
+                  </div>
                 </TabsContent>
-                <TabsContent value="config">
-                  <ScrollArea className="h-[400px] w-full">
-                    <pre className="text-xs font-mono bg-muted p-4 rounded">
-                      <code>{exportCode.config}</code>
-                    </pre>
-                  </ScrollArea>
-                  <Button
-                    className="w-full mt-2"
-                    variant="outline"
-                    onClick={() => copyToClipboard(exportCode.config, 'config.py')}
-                  >
-                    <Code size={16} className="mr-2" />
-                    Copy config.py
-                  </Button>
+                <TabsContent value="dataset" className="mt-4 flex-1 flex flex-col min-h-0">
+                  <div className="flex-1 w-full border rounded-md overflow-auto bg-muted">
+                    <div className="min-w-max">
+                      <pre className="text-xs font-mono p-4 whitespace-pre">
+                        <code>{exportCode.dataset}</code>
+                      </pre>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3 shrink-0">
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      onClick={() => copyToClipboard(exportCode.dataset, 'dataset.py')}
+                    >
+                      <Code size={16} className="mr-2" />
+                      Copy
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      onClick={() => downloadFile(exportCode.dataset, 'dataset.py')}
+                    >
+                      <Download size={16} className="mr-2" />
+                      Download
+                    </Button>
+                  </div>
                 </TabsContent>
-              </Tabs>
+                <TabsContent value="config" className="mt-4 flex-1 flex flex-col min-h-0">
+                  <div className="flex-1 w-full border rounded-md overflow-auto bg-muted">
+                    <div className="min-w-max">
+                      <pre className="text-xs font-mono p-4 whitespace-pre">
+                        <code>{exportCode.config}</code>
+                      </pre>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3 shrink-0">
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      onClick={() => copyToClipboard(exportCode.config, 'config.py')}
+                    >
+                      <Code size={16} className="mr-2" />
+                      Copy
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      onClick={() => downloadFile(exportCode.config, 'config.py')}
+                    >
+                      <Download size={16} className="mr-2" />
+                      Download
+                    </Button>
+                  </div>
+                </TabsContent>
+                </Tabs>
+              </div>
             )}
           </DialogContent>
         </Dialog>

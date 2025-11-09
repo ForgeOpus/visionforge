@@ -155,10 +155,9 @@ def get_node_definitions(request):
     Get available node definitions for a specific framework
     Returns node metadata and configuration schemas
     """
-    from block_manager.services.nodes.registry import (
-        get_all_node_definitions,
-        Framework
-    )
+    from block_manager.services.nodes.specs.registry import list_node_specs
+    from block_manager.services.nodes.specs.serialization import spec_to_dict
+    from block_manager.services.nodes.specs import Framework
     
     # Get framework from query params, default to PyTorch
     framework_param = request.query_params.get('framework', 'pytorch').lower()
@@ -171,17 +170,17 @@ def get_node_definitions(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # Get all node definitions for the framework
-    node_definitions = get_all_node_definitions(framework)
+    # Get all node specs for the framework
+    node_specs = list_node_specs(framework)
     
     # Serialize to dict format
     definitions_data = []
-    for node_def in node_definitions:
+    for node_spec in node_specs:
         try:
-            definitions_data.append(node_def.to_dict())
+            definitions_data.append(spec_to_dict(node_spec))
         except Exception as e:
             # Skip nodes that fail to serialize
-            print(f"Error serializing node {node_def.metadata.type}: {e}")
+            print(f"Error serializing node {node_spec.type}: {e}")
             continue
     
     return Response({
@@ -197,10 +196,9 @@ def get_node_definition(request, node_type):
     """
     Get a specific node definition by type
     """
-    from block_manager.services.nodes.registry import (
-        get_node_definition as get_node_def,
-        Framework
-    )
+    from block_manager.services.nodes.specs.registry import get_node_spec
+    from block_manager.services.nodes.specs.serialization import spec_to_dict
+    from block_manager.services.nodes.specs import Framework
     
     # Get framework from query params, default to PyTorch
     framework_param = request.query_params.get('framework', 'pytorch').lower()
@@ -213,10 +211,10 @@ def get_node_definition(request, node_type):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # Get the node definition
-    node_def = get_node_def(node_type, framework)
+    # Get the node spec
+    node_spec = get_node_spec(node_type, framework)
     
-    if not node_def:
+    if not node_spec:
         return Response(
             {'success': False, 'error': f'Node type "{node_type}" not found for framework {framework.value}'},
             status=status.HTTP_404_NOT_FOUND
@@ -225,10 +223,106 @@ def get_node_definition(request, node_type):
     try:
         return Response({
             'success': True,
-            'definition': node_def.to_dict()
+            'definition': spec_to_dict(node_spec)
         })
     except Exception as e:
         return Response(
             {'success': False, 'error': f'Error serializing node definition: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(['POST'])
+def render_node_code(request):
+    """
+    Render professional class-based code for a single node.
+
+    Request body:
+    {
+        "node_type": "conv2d",
+        "framework": "pytorch",
+        "config": {"out_channels": 64, "kernel_size": 3, ...},
+        "metadata": {
+            "node_id": "node_1",
+            "inputShape": {"dims": [1, 3, 224, 224]},
+            "outputShape": {"dims": [1, 64, 112, 112]}
+        }
+    }
+
+    Returns:
+    {
+        "success": true,
+        "code": "class Conv2dLayer_64ch_3x3(nn.Module): ...",
+        "node_type": "conv2d",
+        "framework": "pytorch",
+        "format": "class"
+    }
+    """
+    from block_manager.services.nodes.specs.registry import get_node_spec
+    from block_manager.services.nodes.specs import Framework
+    from block_manager.services.pytorch_codegen import generate_single_layer_class as pytorch_generate_class
+    from block_manager.services.tensorflow_codegen import generate_single_layer_class as tensorflow_generate_class
+
+    # Validate request data
+    node_type = request.data.get('node_type')
+    framework_param = request.data.get('framework', 'pytorch').lower()
+    config = request.data.get('config', {})
+    metadata = request.data.get('metadata', {})
+
+    if not node_type:
+        return Response(
+            {'success': False, 'error': 'node_type is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        framework = Framework(framework_param)
+    except ValueError:
+        return Response(
+            {'success': False, 'error': f'Invalid framework: {framework_param}'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Get the node spec (for validation)
+    node_spec = get_node_spec(node_type, framework)
+
+    if not node_spec:
+        return Response(
+            {'success': False, 'error': f'Node type "{node_type}" not found for framework {framework.value}'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    # Generate professional class-based code
+    try:
+        # Construct node dictionary from request data
+        node = {
+            'id': metadata.get('node_id', 'preview_node'),
+            'data': {
+                'blockType': node_type,
+                'config': config,
+                'inputShape': metadata.get('inputShape'),
+                'outputShape': metadata.get('outputShape'),
+            }
+        }
+
+        # Generate class-based code using the appropriate framework generator
+        if framework == Framework.PYTORCH:
+            code = pytorch_generate_class(node, node_index=0)
+        else:  # TensorFlow
+            code = tensorflow_generate_class(node, node_index=0)
+
+        return Response({
+            'success': True,
+            'code': code,
+            'node_type': node_type,
+            'framework': framework.value,
+            'format': 'class'
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()  # Log to console for debugging
+        return Response(
+            {'success': False, 'error': f'Error generating node code: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+

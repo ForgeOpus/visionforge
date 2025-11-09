@@ -45,7 +45,7 @@ export default function ChatBot() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Get workflow state from store
-  const { nodes, edges, addNode, updateNode, removeNode, addEdge, removeEdge } = useModelBuilderStore()
+  const { nodes, edges, addNode, updateNode, removeNode, duplicateNode, addEdge, removeEdge } = useModelBuilderStore()
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -211,21 +211,39 @@ export default function ChatBot() {
             return
           }
 
-          // Create properly structured node with all metadata
+          // Create properly structured node with all metadata (matching drag-and-drop format)
           const newNode = {
-            id: `node-${Date.now()}`,
-            type: 'block',
+            id: `${nodeType}-${Date.now()}`,
+            type: 'custom',
             position: position || { x: 100, y: 100 },
             data: {
-              blockType: nodeType,
+              blockType: nodeDef.metadata.type,
               label: nodeDef.metadata.label,
               category: nodeDef.metadata.category,
-              config: config || nodeDef.getDefaultConfig(),
+              config: config || {},
               inputShape: undefined,
               outputShape: undefined
             }
           }
+
+          // Apply default config values from schema
+          nodeDef.configSchema.forEach((field) => {
+            if (field.default !== undefined && !config?.[field.name]) {
+              newNode.data.config[field.name] = field.default
+            }
+          })
+
+          // Merge provided config
+          if (config) {
+            newNode.data.config = { ...newNode.data.config, ...config }
+          }
+
           addNode(newNode)
+
+          // Infer dimensions after adding node
+          setTimeout(() => {
+            useModelBuilderStore.getState().inferDimensions()
+          }, 0)
           toast.success('Node added', {
             description: `Added ${nodeDef.metadata.label} to the workflow`
           })
@@ -233,24 +251,85 @@ export default function ChatBot() {
         }
 
         case 'remove_node': {
-          const { nodeId } = details
-          removeNode(nodeId)
+          const { id, nodeId } = details
+          const targetNodeId = id || nodeId
+          if (!targetNodeId) {
+            toast.error('Invalid node ID', {
+              description: 'Node ID is required to remove a node'
+            })
+            return
+          }
+          removeNode(targetNodeId)
           toast.success('Node removed', {
             description: 'Removed node from workflow'
           })
           break
         }
 
-        case 'modify_node': {
-          const { nodeId, config } = details
-          const node = nodes.find(n => n.id === nodeId)
-          if (node) {
-            updateNode(nodeId, {
-              ...node.data,
-              config: { ...node.data.config, ...config }
+        case 'duplicate_node': {
+          const { id, nodeId } = details
+          const targetNodeId = id || nodeId
+          if (!targetNodeId) {
+            toast.error('Invalid node ID', {
+              description: 'Node ID is required to duplicate a node'
             })
+            return
+          }
+          duplicateNode(targetNodeId)
+          toast.success('Node duplicated', {
+            description: 'Created a copy of the node'
+          })
+          break
+        }
+
+        case 'modify_node': {
+          const { id, nodeId, config, position, label } = details
+          const targetNodeId = id || nodeId
+          const node = nodes.find(n => n.id === targetNodeId)
+          if (!node) {
+            toast.error('Node not found', {
+              description: `Node with ID '${targetNodeId}' does not exist`
+            })
+            return
+          }
+          
+          let updated = false
+          
+          // If position is being updated, we need to update the node directly in the store
+          if (position) {
+            useModelBuilderStore.setState((state) => ({
+              nodes: state.nodes.map((n) =>
+                n.id === targetNodeId
+                  ? { ...n, position }
+                  : n
+              )
+            }))
+            toast.success('Node moved', {
+              description: 'Node position updated'
+            })
+            updated = true
+          }
+          
+          // If config or label is being updated, use the updateNode function
+          if (config || label) {
+            const updates: any = { ...node.data }
+            if (config) {
+              updates.config = { ...node.data.config, ...config }
+            }
+            if (label) {
+              updates.label = label
+            }
+            updateNode(targetNodeId, updates)
+            const description = label ? 'Node label updated' : 'Node configuration updated'
             toast.success('Node updated', {
-              description: 'Node configuration updated'
+              description
+            })
+            updated = true
+          }
+          
+          if (!updated) {
+            toast.warning('No changes made', {
+              description: 'No valid fields provided for modification'
             })
           }
           break
@@ -258,6 +337,12 @@ export default function ChatBot() {
 
         case 'add_connection': {
           const { source, target, sourceHandle, targetHandle } = details
+          if (!source || !target) {
+            toast.error('Invalid connection', {
+              description: 'Both source and target are required'
+            })
+            return
+          }
           addEdge({
             id: `edge-${Date.now()}`,
             source,
@@ -272,11 +357,33 @@ export default function ChatBot() {
         }
 
         case 'remove_connection': {
-          const { edgeId } = details
-          removeEdge(edgeId)
-          toast.success('Connection removed', {
-            description: 'Removed connection from workflow'
-          })
+          const { id, edgeId, source, target } = details
+          
+          // Support both direct ID removal and source/target based removal
+          if (id || edgeId) {
+            const targetEdgeId = id || edgeId
+            removeEdge(targetEdgeId)
+            toast.success('Connection removed', {
+              description: 'Removed connection from workflow'
+            })
+          } else if (source && target) {
+            // Find edge by source and target
+            const edge = edges.find(e => e.source === source && e.target === target)
+            if (edge) {
+              removeEdge(edge.id)
+              toast.success('Connection removed', {
+                description: 'Removed connection from workflow'
+              })
+            } else {
+              toast.error('Connection not found', {
+                description: `No connection found between ${source} and ${target}`
+              })
+            }
+          } else {
+            toast.error('Invalid connection removal', {
+              description: 'Either edge ID or source/target pair is required'
+            })
+          }
           break
         }
 
@@ -374,7 +481,7 @@ export default function ChatBot() {
                           </div>
                         )}
 
-                        <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-sm break-words [&_pre]:overflow-x-auto [&_code]:break-words [&_p]:break-words">
+                        <div className="prose prose-sm dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 text-sm break-words [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap [&_code]:break-words [&_code]:whitespace-pre-wrap [&_p]:break-words">
                           <ReactMarkdown>{message.content}</ReactMarkdown>
                         </div>
 
@@ -383,7 +490,7 @@ export default function ChatBot() {
                           <div className="mt-3 space-y-2 min-w-0">
                             <div className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
                               <Icons.Wrench size={12} className="shrink-0" />
-                              <span className="truncate">Suggested Modifications:</span>
+                              <span className="truncate">Suggested Modifications ({message.modifications.length}):</span>
                             </div>
                             {message.modifications.map((mod, idx) => (
                               <div key={idx} className="bg-background/50 border rounded p-2 space-y-1 min-w-0">
@@ -406,6 +513,43 @@ export default function ChatBot() {
                                 </Button>
                               </div>
                             ))}
+                            
+                            {/* Apply All Button - shown when multiple modifications exist */}
+                            {message.modifications.length > 1 && (
+                              <Button
+                                size="sm"
+                                className="w-full text-xs h-8 bg-primary hover:bg-primary/90"
+                                onClick={async () => {
+                                  let successCount = 0
+                                  let failCount = 0
+                                  
+                                  for (const mod of message.modifications || []) {
+                                    try {
+                                      applyModification(mod)
+                                      successCount++
+                                      // Small delay between modifications to avoid race conditions
+                                      await new Promise(resolve => setTimeout(resolve, 50))
+                                    } catch (error) {
+                                      failCount++
+                                      console.error('Failed to apply modification:', error)
+                                    }
+                                  }
+                                  
+                                  if (failCount === 0) {
+                                    toast.success('All changes applied', {
+                                      description: `Successfully applied ${successCount} modifications`
+                                    })
+                                  } else {
+                                    toast.warning('Some changes failed', {
+                                      description: `Applied ${successCount} modifications, ${failCount} failed`
+                                    })
+                                  }
+                                }}
+                              >
+                                <Icons.CheckCircle size={14} className="mr-1.5" />
+                                Apply All {message.modifications.length} Changes
+                              </Button>
+                            )}
                           </div>
                         )}
                       </div>

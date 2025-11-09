@@ -88,30 +88,11 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     // Track recently used node
     get().trackRecentlyUsedNode(node.data.blockType as BlockType)
 
-    // Auto-create default project if none exists
-    if (!state.currentProject) {
-      const defaultProject: Project = {
-        id: Date.now().toString(),
-        name: 'Untitled Project',
-        description: 'Auto-created project',
-        framework: 'pytorch',
-        nodes: [],
-        edges: [],
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      }
-
-      set({
-        currentProject: defaultProject,
-        nodes: [node],
-        ...historyUpdate
-      })
-    } else {
-      set((state) => ({
-        nodes: [...state.nodes, node],
-        ...historyUpdate
-      }))
-    }
+    // Add node to canvas (project will be created on save)
+    set((state) => ({
+      nodes: [...state.nodes, node],
+      ...historyUpdate
+    }))
   },
 
   updateNode: (id, data) => {
@@ -273,8 +254,8 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     const sourceNode = nodes.find((n) => n.id === connection.source)
     if (!sourceNode) return false
     
-    // Check if target allows multiple inputs (concat and add blocks)
-    const allowsMultiple = targetNode.data.blockType === 'concat' || targetNode.data.blockType === 'add'
+    // Check if target allows multiple inputs (concat, add, and loss blocks)
+    const allowsMultiple = targetNode.data.blockType === 'concat' || targetNode.data.blockType === 'add' || targetNode.data.blockType === 'loss'
     if (!allowsMultiple) {
       const hasExistingInput = edges.some((e) => e.target === connection.target)
       if (hasExistingInput) return false
@@ -363,6 +344,23 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
           }
         })
       }
+      
+      // Special validation for loss nodes - check input count matches loss type
+      if (node.data.blockType === 'loss') {
+        const lossNodeDef = nodeDef as any
+        if (lossNodeDef?.getInputPorts) {
+          const requiredPorts = lossNodeDef.getInputPorts(node.data.config)
+          const incomingEdges = edges.filter((e) => e.target === node.id)
+          
+          if (incomingEdges.length !== requiredPorts.length) {
+            errors.push({
+              nodeId: node.id,
+              message: `Loss function "${node.data.config.loss_type || 'cross_entropy'}" requires ${requiredPorts.length} inputs (${requiredPorts.map((p: any) => p.label).join(', ')}), but has ${incomingEdges.length}`,
+              type: 'error'
+            })
+          }
+        }
+      }
     })
     
     set({ validationErrors: errors })
@@ -433,7 +431,7 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
       createdAt: Date.now(),
       updatedAt: Date.now()
     }
-    
+
     set({
       currentProject: project,
       nodes: [],
