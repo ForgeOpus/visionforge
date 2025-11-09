@@ -34,7 +34,7 @@ export default function Footer() {
             <h3 className="text-white font-semibold mb-4">Product</h3>
             <ul className="space-y-2 text-sm">
               <li>
-                <a href="/app" className="text-gray-400 hover:text-cyan-400 transition-colors">
+                <a href="/project" className="text-gray-400 hover:text-cyan-400 transition-colors">
                   Model Builder
                 </a>
               </li>

@@ -34,7 +34,7 @@ export default function CTASection() {
       >
         <Button
           size="lg"
-          onClick={() => navigate("/app")}
+          onClick={() => navigate("/project")}
           className="bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white border-0 px-8 py-6 text-lg font-semibold shadow-[0_0_30px_rgba(0,229,255,0.4)] hover:shadow-[0_0_50px_rgba(0,229,255,0.6)] transition-all duration-300"
         >
           Start Building Now
