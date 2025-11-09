@@ -3,12 +3,21 @@ import { Node, Edge, Connection } from '@xyflow/react'
 import { BlockData, Project, ValidationError, TensorShape } from './types'
 import { getBlockDefinition, validateBlockConnection, allowsMultipleInputs } from './blockDefinitions'
 
+interface HistoryState {
+  nodes: Node<BlockData>[]
+  edges: Edge[]
+}
+
 interface ModelBuilderState {
   nodes: Node<BlockData>[]
   edges: Edge[]
   selectedNodeId: string | null
   validationErrors: ValidationError[]
   currentProject: Project | null
+  
+  // History for undo/redo
+  past: HistoryState[]
+  future: HistoryState[]
   
   setNodes: (nodes: Node<BlockData>[]) => void
   setEdges: (edges: Edge[]) => void
@@ -23,6 +32,11 @@ interface ModelBuilderState {
   validateArchitecture: () => ValidationError[]
   inferDimensions: () => void
   
+  undo: () => void
+  redo: () => void
+  canUndo: () => boolean
+  canRedo: () => boolean
+  
   createProject: (name: string, description: string, framework: 'pytorch' | 'tensorflow') => void
   saveProject: () => void
   loadProject: (project: Project) => void
@@ -31,43 +45,78 @@ interface ModelBuilderState {
   reset: () => void
 }
 
+const MAX_HISTORY = 10
+
+// Helper to save current state to history
+const saveHistory = (state: ModelBuilderState) => {
+  const currentState: HistoryState = {
+    nodes: JSON.parse(JSON.stringify(state.nodes)),
+    edges: JSON.parse(JSON.stringify(state.edges))
+  }
+  
+  const newPast = [...state.past, currentState].slice(-MAX_HISTORY)
+  
+  return {
+    past: newPast,
+    future: [] // Clear future on new action
+  }
+}
+
 export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
   nodes: [],
   edges: [],
   selectedNodeId: null,
   validationErrors: [],
   currentProject: null,
+  past: [],
+  future: [],
 
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
 
   addNode: (node) => {
+    const state = get()
+    const historyUpdate = saveHistory(state)
+    
     set((state) => ({
-      nodes: [...state.nodes, node]
+      nodes: [...state.nodes, node],
+      ...historyUpdate
     }))
   },
 
   updateNode: (id, data) => {
+    const state = get()
+    const historyUpdate = saveHistory(state)
+    
     set((state) => ({
       nodes: state.nodes.map((node) =>
         node.id === id ? { ...node, data: { ...node.data, ...data } } : node
-      )
+      ),
+      ...historyUpdate
     }))
     
     get().inferDimensions()
   },
 
   removeNode: (id) => {
+    const state = get()
+    const historyUpdate = saveHistory(state)
+    
     set((state) => ({
       nodes: state.nodes.filter((node) => node.id !== id),
       edges: state.edges.filter((edge) => edge.source !== id && edge.target !== id),
-      selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId
+      selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
+      ...historyUpdate
     }))
   },
 
   addEdge: (edge) => {
+    const state = get()
+    const historyUpdate = saveHistory(state)
+    
     set((state) => ({
-      edges: [...state.edges, edge]
+      edges: [...state.edges, edge],
+      ...historyUpdate
     }))
     
     const { nodes, edges } = get()
@@ -137,8 +186,12 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
   },
 
   removeEdge: (id) => {
+    const state = get()
+    const historyUpdate = saveHistory(state)
+    
     set((state) => ({
-      edges: state.edges.filter((edge) => edge.id !== id)
+      edges: state.edges.filter((edge) => edge.id !== id),
+      ...historyUpdate
     }))
   },
 
@@ -344,13 +397,53 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     }))
   },
 
+  undo: () => {
+    const { past, nodes, edges } = get()
+    if (past.length === 0) return
+    
+    const previous = past[past.length - 1]
+    const newPast = past.slice(0, past.length - 1)
+    
+    set((state) => ({
+      past: newPast,
+      future: [...state.future, { nodes, edges }].slice(-MAX_HISTORY),
+      nodes: previous.nodes,
+      edges: previous.edges
+    }))
+    
+    get().inferDimensions()
+  },
+
+  redo: () => {
+    const { future, nodes, edges } = get()
+    if (future.length === 0) return
+    
+    const next = future[future.length - 1]
+    const newFuture = future.slice(0, future.length - 1)
+    
+    set((state) => ({
+      future: newFuture,
+      past: [...state.past, { nodes, edges }].slice(-MAX_HISTORY),
+      nodes: next.nodes,
+      edges: next.edges
+    }))
+    
+    get().inferDimensions()
+  },
+
+  canUndo: () => get().past.length > 0,
+  
+  canRedo: () => get().future.length > 0,
+
   reset: () => {
     set({
       nodes: [],
       edges: [],
       selectedNodeId: null,
       validationErrors: [],
-      currentProject: null
+      currentProject: null,
+      past: [],
+      future: []
     })
   }
 }))
