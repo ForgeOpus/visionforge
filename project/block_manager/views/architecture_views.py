@@ -289,11 +289,6 @@ def render_node_code(request):
     
     # Render the template
     try:
-        # Debug logging
-        print(f"DEBUG: Rendering node_type={node_type}, framework={framework.value}")
-        print(f"DEBUG: Config type={type(config)}, config={config}")
-        print(f"DEBUG: Metadata type={type(metadata)}, metadata={metadata}")
-        
         rendered = render_node_template(node_spec, config, metadata)
         
         # Compute hash from serialized spec
@@ -311,7 +306,7 @@ def render_node_code(request):
         })
     except Exception as e:
         import traceback
-        print(f"DEBUG: Full traceback:\n{traceback.format_exc()}")
+        traceback.print_exc()  # Log to console for debugging
         return Response(
             {'success': False, 'error': f'Error rendering node code: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
