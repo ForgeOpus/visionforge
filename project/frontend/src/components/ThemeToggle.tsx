@@ -14,9 +14,7 @@ export function ThemeToggle() {
 
   if (!mounted) {
     return (
-      <div className="h-9 w-9 rounded-md flex items-center justify-center">
-        <Classic duration={750} />
-      </div>
+      <div className="h-9 w-9 rounded-md flex items-center justify-center bg-muted animate-pulse" />
     );
   }
 
