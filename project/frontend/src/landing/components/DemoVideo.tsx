@@ -15,7 +15,7 @@ export default function DemoVideo() {
         {/* Video Container */}
         <div className="aspect-video bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center relative overflow-hidden">
           <video
-            src="/demo-video.mov"
+            src="/demo-video.mp4"
             autoPlay
             loop
             muted
