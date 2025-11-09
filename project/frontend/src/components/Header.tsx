@@ -90,7 +90,7 @@ export default function Header() {
       toast.success('Project created!')
 
       // Navigate to the new project
-      navigate(`/project/${backendProject.id}`)
+      navigate(`/app/project/${backendProject.id}`)
 
       // Reload projects list
       loadProjectsList()
@@ -137,7 +137,7 @@ export default function Header() {
       const fullProject = await projectApi.fetchProject(project.id)
 
       // Navigate to project URL
-      navigate(`/project/${project.id}`)
+      navigate(`/app/project/${project.id}`)
 
       toast.success(`Loaded "${project.name}"`)
     } catch (error) {
@@ -239,7 +239,7 @@ export default function Header() {
           await projectApi.saveArchitecture(backendProject.id, importedNodes, importedEdges)
 
           // Navigate to new project
-          navigate(`/project/${backendProject.id}`)
+          navigate(`/app/project/${backendProject.id}`)
 
           toast.success('Project created from import!', {
             description: `Created project "${project.name}" with ${importedNodes.length} blocks`
