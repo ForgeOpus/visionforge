@@ -1,26 +1,26 @@
 """
-Gemini AI Service for chat functionality and workflow modifications.
+Claude AI Service for chat functionality and workflow modifications.
 """
-import google.generativeai as genai
+import anthropic
 import json
 import os
-import tempfile
+import base64
 from typing import List, Dict, Any, Optional
 from django.conf import settings
 from django.core.files.uploadedfile import UploadedFile
 
 
-class GeminiChatService:
-    """Service to handle Gemini AI chat interactions with workflow context."""
+class ClaudeChatService:
+    """Service to handle Claude AI chat interactions with workflow context."""
 
     def __init__(self):
-        """Initialize Gemini with API key from environment."""
-        api_key = os.getenv('GEMINI_API_KEY')
+        """Initialize Claude with API key from environment."""
+        api_key = os.getenv('ANTHROPIC_API_KEY')
         if not api_key:
-            raise ValueError("GEMINI_API_KEY environment variable is not set")
+            raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
 
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash')
+        self.client = anthropic.Anthropic(api_key=api_key)
+        self.model = 'claude-3-5-sonnet-20241022'  # Latest Claude model
 
     def _format_workflow_context(self, workflow_state: Optional[Dict[str, Any]]) -> str:
         """Format workflow state into a readable context for the AI."""
@@ -244,7 +244,7 @@ STEP 1: When user requests connected nodes (e.g., "A connects to B connects to C
 
 STEP 2: After nodes exist in the workflow context, create connections:
   - Use the exact node IDs shown in the workflow context
-  
+
 Example (adding connection):
 ```json
 {
@@ -313,61 +313,98 @@ You cannot modify the workflow in this mode. If users want to make changes, sugg
         return f"{base_prompt}\n{mode_prompt}\n{workflow_context}"
 
     def _format_chat_history(self, history: List[Dict[str, str]]) -> List[Dict[str, Any]]:
-        """Convert chat history to Gemini format."""
+        """Convert chat history to Claude format."""
         formatted_history = []
 
         for message in history:
             role = message.get('role', 'user')
             content = message.get('content', '')
 
-            # Gemini uses 'user' and 'model' roles
-            gemini_role = 'model' if role == 'assistant' else 'user'
-
+            # Claude uses 'user' and 'assistant' roles
             formatted_history.append({
-                'role': gemini_role,
-                'parts': [content]
+                'role': role,
+                'content': content
             })
 
         return formatted_history
 
-    def upload_file_to_gemini(self, uploaded_file: UploadedFile) -> Optional[Any]:
+    def _read_file_content(self, uploaded_file: UploadedFile) -> Dict[str, Any]:
         """
-        Upload a file to Gemini's File API.
+        Read file content and prepare it for Claude API.
 
         Args:
             uploaded_file: Django UploadedFile object
 
         Returns:
-            Gemini file object or None if upload failed
+            Dict with file content formatted for Claude
         """
         try:
-            # Save uploaded file to temporary location
-            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as temp_file:
-                for chunk in uploaded_file.chunks():
-                    temp_file.write(chunk)
-                temp_path = temp_file.name
+            # Read file content
+            file_content = uploaded_file.read()
+            file_name = uploaded_file.name
+            content_type = uploaded_file.content_type or 'application/octet-stream'
 
-            # Upload to Gemini
-            gemini_file = genai.upload_file(temp_path, display_name=uploaded_file.name)
+            # Determine media type based on file extension
+            if content_type.startswith('image/'):
+                # For images, encode as base64
+                base64_content = base64.b64encode(file_content).decode('utf-8')
 
-            # Clean up temporary file
-            os.unlink(temp_path)
+                # Map content types
+                media_type_map = {
+                    'image/jpeg': 'image/jpeg',
+                    'image/jpg': 'image/jpeg',
+                    'image/png': 'image/png',
+                    'image/gif': 'image/gif',
+                    'image/webp': 'image/webp'
+                }
 
-            return gemini_file
+                media_type = media_type_map.get(content_type, 'image/jpeg')
+
+                return {
+                    'type': 'image',
+                    'source': {
+                        'type': 'base64',
+                        'media_type': media_type,
+                        'data': base64_content
+                    }
+                }
+
+            elif content_type == 'application/pdf':
+                # For PDFs, encode as base64
+                base64_content = base64.b64encode(file_content).decode('utf-8')
+                return {
+                    'type': 'document',
+                    'source': {
+                        'type': 'base64',
+                        'media_type': 'application/pdf',
+                        'data': base64_content
+                    }
+                }
+
+            else:
+                # For text files, decode as text
+                try:
+                    text_content = file_content.decode('utf-8')
+                    return {
+                        'type': 'text',
+                        'text': f"File: {file_name}\n\n{text_content}"
+                    }
+                except UnicodeDecodeError:
+                    return {
+                        'type': 'text',
+                        'text': f"Unable to read file {file_name} - unsupported format"
+                    }
 
         except Exception as e:
-            print(f"Error uploading file to Gemini: {e}")
-            # Clean up temp file if it exists
-            if 'temp_path' in locals():
-                try:
-                    os.unlink(temp_path)
-                except:
-                    pass
-            return None
+            print(f"Error reading file content: {e}")
+            return {
+                'type': 'text',
+                'text': f"Error reading file: {str(e)}"
+            }
 
     def analyze_file_for_architecture(
         self,
-        gemini_file: Any,
+        file_content: Dict[str, Any],
         user_message: str = "",
         workflow_state: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
@@ -375,7 +412,7 @@ You cannot modify the workflow in this mode. If users want to make changes, sugg
         Analyze an uploaded file (image/document) to generate architecture suggestions.
 
         Args:
-            gemini_file: Gemini file object from upload
+            file_content: File content formatted for Claude
             user_message: Optional message from user
             workflow_state: Current workflow state
 
@@ -439,9 +476,38 @@ EXAMPLE ARCHITECTURE for an image classifier (with LOWERCASE node types):
 Provide each node as a separate JSON block with appropriate configurations using lowercase nodeType values.
 """
 
-            # Generate content with the file
-            response = self.model.generate_content([analysis_prompt, gemini_file])
-            response_text = response.text
+            # Build message content with file
+            message_content = []
+
+            # Add file content first
+            if file_content['type'] == 'image':
+                message_content.append({
+                    'type': 'image',
+                    'source': file_content['source']
+                })
+            elif file_content['type'] == 'document':
+                message_content.append({
+                    'type': 'document',
+                    'source': file_content['source']
+                })
+
+            # Add text prompt
+            message_content.append({
+                'type': 'text',
+                'text': analysis_prompt
+            })
+
+            # Generate response
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=4096,
+                messages=[{
+                    'role': 'user',
+                    'content': message_content
+                }]
+            )
+
+            response_text = response.content[0].text
 
             # Extract modifications
             modifications = self._extract_modifications(response_text)
@@ -463,17 +529,17 @@ Provide each node as a separate JSON block with appropriate configurations using
         history: List[Dict[str, str]],
         modification_mode: bool = False,
         workflow_state: Optional[Dict[str, Any]] = None,
-        gemini_file: Optional[Any] = None
+        file_content: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Send a chat message and get a response from Gemini.
+        Send a chat message and get a response from Claude.
 
         Args:
             message: User's message
             history: Previous chat messages [{'role': 'user'|'assistant', 'content': '...'}]
             modification_mode: Whether workflow modification is enabled
             workflow_state: Current workflow state (nodes and edges)
-            gemini_file: Optional Gemini file object (already uploaded)
+            file_content: Optional file content formatted for Claude
 
         Returns:
             {
@@ -483,9 +549,9 @@ Provide each node as a separate JSON block with appropriate configurations using
         """
         try:
             # If there's a file, use the analyze_file_for_architecture method
-            if gemini_file:
+            if file_content:
                 return self.analyze_file_for_architecture(
-                    gemini_file=gemini_file,
+                    file_content=file_content,
                     user_message=message,
                     workflow_state=workflow_state
                 )
@@ -493,19 +559,33 @@ Provide each node as a separate JSON block with appropriate configurations using
             # Build system context
             system_prompt = self._build_system_prompt(modification_mode, workflow_state)
 
-            # Format history for Gemini
+            # Format history for Claude
             formatted_history = self._format_chat_history(history)
 
-            # Always include system prompt with current workflow context
-            # This ensures the AI always knows the current state and formatting requirements
+            # Add current message with system context
             full_message = f"{system_prompt}\n\nUser: {message}"
 
-            # Create chat session with history
-            chat = self.model.start_chat(history=formatted_history)
+            # Build messages array
+            messages = formatted_history + [{'role': 'user', 'content': full_message}]
 
-            # Send message and get response
-            response = chat.send_message(full_message)
-            response_text = response.text
+            # Ensure messages alternate between user and assistant
+            # Claude API requires strict alternation
+            cleaned_messages = []
+            for i, msg in enumerate(messages):
+                if i == 0 or msg['role'] != cleaned_messages[-1]['role']:
+                    cleaned_messages.append(msg)
+                else:
+                    # Merge consecutive messages from same role
+                    cleaned_messages[-1]['content'] += '\n\n' + msg['content']
+
+            # Generate response
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=4096,
+                messages=cleaned_messages
+            )
+
+            response_text = response.content[0].text
 
             # Try to extract JSON modifications from response
             modifications = self._extract_modifications(response_text)
@@ -517,7 +597,7 @@ Provide each node as a separate JSON block with appropriate configurations using
 
         except Exception as e:
             return {
-                'response': f"Error communicating with Gemini AI: {str(e)}",
+                'response': f"Error communicating with Claude AI: {str(e)}",
                 'modifications': None
             }
 
@@ -574,8 +654,16 @@ Provide suggestions as a numbered list. Focus on:
 
 Format your response as a simple numbered list."""
 
-            response = self.model.generate_content(prompt)
-            response_text = response.text
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=1024,
+                messages=[{
+                    'role': 'user',
+                    'content': prompt
+                }]
+            )
+
+            response_text = response.content[0].text
 
             # Parse suggestions from numbered list
             import re

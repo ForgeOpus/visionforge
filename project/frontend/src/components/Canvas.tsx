@@ -422,7 +422,11 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
         node.data.blockType,
         currentProject?.framework || 'pytorch',
         node.data.config,
-        { node_id: nodeId }
+        {
+          node_id: nodeId,
+          inputShape: node.data.inputShape,
+          outputShape: node.data.outputShape
+        }
       )
 
       if (response.success && response.data) {
@@ -459,7 +463,11 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
         sourceNode.data.blockType,
         currentProject?.framework || 'pytorch',
         sourceNode.data.config,
-        { node_id: nodeId }
+        {
+          node_id: nodeId,
+          inputShape: sourceNode.data.inputShape,
+          outputShape: sourceNode.data.outputShape
+        }
       )
 
       if (!response.success || !response.data) {
