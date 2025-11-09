@@ -6,6 +6,12 @@ import { NodeDefinition } from '../../base'
 import { NodeMetadata, BackendFramework } from '../../contracts'
 import { TensorShape, BlockConfig, ConfigField, BlockType } from '../../../types'
 
+export interface InputPort {
+  id: string
+  label: string
+  description: string
+}
+
 export class LossNode extends NodeDefinition {
   readonly metadata: NodeMetadata = {
     type: 'loss',
@@ -32,6 +38,8 @@ export class LossNode extends NodeDefinition {
         { value: 'nll', label: 'Negative Log Likelihood' },
         { value: 'smooth_l1', label: 'Smooth L1 Loss' },
         { value: 'kl_div', label: 'KL Divergence' },
+        { value: 'triplet', label: 'Triplet Loss' },
+        { value: 'contrastive', label: 'Contrastive Loss' },
         { value: 'custom', label: 'Custom Loss' }
       ],
       description: 'Type of loss function to use'
@@ -56,6 +64,60 @@ export class LossNode extends NodeDefinition {
       description: 'Optional class weights as JSON array'
     }
   ]
+
+  /**
+   * Get input ports based on the loss type configuration
+   */
+  getInputPorts(config: BlockConfig): InputPort[] {
+    const lossType = config.loss_type || 'cross_entropy'
+
+    const portConfigs: Record<string, InputPort[]> = {
+      cross_entropy: [
+        { id: 'y_pred', label: 'Predictions', description: 'Model predictions' },
+        { id: 'y_true', label: 'Ground Truth', description: 'True labels' }
+      ],
+      mse: [
+        { id: 'y_pred', label: 'Predictions', description: 'Model predictions' },
+        { id: 'y_true', label: 'Ground Truth', description: 'True values' }
+      ],
+      mae: [
+        { id: 'y_pred', label: 'Predictions', description: 'Model predictions' },
+        { id: 'y_true', label: 'Ground Truth', description: 'True values' }
+      ],
+      bce: [
+        { id: 'y_pred', label: 'Predictions', description: 'Model predictions' },
+        { id: 'y_true', label: 'Ground Truth', description: 'True labels' }
+      ],
+      nll: [
+        { id: 'y_pred', label: 'Predictions', description: 'Model predictions' },
+        { id: 'y_true', label: 'Ground Truth', description: 'True labels' }
+      ],
+      smooth_l1: [
+        { id: 'y_pred', label: 'Predictions', description: 'Model predictions' },
+        { id: 'y_true', label: 'Ground Truth', description: 'True values' }
+      ],
+      kl_div: [
+        { id: 'y_pred', label: 'Predictions', description: 'Predicted distribution' },
+        { id: 'y_true', label: 'Ground Truth', description: 'Target distribution' }
+      ],
+      triplet: [
+        { id: 'anchor', label: 'Anchor', description: 'Anchor embedding' },
+        { id: 'positive', label: 'Positive', description: 'Positive example embedding' },
+        { id: 'negative', label: 'Negative', description: 'Negative example embedding' }
+      ],
+      contrastive: [
+        { id: 'input1', label: 'Input 1', description: 'First input embedding' },
+        { id: 'input2', label: 'Input 2', description: 'Second input embedding' },
+        { id: 'label', label: 'Label', description: 'Similarity label (1 or -1)' }
+      ],
+      custom: [
+        { id: 'input1', label: 'Input 1', description: 'First input' },
+        { id: 'input2', label: 'Input 2', description: 'Second input' }
+      ]
+    }
+
+    return portConfigs[lossType as string] || portConfigs.cross_entropy
+  }
 
   /**
    * Loss node accepts multiple inputs but always outputs a scalar loss

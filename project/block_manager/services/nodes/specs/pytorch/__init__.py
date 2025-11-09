@@ -2,6 +2,7 @@ from ..models import (
     ConfigFieldSpec,
     ConfigOptionSpec,
     Framework,
+    InputPortSpec,
     NodeSpec,
     NodeTemplateSpec,
 )
@@ -489,6 +490,7 @@ LOSS_SPEC = NodeSpec(
     icon="Target",
     description="Loss function for training",
     framework=Framework.PYTORCH,
+    allows_multiple_inputs=True,
     config_schema=(
         ConfigFieldSpec(
             name="loss_type",
@@ -500,8 +502,24 @@ LOSS_SPEC = NodeSpec(
                 ConfigOptionSpec(value="mse", label="Mean Squared Error"),
                 ConfigOptionSpec(value="mae", label="Mean Absolute Error"),
                 ConfigOptionSpec(value="bce", label="Binary Cross Entropy"),
+                ConfigOptionSpec(value="triplet", label="Triplet Loss"),
+                ConfigOptionSpec(value="contrastive", label="Contrastive Loss"),
+                ConfigOptionSpec(value="nll", label="Negative Log Likelihood"),
+                ConfigOptionSpec(value="kl_div", label="KL Divergence"),
             ),
             description="Type of loss function",
+        ),
+    ),
+    input_ports=(
+        InputPortSpec(
+            id="y_pred",
+            label="Predictions",
+            description="Model predictions (y_pred)",
+        ),
+        InputPortSpec(
+            id="y_true",
+            label="Ground Truth",
+            description="True labels (y_true)",
         ),
     ),
     template=NodeTemplateSpec(
@@ -511,9 +529,25 @@ LOSS_SPEC = NodeSpec(
 {%- elif config.loss_type == 'mse' %}nn.MSELoss()
 {%- elif config.loss_type == 'mae' %}nn.L1Loss()
 {%- elif config.loss_type == 'bce' %}nn.BCELoss()
+{%- elif config.loss_type == 'triplet' %}nn.TripletMarginLoss()
+{%- elif config.loss_type == 'contrastive' %}nn.CosineEmbeddingLoss()
+{%- elif config.loss_type == 'nll' %}nn.NLLLoss()
+{%- elif config.loss_type == 'kl_div' %}nn.KLDivLoss()
 {%- else %}nn.CrossEntropyLoss()
 {%- endif %}""",
     ),
+    metadata={
+        "input_ports_config": {
+            "cross_entropy": ["y_pred", "y_true"],
+            "mse": ["y_pred", "y_true"],
+            "mae": ["y_pred", "y_true"],
+            "bce": ["y_pred", "y_true"],
+            "nll": ["y_pred", "y_true"],
+            "kl_div": ["y_pred", "y_true"],
+            "triplet": ["anchor", "positive", "negative"],
+            "contrastive": ["input1", "input2", "label"],
+        }
+    },
 )
 
 # Empty Node
