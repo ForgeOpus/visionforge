@@ -5,9 +5,36 @@ export const blockDefinitions: Record<string, BlockDefinition> = {
     type: 'input',
     label: 'Input',
     category: 'input',
+    color: 'var(--color-gray)',
+    icon: 'CircleDashed',
+    description: 'Input placeholder node',
+    configSchema: [
+      {
+        name: 'label',
+        label: 'Custom Label',
+        type: 'text',
+        default: 'Input',
+        placeholder: 'Enter custom label...',
+        description: 'Custom label for this input node'
+      },
+      {
+        name: 'note',
+        label: 'Note',
+        type: 'text',
+        placeholder: 'Add notes here...',
+        description: 'Notes or comments about this input'
+      }
+    ],
+    computeOutputShape: (inputShape) => inputShape
+  },
+
+  dataloader: {
+    type: 'dataloader',
+    label: 'Data Loader',
+    category: 'input',
     color: 'var(--color-teal)',
-    icon: 'ArrowDown',
-    description: 'Define input tensor shape with optional ground truth output',
+    icon: 'Database',
+    description: 'Load and prepare input data with optional ground truth',
     configSchema: [
       {
         name: 'shape',
@@ -70,7 +97,7 @@ export const blockDefinitions: Record<string, BlockDefinition> = {
     label: 'Output',
     category: 'output',
     color: 'var(--color-green)',
-    icon: 'ArrowUp',
+    icon: 'Export',
     description: 'Define model output and predictions',
     configSchema: [
       {
@@ -151,10 +178,18 @@ export const blockDefinitions: Record<string, BlockDefinition> = {
     type: 'empty',
     label: 'Empty Node',
     category: 'utility',
-    color: 'var(--color-muted)',
-    icon: 'Circle',
+    color: 'var(--color-gray)',
+    icon: 'Placeholder',
     description: 'Placeholder node for architecture planning',
     configSchema: [
+      {
+        name: 'label',
+        label: 'Custom Label',
+        type: 'text',
+        default: 'Empty Node',
+        placeholder: 'Enter custom label...',
+        description: 'Custom label for this node'
+      },
       {
         name: 'note',
         label: 'Note',
@@ -598,9 +633,9 @@ export function validateBlockConnection(
   targetBlockType: string,
   sourceOutputShape?: TensorShape
 ): string | undefined {
-  // Input blocks can't receive connections
-  if (targetBlockType === 'input') {
-    return 'Input blocks cannot receive connections'
+  // Data Loader blocks can't receive connections (they are source nodes)
+  if (targetBlockType === 'dataloader') {
+    return 'Data Loader blocks cannot receive connections'
   }
 
   // Output and Loss blocks can receive connections (they're terminal nodes)
@@ -610,6 +645,11 @@ export function validateBlockConnection(
 
   // Empty nodes are passthrough, always valid
   if (targetBlockType === 'empty' || sourceBlockType === 'empty') {
+    return undefined
+  }
+
+  // Input and DataLoader nodes can connect without configured shapes
+  if (sourceBlockType === 'input' || sourceBlockType === 'dataloader') {
     return undefined
   }
 

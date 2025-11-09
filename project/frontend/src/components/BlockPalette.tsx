@@ -20,9 +20,11 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
 
   const categories = [
     { key: 'input', label: 'Input Layers', icon: Icons.ArrowDown },
+    { key: 'output', label: 'Output Layers', icon: Icons.ArrowUp },
     { key: 'basic', label: 'Basic Layers', icon: Icons.Lightning },
     { key: 'advanced', label: 'Advanced Layers', icon: Icons.Brain },
-    { key: 'merge', label: 'Merge/Split', icon: Icons.GitMerge }
+    { key: 'merge', label: 'Merge/Split', icon: Icons.GitMerge },
+    { key: 'utility', label: 'Utility', icon: Icons.Toolbox }
   ]
 
   // Prepare all blocks for fuzzy search
@@ -195,7 +197,7 @@ export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed, o
             </div>
           ) : (
             // Categorized view
-            <Accordion type="multiple" defaultValue={['input', 'basic']} className="px-2 py-2">
+            <Accordion type="multiple" defaultValue={['input', 'output', 'basic']} className="px-2 py-2">
               {categories.map((category) => {
                 const blocks = getBlocksByCategory(category.key)
                 const CategoryIcon = category.icon

@@ -48,7 +48,7 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
         </div>
       )}
 
-      {data.blockType !== 'input' && (
+      {data.blockType !== 'dataloader' && (
         <>
           <Handle
             type="target"
@@ -80,7 +80,9 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
             <IconComponent size={16} weight="bold" />
           </div>
           <div className="flex-1">
-            <div className="font-medium text-sm">{definition.label}</div>
+            <div className="font-medium text-sm">
+              {data.config?.label || definition.label}
+            </div>
             <Badge
               variant="secondary"
               className="text-[10px] px-1 py-0 h-4"
@@ -102,27 +104,83 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
           </div>
         )}
 
-        {!data.outputShape && data.blockType !== 'input' && (
+        {!data.outputShape && data.blockType !== 'input' && data.blockType !== 'dataloader' && data.blockType !== 'empty' && (
           <div className="text-xs text-orange-600">
             Configure parameters
           </div>
         )}
       </div>
 
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="w-3 h-3 !bg-accent transition-all"
-        style={{
-          right: -6,
-          zIndex: 10
-        }}
-      />
-      {selected && (
-        <div
-          className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-6 h-6 rounded-full border-2 border-accent bg-accent/20 animate-pulse pointer-events-none"
-          style={{ right: -6 }}
-        />
+      {/* Multiple output handles for DataLoader node with ground truth */}
+      {data.blockType === 'dataloader' && data.config?.has_ground_truth ? (
+        <>
+          {/* Input Data Output */}
+          <div className="absolute right-0 flex items-center" style={{ top: '33%', transform: 'translateY(-50%)' }}>
+            <span className="text-[10px] text-blue-600 font-medium mr-2 bg-white/90 px-1.5 py-0.5 rounded border border-blue-200">
+              Input
+            </span>
+            <Handle
+              type="source"
+              position={Position.Right}
+              id="input-output"
+              className="w-3 h-3 !bg-blue-500 transition-all border-2 border-white"
+              style={{
+                position: 'relative',
+                right: -6,
+                zIndex: 10
+              }}
+            />
+          </div>
+
+          {/* Ground Truth Output */}
+          <div className="absolute right-0 flex items-center" style={{ top: '66%', transform: 'translateY(-50%)' }}>
+            <span className="text-[10px] text-green-600 font-medium mr-2 bg-white/90 px-1.5 py-0.5 rounded border border-green-200">
+              GT
+            </span>
+            <Handle
+              type="source"
+              position={Position.Right}
+              id="ground-truth-output"
+              className="w-3 h-3 !bg-green-500 transition-all border-2 border-white"
+              style={{
+                position: 'relative',
+                right: -6,
+                zIndex: 10
+              }}
+            />
+          </div>
+
+          {selected && (
+            <>
+              <div
+                className="absolute right-0 w-6 h-6 rounded-full border-2 border-blue-500 bg-blue-500/20 animate-pulse pointer-events-none"
+                style={{ top: '33%', right: -6, transform: 'translate(50%, -50%)' }}
+              />
+              <div
+                className="absolute right-0 w-6 h-6 rounded-full border-2 border-green-500 bg-green-500/20 animate-pulse pointer-events-none"
+                style={{ top: '66%', right: -6, transform: 'translate(50%, -50%)' }}
+              />
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <Handle
+            type="source"
+            position={Position.Right}
+            className="w-3 h-3 !bg-accent transition-all"
+            style={{
+              right: -6,
+              zIndex: 10
+            }}
+          />
+          {selected && (
+            <div
+              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-6 h-6 rounded-full border-2 border-accent bg-accent/20 animate-pulse pointer-events-none"
+              style={{ right: -6 }}
+            />
+          )}
+        </>
       )}
     </Card>
   )

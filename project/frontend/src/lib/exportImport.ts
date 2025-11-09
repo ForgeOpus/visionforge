@@ -73,9 +73,16 @@ export function exportToJSON(
 /**
  * Import from sanitized JSON format and reconstruct nodes and edges
  * Validates the data structure before importing
+ *
+ * @param jsonData - The exported JSON data
+ * @param existingNodes - Optional array of existing nodes to check for ID conflicts
+ * @param existingEdges - Optional array of existing edges
+ * @returns Reconstructed nodes, edges, and project metadata
  */
 export function importFromJSON(
-  jsonData: ExportData
+  jsonData: ExportData,
+  existingNodes?: Node<BlockData>[],
+  existingEdges?: Edge[]
 ): {
   nodes: Node<BlockData>[]
   edges: Edge[]
@@ -90,32 +97,60 @@ export function importFromJSON(
     throw new Error(`Unsupported export version: ${jsonData.version}`)
   }
 
-  // Reconstruct nodes with proper React Flow format
-  const nodes: Node<BlockData>[] = jsonData.architecture.nodes.map((nodeData, index) => ({
-    id: nodeData.id,
-    type: 'block',
-    position: {
-      // Create a grid layout for imported nodes
-      x: (index % 4) * 250,
-      y: Math.floor(index / 4) * 150
-    },
-    data: {
-      blockType: nodeData.type as any,
-      label: nodeData.label,
-      category: nodeData.category as any,
-      config: nodeData.config,
-      inputShape: nodeData.inputShape,
-      outputShape: nodeData.outputShape
-    }
-  }))
+  // Build a set of existing node IDs to detect conflicts
+  const existingNodeIds = new Set(existingNodes?.map(n => n.id) || [])
+  const idMapping = new Map<string, string>()
 
-  // Reconstruct edges
-  const edges: Edge[] = jsonData.architecture.connections.map((conn, index) => ({
-    id: `e${conn.from}-${conn.to}-${index}`,
-    source: conn.from,
-    target: conn.to,
-    animated: true
-  }))
+  // Reconstruct nodes with proper React Flow format
+  const nodes: Node<BlockData>[] = jsonData.architecture.nodes.map((nodeData, index) => {
+    let nodeId = nodeData.id
+
+    // If there's an ID conflict, generate a new unique ID
+    if (existingNodeIds.has(nodeId)) {
+      let counter = 1
+      let newId = `${nodeId}_${counter}`
+      while (existingNodeIds.has(newId)) {
+        counter++
+        newId = `${nodeId}_${counter}`
+      }
+      idMapping.set(nodeId, newId)
+      nodeId = newId
+      existingNodeIds.add(nodeId)
+    } else {
+      existingNodeIds.add(nodeId)
+    }
+
+    return {
+      id: nodeId,
+      type: 'block',
+      position: {
+        // Create a grid layout for imported nodes
+        x: (index % 4) * 250,
+        y: Math.floor(index / 4) * 150
+      },
+      data: {
+        blockType: nodeData.type as any,
+        label: nodeData.label,
+        category: nodeData.category as any,
+        config: nodeData.config,
+        inputShape: nodeData.inputShape,
+        outputShape: nodeData.outputShape
+      }
+    }
+  })
+
+  // Reconstruct edges, updating IDs if there were conflicts
+  const edges: Edge[] = jsonData.architecture.connections.map((conn, index) => {
+    const sourceId = idMapping.get(conn.from) || conn.from
+    const targetId = idMapping.get(conn.to) || conn.to
+
+    return {
+      id: `e${sourceId}-${targetId}-${index}`,
+      source: sourceId,
+      target: targetId,
+      animated: true
+    }
+  })
 
   // Create project metadata
   const project: Partial<Project> = {

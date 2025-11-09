@@ -1,5 +1,6 @@
 export type BlockType =
   | 'input'
+  | 'dataloader'
   | 'output'
   | 'loss'
   | 'empty'

@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useModelBuilderStore } from '@/lib/store'
-import { useKV } from '@github/spark/hooks'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -27,12 +27,16 @@ import { Plus, Download, FloppyDisk, CaretDown, Code, Flask, CheckCircle, GitBra
 import { toast } from 'sonner'
 import { generatePyTorchCode } from '@/lib/codeGenerator'
 import { validateModel } from '@/lib/api'
-import { Project } from '@/lib/types'
 import { exportToJSON, importFromJSON, downloadJSON, readJSONFile } from '@/lib/exportImport'
+import * as projectApi from '@/lib/projectApi'
 
 export default function Header() {
-  const { currentProject, nodes, edges, createProject, saveProject, loadProject, updateProjectInfo, validateArchitecture, setNodes, setEdges } = useModelBuilderStore()
-  const [projects, setProjects] = useKV<Project[]>('model-builder-projects', [])
+  const navigate = useNavigate()
+  const { projectId } = useParams<{ projectId: string }>()
+  const { currentProject, nodes, edges, createProject: createProjectInStore, saveProject, loadProject, validateArchitecture, setNodes, setEdges } = useModelBuilderStore()
+
+  const [projects, setProjects] = useState<projectApi.ProjectResponse[]>([])
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false)
 
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
@@ -45,54 +49,102 @@ export default function Header() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleCreateProject = () => {
+  // Load projects list on mount
+  useEffect(() => {
+    loadProjectsList()
+  }, [])
+
+  const loadProjectsList = async () => {
+    setIsLoadingProjects(true)
+    try {
+      const projectsList = await projectApi.fetchProjects()
+      setProjects(projectsList)
+    } catch (error) {
+      console.error('Failed to load projects:', error)
+      toast.error('Failed to load projects list')
+    } finally {
+      setIsLoadingProjects(false)
+    }
+  }
+
+  const handleCreateProject = async () => {
     if (!newProjectName.trim()) {
       toast.error('Please enter a project name')
       return
     }
 
-    createProject(newProjectName, newProjectDesc, newProjectFramework)
-    setIsNewProjectOpen(false)
-    setNewProjectName('')
-    setNewProjectDesc('')
-    toast.success('Project created!')
+    try {
+      const backendProject = await projectApi.createProject({
+        name: newProjectName,
+        description: newProjectDesc,
+        framework: newProjectFramework
+      })
+
+      // Create in local store
+      createProjectInStore(newProjectName, newProjectDesc, newProjectFramework)
+
+      setIsNewProjectOpen(false)
+      setNewProjectName('')
+      setNewProjectDesc('')
+
+      toast.success('Project created!')
+
+      // Navigate to the new project
+      navigate(`/project/${backendProject.id}`)
+
+      // Reload projects list
+      loadProjectsList()
+    } catch (error) {
+      toast.error('Failed to create project', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
   }
 
-  const handleSaveProject = () => {
+  const handleSaveProject = async () => {
     if (nodes.length === 0) {
       toast.error('No architecture to save')
       return
     }
 
-    // Ensure we have a project (auto-created when first node added)
     const project = currentProject
     if (!project) {
       toast.error('No active project')
       return
     }
 
-    saveProject()
+    try {
+      // Save to backend
+      await projectApi.saveArchitecture(project.id, nodes, edges)
 
-    setProjects((prevProjects) => {
-      const projectList = prevProjects || []
-      const existingIndex = projectList.findIndex((p) => p.id === project.id)
-      const updatedProject = { ...project, nodes, edges, updatedAt: Date.now() }
+      // Save to local store
+      saveProject()
 
-      if (existingIndex >= 0) {
-        const updated = [...projectList]
-        updated[existingIndex] = updatedProject
-        return updated
-      } else {
-        return [...projectList, updatedProject]
-      }
-    })
+      toast.success('Project saved!')
 
-    toast.success('Project saved!')
+      // Reload projects list
+      loadProjectsList()
+    } catch (error) {
+      toast.error('Failed to save project', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
   }
 
-  const handleLoadProject = (project: Project) => {
-    loadProject(project)
-    toast.success(`Loaded "${project.name}"`)
+  const handleLoadProject = async (project: projectApi.ProjectResponse) => {
+    try {
+      // Fetch full project details
+      const fullProject = await projectApi.fetchProject(project.id)
+
+      // Navigate to project URL
+      navigate(`/project/${project.id}`)
+
+      toast.success(`Loaded "${project.name}"`)
+    } catch (error) {
+      toast.error('Failed to load project', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
   }
 
   const handleExportPyTorch = () => {
@@ -146,29 +198,57 @@ export default function Header() {
 
     try {
       const jsonData = await readJSONFile(file)
-      const { nodes: importedNodes, edges: importedEdges, project } = importFromJSON(jsonData)
 
-      // Create a new project from imported data or update current
-      if (project.name && project.description !== undefined) {
-        createProject(
-          project.name,
-          project.description,
-          project.framework || 'pytorch'
+      // Check if we're in an existing project or on the home page
+      if (projectId && currentProject) {
+        // CASE 1: Importing into an existing project
+        // Only import nodes/edges, preserve project metadata
+        // Pass existing nodes to handle ID conflicts
+        const { nodes: importedNodes, edges: importedEdges } = importFromJSON(
+          jsonData,
+          nodes,
+          edges
         )
+
+        // Merge with existing nodes and edges
+        const mergedNodes = [...nodes, ...importedNodes]
+        const mergedEdges = [...edges, ...importedEdges]
+
+        // Update the canvas
+        setNodes(mergedNodes)
+        setEdges(mergedEdges)
+
+        // Save to backend
+        await projectApi.saveArchitecture(projectId, mergedNodes, mergedEdges)
+
+        toast.success('Architecture imported into current project!', {
+          description: `Added ${importedNodes.length} blocks to "${currentProject.name}"`
+        })
+      } else {
+        // CASE 2: No active project - create a new one from import
+        const { nodes: importedNodes, edges: importedEdges, project } = importFromJSON(jsonData)
+
+        if (project.name && project.description !== undefined) {
+          const backendProject = await projectApi.createProject({
+            name: project.name,
+            description: project.description,
+            framework: project.framework || 'pytorch'
+          })
+
+          // Save the architecture
+          await projectApi.saveArchitecture(backendProject.id, importedNodes, importedEdges)
+
+          // Navigate to new project
+          navigate(`/project/${backendProject.id}`)
+
+          toast.success('Project created from import!', {
+            description: `Created project "${project.name}" with ${importedNodes.length} blocks`
+          })
+
+          // Reload projects list
+          loadProjectsList()
+        }
       }
-
-      // Set the imported nodes and edges
-      setNodes(importedNodes)
-      setEdges(importedEdges)
-
-      // Trigger validation to update error badges
-      setTimeout(() => {
-        validateArchitecture()
-      }, 100)
-
-      toast.success('Architecture imported successfully!', {
-        description: `Loaded ${importedNodes.length} blocks and ${importedEdges.length} connections`
-      })
 
       // Reset file input
       if (fileInputRef.current) {
@@ -198,7 +278,7 @@ export default function Header() {
 
     try {
       toast.loading('Validating architecture...')
-      
+
       const result = await validateModel({
         nodes: nodes.map(node => ({
           id: node.id,
@@ -224,7 +304,7 @@ export default function Header() {
               ? `${result.data.warnings.length} warning(s) found`
               : 'No issues detected'
           })
-          
+
           // Show warnings if any
           if (result.data.warnings && result.data.warnings.length > 0) {
             result.data.warnings.forEach((warning: any, index: number) => {
@@ -241,7 +321,7 @@ export default function Header() {
               ? `${result.data.errors.length} error(s) found`
               : 'Invalid architecture'
           })
-          
+
           // Show errors
           if (result.data.errors && result.data.errors.length > 0) {
             result.data.errors.forEach((error: any, index: number) => {
@@ -279,7 +359,7 @@ export default function Header() {
           <h1 className="text-xl font-semibold">VisionForge</h1>
         </div>
 
-        {/* Project Dropdown - GitHub Branch Style */}
+        {/* Project Dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="h-8 gap-2">
@@ -300,7 +380,7 @@ export default function Header() {
               Switch project or create new
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            
+
             {/* New Project Option */}
             <DropdownMenuItem
               className="gap-2 cursor-pointer"
@@ -314,7 +394,7 @@ export default function Header() {
                 </div>
               </div>
             </DropdownMenuItem>
-            
+
             {/* Saved Projects List */}
             {projects && projects.length > 0 && (
               <>
@@ -337,10 +417,10 @@ export default function Header() {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground pl-5">
-                        {project.description || 'No description'} • {project.framework} • {project.nodes.length} blocks
+                        {project.description || 'No description'} • {project.framework}
                       </div>
                       <div className="text-xs text-muted-foreground pl-5">
-                        Updated {new Date(project.updatedAt).toLocaleDateString()}
+                        Updated {new Date(project.updated_at).toLocaleDateString()}
                       </div>
                     </DropdownMenuItem>
                   ))}
@@ -422,7 +502,7 @@ export default function Header() {
           variant="outline"
           size="sm"
           onClick={handleSaveProject}
-          disabled={nodes.length === 0}
+          disabled={nodes.length === 0 || !currentProject}
         >
           <FloppyDisk size={16} className="mr-2" />
           Save
