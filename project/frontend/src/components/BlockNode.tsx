@@ -26,6 +26,7 @@ interface BlockNodeProps {
 const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
   const nodeDef = getNodeDefinition(data.blockType as BlockType, BackendFramework.PyTorch)
   const validationErrors = useModelBuilderStore((state) => state.validationErrors)
+  const edges = useModelBuilderStore((state) => state.edges)
 
   if (!nodeDef) return null
 
@@ -35,6 +36,17 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
   // Check if this node has any validation errors
   const nodeErrors = validationErrors.filter((error) => error.nodeId === id && error.type === 'error')
   const hasErrors = nodeErrors.length > 0
+  
+  // Helper to check if a handle is already connected
+  const isHandleConnected = (handleId: string, isTarget: boolean) => {
+    return edges.some(edge => {
+      if (isTarget) {
+        return edge.target === id && (edge.targetHandle || 'default') === handleId
+      } else {
+        return edge.source === id && (edge.sourceHandle || 'default') === handleId
+      }
+    })
+  }
 
   const formatShape = (dims?: (number | string)[]) => {
     if (!dims) return '?'
@@ -104,21 +116,35 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
 
       {data.blockType !== 'dataloader' && data.blockType !== 'loss' && (
         <>
-          <Handle
-            type="target"
-            position={Position.Left}
-            className="w-3 h-3 !bg-accent transition-all"
-            style={{
-              left: -6,
-              zIndex: 10
-            }}
-          />
-          {selected && (
-            <div
-              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full border-2 border-accent bg-accent/20 animate-pulse pointer-events-none"
-              style={{ left: -6 }}
-            />
-          )}
+          {/* Get input port ID from node definition */}
+          {(() => {
+            const inputPorts = nodeDef.getInputPorts ? nodeDef.getInputPorts(data.config) : []
+            const inputPort = inputPorts.length > 0 ? inputPorts[0] : null
+            const handleId = inputPort?.id || 'default'
+            const isConnected = isHandleConnected(handleId, true)
+            
+            return (
+              <>
+                <Handle
+                  type="target"
+                  position={Position.Left}
+                  id={handleId}
+                  className={`w-3 h-3 !bg-accent transition-all ${isConnected ? 'ring-2 ring-offset-1 ring-green-400' : ''}`}
+                  style={{
+                    left: -6,
+                    zIndex: 10,
+                    opacity: isConnected ? 1 : 0.8
+                  }}
+                />
+                {selected && (
+                  <div
+                    className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full border-2 border-accent bg-accent/20 animate-pulse pointer-events-none"
+                    style={{ left: -6 }}
+                  />
+                )}
+              </>
+            )
+          })()}
         </>
       )}
 
@@ -230,22 +256,28 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
             for (let i = 0; i < numInputOutlets; i++) {
               const topPercent = spacing * (i + 1)
               const color = colors[i % colors.length]
+              const handleId = numInputOutlets > 1 ? `input-output-${i}` : 'input-output'
+              const isConnected = isHandleConnected(handleId, false)
 
               outlets.push(
                 <div key={`input-${i}`} className="absolute right-0 flex items-center" style={{ top: `${topPercent}%`, transform: 'translateY(-50%)' }}>
-                  <span className="text-[10px] font-medium mr-2 bg-card px-1.5 py-0.5 rounded border" style={{ color, borderColor: color }}>
-                    In{numInputOutlets > 1 ? ` ${i + 1}` : ''}
+                  <span 
+                    className={`text-[10px] font-medium mr-2 bg-card px-1.5 py-0.5 rounded border ${isConnected ? 'opacity-60' : ''}`}
+                    style={{ color: isConnected ? '#10b981' : color, borderColor: isConnected ? '#10b981' : color }}
+                  >
+                    In{numInputOutlets > 1 ? ` ${i + 1}` : ''} {isConnected && '✓'}
                   </span>
                   <Handle
                     type="source"
                     position={Position.Right}
-                    id={numInputOutlets > 1 ? `input-output-${i}` : 'input-output'}
-                    className="w-3 h-3 transition-all border-2 border-card"
+                    id={handleId}
+                    className={`w-3 h-3 transition-all border-2 border-card ${isConnected ? 'ring-2 ring-offset-1 ring-green-400' : ''}`}
                     style={{
                       position: 'relative',
                       right: -6,
                       zIndex: 10,
-                      backgroundColor: color
+                      backgroundColor: isConnected ? '#10b981' : color,
+                      opacity: isConnected ? 1 : 0.8
                     }}
                   />
                   {selected && (
@@ -255,8 +287,8 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
                         top: 0,
                         right: -6,
                         transform: 'translate(50%, -50%)',
-                        borderColor: color,
-                        backgroundColor: `${color}33`
+                        borderColor: isConnected ? '#10b981' : color,
+                        backgroundColor: `${isConnected ? '#10b981' : color}33`
                       }}
                     />
                   )}
@@ -268,21 +300,26 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
             if (hasGT) {
               const topPercent = spacing * (numInputOutlets + 1)
               const gtColor = '#10b981'
+              const handleId = 'ground-truth-output'
+              const isConnected = isHandleConnected(handleId, false)
 
               outlets.push(
                 <div key="gt" className="absolute right-0 flex items-center" style={{ top: `${topPercent}%`, transform: 'translateY(-50%)' }}>
-                  <span className="text-[10px] text-green-600 font-medium mr-2 bg-card px-1.5 py-0.5 rounded border border-green-200">
-                    GT
+                  <span 
+                    className={`text-[10px] text-green-600 font-medium mr-2 bg-card px-1.5 py-0.5 rounded border border-green-200 ${isConnected ? 'opacity-60' : ''}`}
+                  >
+                    GT {isConnected && '✓'}
                   </span>
                   <Handle
                     type="source"
                     position={Position.Right}
-                    id="ground-truth-output"
-                    className="w-3 h-3 !bg-green-500 transition-all border-2 border-card"
+                    id={handleId}
+                    className={`w-3 h-3 !bg-green-500 transition-all border-2 border-card ${isConnected ? 'ring-2 ring-offset-1 ring-green-400' : ''}`}
                     style={{
                       position: 'relative',
                       right: -6,
-                      zIndex: 10
+                      zIndex: 10,
+                      opacity: isConnected ? 1 : 0.8
                     }}
                   />
                   {selected && (
@@ -335,23 +372,29 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
             return inputPorts.map((port: any, i: number) => {
               const topPercent = spacing * (i + 1)
               const color = colors[i % colors.length]
+              const handleId = port.id  // Port ID already includes 'loss-input-' prefix
+              const isConnected = isHandleConnected(handleId, true)
 
               return (
                 <div key={`loss-input-${i}`} className="absolute left-0 flex items-center" style={{ top: `${topPercent}%`, transform: 'translateY(-50%)' }}>
                   <Handle
                     type="target"
                     position={Position.Left}
-                    id={`loss-input-${port.id}`}
-                    className="w-3 h-3 transition-all border-2 border-card"
+                    id={handleId}
+                    className={`w-3 h-3 transition-all border-2 border-card ${isConnected ? 'ring-2 ring-offset-1 ring-green-400' : ''}`}
                     style={{
                       position: 'relative',
                       left: -6,
                       zIndex: 10,
-                      backgroundColor: color
+                      backgroundColor: isConnected ? '#10b981' : color,
+                      opacity: isConnected ? 1 : 0.8
                     }}
                   />
-                  <span className="text-[10px] font-medium ml-2 bg-card px-1.5 py-0.5 rounded border" style={{ color, borderColor: color }}>
-                    {port.label}
+                  <span 
+                    className={`text-[10px] font-medium ml-2 bg-card px-1.5 py-0.5 rounded border ${isConnected ? 'opacity-60' : ''}`}
+                    style={{ color: isConnected ? '#10b981' : color, borderColor: isConnected ? '#10b981' : color }}
+                  >
+                    {port.label} {isConnected && '✓'}
                   </span>
                   {selected && (
                     <div
@@ -360,8 +403,8 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
                         top: 0,
                         left: -6,
                         transform: 'translate(-50%, -50%)',
-                        borderColor: color,
-                        backgroundColor: `${color}33`
+                        borderColor: isConnected ? '#10b981' : color,
+                        backgroundColor: `${isConnected ? '#10b981' : color}33`
                       }}
                     />
                   )}
@@ -389,21 +432,35 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
         </>
       ) : (
         <>
-          <Handle
-            type="source"
-            position={Position.Right}
-            className="w-3 h-3 !bg-accent transition-all"
-            style={{
-              right: -6,
-              zIndex: 10
-            }}
-          />
-          {selected && (
-            <div
-              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-6 h-6 rounded-full border-2 border-accent bg-accent/20 animate-pulse pointer-events-none"
-              style={{ right: -6 }}
-            />
-          )}
+          {/* Get output port ID from node definition */}
+          {(() => {
+            const outputPorts = nodeDef.getOutputPorts ? nodeDef.getOutputPorts(data.config) : []
+            const outputPort = outputPorts.length > 0 ? outputPorts[0] : null
+            const handleId = outputPort?.id || 'default'
+            const isConnected = isHandleConnected(handleId, false)
+            
+            return (
+              <>
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={handleId}
+                  className={`w-3 h-3 !bg-accent transition-all ${isConnected ? 'ring-2 ring-offset-1 ring-green-400' : ''}`}
+                  style={{
+                    right: -6,
+                    zIndex: 10,
+                    opacity: isConnected ? 1 : 0.8
+                  }}
+                />
+                {selected && (
+                  <div
+                    className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-6 h-6 rounded-full border-2 border-accent bg-accent/20 animate-pulse pointer-events-none"
+                    style={{ right: -6 }}
+                  />
+                )}
+              </>
+            )
+          })()}
         </>
       )}
     </Card>
