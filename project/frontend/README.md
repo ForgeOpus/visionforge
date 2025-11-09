@@ -77,7 +77,7 @@ Click "New Project" in the header and provide:
 - Green checkmarks when everything is valid
 
 ### 4. Export Your Code
-1. Click "Export Code" in the header
+1. Click "Export" in the header
 2. View generated model.py, train.py, and config.py
 3. Copy code to clipboard or download files
 4. Use the code in your own projects!

@@ -7,18 +7,26 @@ import {
   DialogContent,
   DialogDescription,
   DialogHeader,
-  DialogTitle,
-  DialogTrigger
+  DialogTitle
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Download, FloppyDisk, FolderOpen, Code, Flask } from '@phosphor-icons/react'
+import { Plus, Download, FloppyDisk, CaretDown, Code, Flask, CheckCircle, GitBranch } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { generatePyTorchCode } from '@/lib/codeGenerator'
+import { validateModel } from '@/lib/api'
 import { Project } from '@/lib/types'
 
 export default function Header() {
@@ -26,7 +34,6 @@ export default function Header() {
   const [projects, setProjects] = useKV<Project[]>('model-builder-projects', [])
 
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false)
-  const [isLoadProjectOpen, setIsLoadProjectOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
 
   const [newProjectName, setNewProjectName] = useState('')
@@ -75,7 +82,6 @@ export default function Header() {
 
   const handleLoadProject = (project: Project) => {
     loadProject(project)
-    setIsLoadProjectOpen(false)
     toast.success(`Loaded "${project.name}"`)
   }
 
@@ -107,6 +113,82 @@ export default function Header() {
     }
   }
 
+  const handleValidate = async () => {
+    if (!currentProject || nodes.length === 0) {
+      toast.error('Cannot validate: No architecture to validate')
+      return
+    }
+
+    try {
+      toast.loading('Validating architecture...')
+      
+      const result = await validateModel({
+        nodes: nodes.map(node => ({
+          id: node.id,
+          type: node.data.blockType,
+          config: node.data.config,
+          position: node.position
+        })),
+        edges: edges.map(edge => ({
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          sourceHandle: edge.sourceHandle,
+          targetHandle: edge.targetHandle
+        }))
+      })
+
+      toast.dismiss()
+
+      if (result.success && result.data) {
+        if (result.data.isValid) {
+          toast.success('Architecture is valid!', {
+            description: result.data.warnings && result.data.warnings.length > 0
+              ? `${result.data.warnings.length} warning(s) found`
+              : 'No issues detected'
+          })
+          
+          // Show warnings if any
+          if (result.data.warnings && result.data.warnings.length > 0) {
+            result.data.warnings.forEach((warning, index) => {
+              setTimeout(() => {
+                toast.warning(`Warning ${index + 1}`, {
+                  description: warning
+                })
+              }, index * 100)
+            })
+          }
+        } else {
+          toast.error('Architecture validation failed', {
+            description: result.data.errors && result.data.errors.length > 0
+              ? `${result.data.errors.length} error(s) found`
+              : 'Invalid architecture'
+          })
+          
+          // Show errors
+          if (result.data.errors && result.data.errors.length > 0) {
+            result.data.errors.forEach((error, index) => {
+              setTimeout(() => {
+                toast.error(`Error ${index + 1}`, {
+                  description: error
+                })
+              }, index * 100)
+            })
+          }
+        }
+      } else {
+        toast.error('Validation request failed', {
+          description: result.error || 'Could not connect to validation service'
+        })
+      }
+    } catch (error) {
+      toast.dismiss()
+      toast.error('Validation error', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred'
+      })
+    }
+  }
+
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text)
     toast.success(`${label} copied to clipboard!`)
@@ -117,25 +199,84 @@ export default function Header() {
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <Flask size={28} weight="fill" className="text-primary" />
-          <h1 className="text-xl font-semibold">Visual AI Model Builder</h1>
+          <h1 className="text-xl font-semibold">VisionForge</h1>
         </div>
 
-        {currentProject && (
-          <div className="ml-4 px-3 py-1 bg-muted rounded text-sm">
-            <span className="font-medium">{currentProject.name}</span>
-            <span className="text-muted-foreground ml-2">({currentProject.framework})</span>
-          </div>
-        )}
+        {/* Project Dropdown - GitHub Branch Style */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="h-8 gap-2">
+              <GitBranch size={16} />
+              <span className="font-medium">
+                {currentProject ? currentProject.name : 'No Project'}
+              </span>
+              {currentProject && (
+                <span className="text-xs text-muted-foreground">
+                  ({currentProject.framework})
+                </span>
+              )}
+              <CaretDown size={14} className="text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-xs">
+            <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+              Switch project or create new
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            
+            {/* New Project Option */}
+            <DropdownMenuItem
+              className="gap-2 cursor-pointer"
+              onSelect={() => setIsNewProjectOpen(true)}
+            >
+              <Plus size={16} className="text-primary" />
+              <div className="flex-1">
+                <div className="font-medium">Create New Project</div>
+                <div className="text-xs text-muted-foreground">
+                  Start building a new architecture
+                </div>
+              </div>
+            </DropdownMenuItem>
+            
+            {/* Saved Projects List */}
+            {projects && projects.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                  Recent Projects
+                </DropdownMenuLabel>
+                <ScrollArea className="max-h-[300px]">
+                  {projects.slice(0, 10).map((project) => (
+                    <DropdownMenuItem
+                      key={project.id}
+                      className="cursor-pointer flex-col items-start gap-1 py-2"
+                      onSelect={() => handleLoadProject(project)}
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <GitBranch size={14} className="text-muted-foreground" />
+                        <span className="font-medium flex-1">{project.name}</span>
+                        {currentProject?.id === project.id && (
+                          <CheckCircle size={14} weight="fill" className="text-primary" />
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground pl-5">
+                        {project.description || 'No description'} • {project.framework} • {project.nodes.length} blocks
+                      </div>
+                      <div className="text-xs text-muted-foreground pl-5">
+                        Updated {new Date(project.updatedAt).toLocaleDateString()}
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </ScrollArea>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="flex items-center gap-2">
+        {/* New Project Dialog */}
         <Dialog open={isNewProjectOpen} onOpenChange={setIsNewProjectOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Plus size={16} className="mr-2" />
-              New Project
-            </Button>
-          </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create New Project</DialogTitle>
@@ -181,57 +322,6 @@ export default function Header() {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={isLoadProjectOpen} onOpenChange={setIsLoadProjectOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm">
-              <FolderOpen size={16} className="mr-2" />
-              Load
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Load Project</DialogTitle>
-              <DialogDescription>
-                Select a previously saved project
-              </DialogDescription>
-            </DialogHeader>
-            <ScrollArea className="max-h-[400px] pr-4">
-              {!projects || projects.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No saved projects yet
-                </div>
-              ) : (
-                <div className="space-y-2 pt-4">
-                  {projects.map((project) => (
-                    <div
-                      key={project.id}
-                      className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
-                      onClick={() => handleLoadProject(project)}
-                    >
-                      <div className="font-medium">{project.name}</div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        {project.description || 'No description'}
-                      </div>
-                      <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                        <span className="px-2 py-0.5 bg-primary/10 text-primary rounded">
-                          {project.framework}
-                        </span>
-                        <span>
-                          {project.nodes.length} blocks
-                        </span>
-                        <span>•</span>
-                        <span>
-                          {new Date(project.updatedAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-          </DialogContent>
-        </Dialog>
-
         <Button
           variant="outline"
           size="sm"
@@ -242,6 +332,16 @@ export default function Header() {
           Save
         </Button>
 
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleValidate}
+          disabled={!currentProject || nodes.length === 0}
+        >
+          <CheckCircle size={16} className="mr-2" />
+          Validate
+        </Button>
+
         <Dialog open={isExportOpen} onOpenChange={setIsExportOpen}>
           <Button
             variant="default"
@@ -250,7 +350,7 @@ export default function Header() {
             disabled={!currentProject || nodes.length === 0}
           >
             <Download size={16} className="mr-2" />
-            Export Code
+            Export
           </Button>
           <DialogContent className="max-w-4xl max-h-[80vh]">
             <DialogHeader>
