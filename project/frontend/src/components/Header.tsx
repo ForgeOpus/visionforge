@@ -26,8 +26,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Plus, Download, FloppyDisk, CaretDown, Code, Flask, CheckCircle, GitBranch, Upload, FileCode, FilePy, GearSix, Trash, Info, PencilSimple } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { generatePyTorchCode } from '@/lib/codeGenerator'
-import { validateModel } from '@/lib/api'
+import { validateModel, exportModel as apiExportModel } from '@/lib/api'
 import { exportToJSON, importFromJSON, downloadJSON, readJSONFile } from '@/lib/exportImport'
 import * as projectApi from '@/lib/projectApi'
 
@@ -52,7 +51,7 @@ export default function Header() {
   const [editProjectName, setEditProjectName] = useState('')
   const [editProjectDesc, setEditProjectDesc] = useState('')
 
-  const [exportCode, setExportCode] = useState<{model: string, train: string, config: string} | null>(null)
+  const [exportCode, setExportCode] = useState<{model: string, train: string, dataset: string, config: string, zip: string, filename: string} | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -154,7 +153,7 @@ export default function Header() {
     }
   }
 
-  const handleExportPyTorch = () => {
+  const handleExportCode = async () => {
     const errors = validateArchitecture()
     const criticalErrors = errors.filter((e) => e.type === 'error')
 
@@ -170,12 +169,53 @@ export default function Header() {
       return
     }
 
+    if (!currentProject) {
+      toast.error('Cannot export: No active project')
+      return
+    }
+
     try {
-      const code = generatePyTorchCode(nodes, edges, currentProject?.name || 'CustomModel')
-      setExportCode(code)
-      setIsExportOpen(true)
-      toast.success('Code generated successfully!')
+      toast.loading('Generating code...')
+
+      // Call backend API with framework selection
+      const result = await apiExportModel({
+        nodes: nodes.map(node => ({
+          id: node.id,
+          type: node.data.blockType,
+          data: node.data,
+          position: node.position
+        })),
+        edges: edges.map(edge => ({
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          sourceHandle: edge.sourceHandle || '',
+          targetHandle: edge.targetHandle || ''
+        })),
+        format: currentProject.framework as 'pytorch' | 'tensorflow',
+        projectName: currentProject.name
+      })
+
+      toast.dismiss()
+
+      if (result.success && result.data) {
+        setExportCode({
+          model: result.data.files['model.py'],
+          train: result.data.files['train.py'],
+          dataset: result.data.files['dataset.py'],
+          config: result.data.files['config.py'],
+          zip: result.data.zip,
+          filename: result.data.filename
+        })
+        setIsExportOpen(true)
+        toast.success(`${result.data.framework.toUpperCase()} code generated successfully!`)
+      } else {
+        toast.error('Code generation failed', {
+          description: result.error || 'Unknown error occurred'
+        })
+      }
     } catch (error) {
+      toast.dismiss()
       toast.error('Code generation failed', {
         description: error instanceof Error ? error.message : 'Unknown error'
       })
@@ -625,12 +665,14 @@ export default function Header() {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Export Options</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleExportPyTorch} className="gap-2 cursor-pointer">
+              <DropdownMenuItem onClick={handleExportCode} className="gap-2 cursor-pointer">
                 <FilePy size={16} />
                 <div>
-                  <div className="font-medium">PyTorch Code</div>
+                  <div className="font-medium">
+                    {currentProject ? `${currentProject.framework.toUpperCase()} Code` : 'Model Code'}
+                  </div>
                   <div className="text-xs text-muted-foreground">
-                    Generate model.py, train.py, config.py
+                    Generate model.py, train.py, dataset.py, config.py
                   </div>
                 </div>
               </DropdownMenuItem>
@@ -647,18 +689,50 @@ export default function Header() {
           </DropdownMenu>
           <DialogContent className="max-w-4xl max-h-[90vh] w-full overflow-hidden flex flex-col">
             <DialogHeader>
-              <DialogTitle>Export PyTorch Code</DialogTitle>
+              <DialogTitle>
+                Export {currentProject ? currentProject.framework.toUpperCase() : 'Model'} Code
+              </DialogTitle>
               <DialogDescription>
-                Copy the generated code files or download them
+                Copy individual files or download all as ZIP
               </DialogDescription>
             </DialogHeader>
             {exportCode && (
-              <Tabs defaultValue="model" className="w-full flex-1 flex flex-col min-h-0">
-                <TabsList className="w-full shrink-0">
-                  <TabsTrigger value="model" className="flex-1">model.py</TabsTrigger>
-                  <TabsTrigger value="train" className="flex-1">train.py</TabsTrigger>
-                  <TabsTrigger value="config" className="flex-1">config.py</TabsTrigger>
-                </TabsList>
+              <div className="flex-1 flex flex-col min-h-0">
+                {/* Download All Button */}
+                <div className="mb-3">
+                  <Button
+                    className="w-full"
+                    onClick={() => {
+                      // Decode base64 zip and download
+                      const binaryString = atob(exportCode.zip)
+                      const bytes = new Uint8Array(binaryString.length)
+                      for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i)
+                      }
+                      const blob = new Blob([bytes], { type: 'application/zip' })
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = exportCode.filename
+                      document.body.appendChild(a)
+                      a.click()
+                      document.body.removeChild(a)
+                      URL.revokeObjectURL(url)
+                      toast.success(`${exportCode.filename} downloaded!`)
+                    }}
+                  >
+                    <Download size={16} className="mr-2" />
+                    Download All Files (ZIP)
+                  </Button>
+                </div>
+
+                <Tabs defaultValue="model" className="flex-1 flex flex-col min-h-0">
+                  <TabsList className="w-full shrink-0">
+                    <TabsTrigger value="model" className="flex-1">model.py</TabsTrigger>
+                    <TabsTrigger value="train" className="flex-1">train.py</TabsTrigger>
+                    <TabsTrigger value="dataset" className="flex-1">dataset.py</TabsTrigger>
+                    <TabsTrigger value="config" className="flex-1">config.py</TabsTrigger>
+                  </TabsList>
                 <TabsContent value="model" className="mt-4 flex-1 flex flex-col min-h-0">
                   <div className="flex-1 w-full border rounded-md overflow-auto bg-muted">
                     <div className="min-w-max">
@@ -713,6 +787,33 @@ export default function Header() {
                     </Button>
                   </div>
                 </TabsContent>
+                <TabsContent value="dataset" className="mt-4 flex-1 flex flex-col min-h-0">
+                  <div className="flex-1 w-full border rounded-md overflow-auto bg-muted">
+                    <div className="min-w-max">
+                      <pre className="text-xs font-mono p-4 whitespace-pre">
+                        <code>{exportCode.dataset}</code>
+                      </pre>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3 shrink-0">
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      onClick={() => copyToClipboard(exportCode.dataset, 'dataset.py')}
+                    >
+                      <Code size={16} className="mr-2" />
+                      Copy
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      variant="outline"
+                      onClick={() => downloadFile(exportCode.dataset, 'dataset.py')}
+                    >
+                      <Download size={16} className="mr-2" />
+                      Download
+                    </Button>
+                  </div>
+                </TabsContent>
                 <TabsContent value="config" className="mt-4 flex-1 flex flex-col min-h-0">
                   <div className="flex-1 w-full border rounded-md overflow-auto bg-muted">
                     <div className="min-w-max">
@@ -740,7 +841,8 @@ export default function Header() {
                     </Button>
                   </div>
                 </TabsContent>
-              </Tabs>
+                </Tabs>
+              </div>
             )}
           </DialogContent>
         </Dialog>

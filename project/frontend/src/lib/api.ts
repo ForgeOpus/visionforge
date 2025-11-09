@@ -134,14 +134,25 @@ export async function sendChatMessage(
 }
 
 /**
- * Export model configuration
+ * Export model configuration with professional multi-file code generation
  */
 export async function exportModel(modelData: {
   nodes: any[]
   edges: any[]
-  format: 'pytorch' | 'tensorflow' | 'onnx'
+  format: 'pytorch' | 'tensorflow'
+  projectName: string
 }): Promise<ApiResponse<{
-  code: string
+  success: boolean
+  framework: string
+  projectName: string
+  files: {
+    'model.py': string
+    'train.py': string
+    'dataset.py': string
+    'config.py': string
+  }
+  zip: string  // Base64 encoded zip file
+  filename: string
 }>> {
   return apiFetch('/export', {
     method: 'POST',

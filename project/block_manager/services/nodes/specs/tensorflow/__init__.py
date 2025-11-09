@@ -270,6 +270,48 @@ MAXPOOL_SPEC = NodeSpec(
     ),
 )
 
+# ReLU Activation Node
+RELU_SPEC = NodeSpec(
+    type="relu",
+    label="ReLU",
+    category="basic",
+    color="var(--color-accent)",
+    icon="Lightning",
+    description="Rectified Linear Unit activation",
+    framework=Framework.TENSORFLOW,
+    config_schema=(),
+    template=NodeTemplateSpec(
+        name="tensorflow_relu",
+        engine="jinja2",
+        content="""layers.ReLU()""",
+    ),
+)
+
+# Softmax Activation Node
+SOFTMAX_SPEC = NodeSpec(
+    type="softmax",
+    label="Softmax",
+    category="basic",
+    color="var(--color-accent)",
+    icon="Function",
+    description="Softmax activation function",
+    framework=Framework.TENSORFLOW,
+    config_schema=(
+        ConfigFieldSpec(
+            name="axis",
+            label="Axis",
+            field_type="number",
+            default=-1,
+            description="Axis along which Softmax will be computed",
+        ),
+    ),
+    template=NodeTemplateSpec(
+        name="tensorflow_softmax",
+        engine="jinja2",
+        content="""layers.Softmax(axis={{ config.axis }})""",
+    ),
+)
+
 # Concat Node
 CONCAT_SPEC = NodeSpec(
     type="concat",
@@ -311,6 +353,49 @@ ADD_SPEC = NodeSpec(
         name="tensorflow_add",
         engine="jinja2",
         content="""# Element-wise addition happens in call method: layers.Add()([x1, x2])""",
+    ),
+)
+
+# Multi-Head Attention Node
+ATTENTION_SPEC = NodeSpec(
+    type="attention",
+    label="Multi-Head Attention",
+    category="advanced",
+    color="var(--color-purple)",
+    icon="Brain",
+    description="Multi-head self-attention mechanism",
+    framework=Framework.TENSORFLOW,
+    config_schema=(
+        ConfigFieldSpec(
+            name="num_heads",
+            label="Number of Heads",
+            field_type="number",
+            default=8,
+            min=1,
+            description="Number of attention heads",
+        ),
+        ConfigFieldSpec(
+            name="key_dim",
+            label="Key Dimension",
+            field_type="number",
+            required=True,
+            min=1,
+            description="Size of each attention head for query and key",
+        ),
+        ConfigFieldSpec(
+            name="dropout",
+            label="Dropout",
+            field_type="number",
+            default=0.0,
+            min=0.0,
+            max=1.0,
+            description="Dropout probability",
+        ),
+    ),
+    template=NodeTemplateSpec(
+        name="tensorflow_attention",
+        engine="jinja2",
+        content="""layers.MultiHeadAttention(num_heads={{ config.num_heads }}, key_dim={{ config.key_dim }}, dropout={{ config.dropout }})""",
     ),
 )
 
@@ -471,11 +556,14 @@ NODE_SPECS = (
     LINEAR_SPEC,
     CONV2D_SPEC,
     FLATTEN_SPEC,
+    RELU_SPEC,
+    SOFTMAX_SPEC,
     DROPOUT_SPEC,
     BATCHNORM_SPEC,
     MAXPOOL_SPEC,
     CONCAT_SPEC,
     ADD_SPEC,
+    ATTENTION_SPEC,
     DATALOADER_SPEC,
     OUTPUT_SPEC,
     LOSS_SPEC,
