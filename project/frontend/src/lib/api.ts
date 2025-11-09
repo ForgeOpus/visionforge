@@ -3,6 +3,8 @@
  * Handles all backend communication
  */
 
+import type { NodeSpec, NodeDefinitionsResponse, RenderCodeResponse } from './nodeSpec.types'
+
 // API configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
 
@@ -165,9 +167,9 @@ export async function getModelSuggestions(modelData: {
 /**
  * Get all available node definitions for a framework
  */
-export async function getNodeDefinitions(framework: 'pytorch' | 'tensorflow' = 'pytorch'): Promise<ApiResponse<{
-  [nodeType: string]: any
-}>> {
+export async function getNodeDefinitions(
+  framework: 'pytorch' | 'tensorflow' = 'pytorch'
+): Promise<ApiResponse<NodeDefinitionsResponse>> {
   return apiFetch(`/node-definitions?framework=${framework}`, {
     method: 'GET',
   })
@@ -180,11 +182,31 @@ export async function getNodeDefinition(
   nodeType: string, 
   framework: 'pytorch' | 'tensorflow' = 'pytorch'
 ): Promise<ApiResponse<{
-  metadata: any
-  config_schema: any
+  success: boolean
+  definition: NodeSpec
 }>> {
   return apiFetch(`/node-definitions/${nodeType}?framework=${framework}`, {
     method: 'GET',
+  })
+}
+
+/**
+ * Render node code from spec and config
+ */
+export async function renderNodeCode(
+  nodeType: string,
+  framework: 'pytorch' | 'tensorflow',
+  config: Record<string, any>,
+  metadata?: Record<string, any>
+): Promise<ApiResponse<RenderCodeResponse>> {
+  return apiFetch('/render-node-code', {
+    method: 'POST',
+    body: JSON.stringify({
+      node_type: nodeType,
+      framework,
+      config,
+      metadata: metadata || {},
+    }),
   })
 }
 
@@ -195,4 +217,5 @@ export default {
   getModelSuggestions,
   getNodeDefinitions,
   getNodeDefinition,
+  renderNodeCode,
 }

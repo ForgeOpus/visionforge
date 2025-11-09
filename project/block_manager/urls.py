@@ -6,7 +6,8 @@ from block_manager.views.architecture_views import (
     save_architecture, 
     load_architecture,
     get_node_definitions,
-    get_node_definition
+    get_node_definition,
+    render_node_code
 )
 from block_manager.views.validation_views import validate_model
 from block_manager.views.export_views import export_model
@@ -27,6 +28,7 @@ urlpatterns = [
     # Node definition endpoints
     path('node-definitions', get_node_definitions, name='node-definitions'),
     path('node-definitions/<str:node_type>', get_node_definition, name='node-definition'),
+    path('render-node-code', render_node_code, name='render-node-code'),
     
     # Validation endpoint (matches frontend API contract)
     path('validate', validate_model, name='validate-model'),
