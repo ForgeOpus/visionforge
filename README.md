@@ -1,22 +1,68 @@
-# VisionForge - Quick Start Guide
+<div align="center">
+  <img src="project/frontend/public/vision_logo.png" alt="VisionForge Logo" width="120" height="120">
 
-## 🚀 Getting Started
+  # VisionForge
+
+  **Design Neural Networks Without Writing Code**
+
+  Build production-ready AI models visually. Export clean PyTorch or TensorFlow code in minutes.
+
+  [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+  [![Built with Spark](https://img.shields.io/badge/Built%20with-Spark-orange)](https://github.com/github/spark)
+
+</div>
+
+---
+
+## ✨ Features
+
+### 🎨 **Intuitive Visual Builder**
+Design complex neural network architectures with a drag-and-drop canvas. No coding required.
+
+### 🔄 **Automatic Shape Inference**
+Tensor dimensions calculated automatically as you build. No manual dimension tracking needed.
+
+### ✅ **Intelligent Validation**
+Real-time architecture validation catches errors instantly with helpful suggestions.
+
+### 💾 **Save & Share Projects**
+Export architectures as JSON. Import pre-built models or share with your team effortlessly.
+
+### ⚡ **Multi-Framework Support**
+Export to PyTorch or TensorFlow with a single click. Maintain flexibility in your ML workflow.
+
+### 📝 **Clean, Production Code**
+Generate well-structured, documented code with type hints and best practices built-in.
+
+### 🔀 **Complex Architectures**
+Build multi-branch models with skip connections, residual blocks, and merge operations (ResNet, U-Net, and beyond).
+
+### 🛠️ **Custom Layer Support**
+Extend with your own custom implementations. Full flexibility for research and production needs.
+
+### 🤖 **AI-Powered Chatbot**
+Intelligent assistant powered by Google Gemini. Ask questions or let AI modify your workflow in real-time.
+
+---
+
+## 🚀 Quick Start
 
 ### Prerequisites
 - Python 3.8+
 - Node.js 16+
-- npm or yarn
-- Google Gemini API key (for AI chatbot - [Get one here](https://aistudio.google.com/app/apikey))
+- Google Gemini API key ([Get one here](https://aistudio.google.com/app/apikey))
 
-### 1. Setup Backend
+### 1. Clone & Setup Backend
 
 ```bash
-cd project
+# Clone repository
+git clone https://github.com/devgunnu/visionforge.git
+cd visionforge/project
 
-# Install Python dependencies (if not already done)
+# Install dependencies
 pip install -r requirements.txt
 
-# Configure environment (REQUIRED for AI chatbot)
+# Configure environment
 cp .env.example .env
 # Edit .env and add your GEMINI_API_KEY
 
@@ -35,11 +81,8 @@ Backend runs on: `http://localhost:8000`
 ```bash
 cd project/frontend
 
-# Install dependencies (if not already done)
+# Install dependencies
 npm install
-
-# Create environment file
-cp .env.example .env
 
 # Start development server
 npm run dev
@@ -47,226 +90,143 @@ npm run dev
 
 Frontend runs on: `http://localhost:5173`
 
-### 3. Access Application
+### 3. Start Building!
 
-Open browser: `http://localhost:5173`
-
----
-
-## 📖 User Guide
-
-### Creating Your First Project
-
-1. **Click** "Create New Project" from project dropdown
-2. **Enter** project details:
-   - Name: "My First Model"
-   - Description: "Testing VisionForge"
-   - Framework: PyTorch
-3. **Click** "Create Project"
-4. **Result**: Navigates to `/project/{id}`
-
-### Building an Architecture
-
-1. **Drag** an "Input" block from left sidebar onto canvas
-2. **Click** the Input block to configure:
-   - Shape: `[1, 3, 224, 224]` (for images)
-   - Enable ground truth if needed
-3. **Add** more blocks (Conv2D, ReLU, etc.)
-4. **Connect** blocks by dragging from output handle to input handle
-5. **Configure** each block by clicking it
-
-### Saving Your Work
-
-1. **Click** "Save" button in header
-2. **Result**: Architecture saved to database
-3. **Benefit**: Can reload from URL or project list
-
-### Loading a Project
-
-**Method 1**: Use URL directly
-- `http://localhost:5173/project/{project-id}`
-
-**Method 2**: Use project dropdown
-- Click dropdown → Select project from list
-
-### Exporting
-
-**PyTorch Code**:
-1. Click "Export" → "PyTorch Code"
-2. View generated files (model.py, train.py, config.py)
-3. Copy to clipboard or download
-
-**JSON Architecture**:
-1. Click "Export" → "JSON Architecture"
-2. Downloads JSON file with architecture
-
-### Importing
-
-1. Click "Import" button
-2. Select JSON file
-3. Creates new project automatically
+Open `http://localhost:5173` in your browser and start designing your first neural network.
 
 ---
 
-## 🎨 Features
+## 🎯 How It Works
 
-### AI-Powered Chatbot
-
-**NEW!** VisionForge now includes an intelligent AI assistant powered by Google Gemini.
-
-**Two Modes:**
-- **Q&A Mode**: Ask questions, get explanations, learn about neural networks
-- **Modification Mode**: Let AI suggest and apply changes to your workflow
-
-**Key Features:**
-- Full workflow context awareness
-- One-click application of AI suggestions
-- Real-time architecture modifications
-- Persistent chat history during session
-- Markdown-formatted responses
-
-**Quick Start:**
-1. Click the chat bubble icon (bottom-right)
-2. Toggle "Modification Mode" to enable workflow changes
-3. Ask: "Add a Conv2D layer with 64 filters"
-4. Click "Apply Change" on suggestions
-
-**See [QUICKSTART.md](./QUICKSTART.md) and [CHATBOT_SETUP.md](./CHATBOT_SETUP.md) for detailed setup.**
+1. **Drag & Drop** - Add blocks from the sidebar (Input, Conv2D, Linear, etc.)
+2. **Connect** - Draw connections between blocks to define data flow
+3. **Configure** - Click blocks to set parameters (filters, kernel size, etc.)
+4. **Validate** - Real-time validation ensures your architecture is correct
+5. **Export** - Generate production-ready PyTorch or TensorFlow code
 
 ---
 
-### New Block Types
+## 🏗️ Tech Stack
 
-**Output Node** (Green)
-- Define model output type
-- Configure number of classes
-
-**Loss Function** (Red)
-- Choose loss function
-- Configure reduction method
-- Set class weights
-
-**Empty Node** (Gray)
-- Placeholder for planning
-- Add notes/comments
-
-### Enhanced Input Node
-
-- **Ground Truth**: Dual output for input + labels
-- **Randomize**: Use synthetic data for testing
-- **CSV File**: Load data from CSV
-
-### UI Improvements
-
-- **Error Badges**: Red badges on invalid nodes
-- **Reset Button**: Clear canvas in toolbar
-- **Scrollable Config**: Scroll through long configurations
-- **URL Routing**: Shareable project links
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS
+- **Canvas**: ReactFlow (@xyflow/react)
+- **State**: Zustand
+- **Animations**: Framer Motion
+- **Backend**: Django, Python
+- **AI**: Google Gemini API
+- **UI**: Radix UI, shadcn/ui
 
 ---
 
-## 💡 Tips & Tricks
+## 📦 Available Blocks
 
-### Quick Actions
-- **Ctrl+Z**: Undo
-- **Ctrl+Y**: Redo
-- **Delete**: Remove selected block
-- **Reset**: Clear entire canvas (in toolbar)
+### Core Layers
+- **Input/Output** - Define model inputs and outputs
+- **Linear** - Fully connected layers
+- **Conv1D/2D/3D** - Convolutional layers
+- **Flatten** - Flatten tensors for FC layers
 
-### Best Practices
+### Activation & Normalization
+- **ReLU, Sigmoid, Tanh, Softmax** - Activation functions
+- **BatchNorm2D** - Batch normalization
+- **Dropout** - Regularization
 
-1. **Start with Input**: Always begin with an Input node
-2. **Configure Shapes**: Set input shape before connecting
-3. **Validate Often**: Click "Validate" to check for errors
-4. **Save Frequently**: Don't lose your work!
-5. **Use Descriptions**: Add project descriptions for clarity
+### Pooling
+- **MaxPool2D, AvgPool2D** - Pooling layers
+- **AdaptiveAvgPool2D** - Adaptive pooling
 
-### Common Patterns
+### Recurrent & Attention
+- **LSTM, GRU** - Recurrent layers
+- **Embedding** - Embedding layers
 
-**Image Classification**:
+### Merge & Split
+- **Add, Concat** - Combine multiple inputs
+- **Custom** - Define your own layers
+
+---
+
+## 💡 Example Architectures
+
+### Simple CNN Classifier
 ```
 Input → Conv2D → ReLU → MaxPool2D → Flatten → Linear → Output → Loss
 ```
 
-**Text Processing**:
+### ResNet-style Block
 ```
-Input → Linear → ReLU → Attention → Linear → Output → Loss
+Input → Conv2D → BatchNorm → ReLU → Conv2D → Add (skip) → ReLU → Output
 ```
 
-**Regression**:
+### Sequence Model
 ```
-Input → Flatten → Linear → ReLU → Linear → Output → Loss(MSE)
+Input → Embedding → LSTM → Linear → Output → Loss
 ```
+
+---
+
+## 📖 Documentation
+
+- **[Quick Start Guide](docs/QUICKSTART.md)** - Detailed setup instructions
+- **[Chatbot Setup](docs/CHATBOT_SETUP.md)** - Configure AI assistant
+- **[Export Format](docs/EXPORT_FORMAT.md)** - Architecture JSON structure
+- **[Node Architecture](docs/NODE_DEFINITION_ARCHITECTURE.md)** - Backend node system
+
+---
+
+## 🎮 Keyboard Shortcuts
+
+- `Ctrl+Z` - Undo
+- `Ctrl+Y` - Redo
+- `Delete` - Remove selected block
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Backend Not Running
-**Error**: Failed to fetch projects
-**Solution**:
+### Backend not running?
 ```bash
 cd project
 python manage.py runserver
 ```
 
-### Frontend Build Errors
-**Error**: Module not found
-**Solution**:
+### Frontend errors?
 ```bash
 cd project/frontend
 rm -rf node_modules package-lock.json
 npm install
+npm run dev
 ```
 
-### Database Issues
-**Error**: No such table
-**Solution**:
+### Database issues?
 ```bash
 cd project
 python manage.py migrate
 ```
 
-### CORS Errors
-**Error**: CORS policy blocked
-**Solution**: Check `CORS_ALLOWED_ORIGINS` in `backend/settings.py`
+---
 
-### Port Conflicts
-**Backend**: Change port with `python manage.py runserver 8001`
-**Frontend**: Change port in `vite.config.ts`
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
-## 📚 Additional Resources
+## 📄 License
 
-- **AI Chatbot Setup**: [QUICKSTART.md](./QUICKSTART.md) & [CHATBOT_SETUP.md](./CHATBOT_SETUP.md)
-- **Backend API**: http://localhost:8000/api/
-- **Django Admin**: http://localhost:8000/admin/
-- **Implementation Details**: See `IMPLEMENTATION_SUMMARY.md`
-- **Export Format**: See `EXPORT_FORMAT.md`
-- **README**: See `project/frontend/README.md`
+This project is licensed under the MIT License.
 
 ---
 
-## 🎯 Next Steps
+## 🙏 Acknowledgments
 
-1. **Create Example Projects**: Build sample architectures
-2. **Export Code**: Generate PyTorch code and test it
-3. **Share Projects**: Share URLs with your team
-4. **Explore Blocks**: Try all 16 block types
-5. **Customize**: Modify blocks to fit your needs
+Built with ❤️ using [GitHub Spark](https://github.com/github/spark)
 
 ---
 
-## ✨ Quick Tips
+<div align="center">
 
-- Projects auto-save when you click "Save"
-- URLs are shareable - copy and send to teammates
-- JSON export is human-readable - open in editor
-- Ground truth output enables supervised learning setups
-- Use Empty nodes to plan architecture before implementing
-- Reset button clears canvas but doesn't delete project
+**Ready to build your first AI model?**
 
----
+[Get Started](#-quick-start) • [View Docs](docs/) • [Report Bug](https://github.com/devgunnu/visionforge/issues)
 
-Happy model building! 🚀
+</div>
