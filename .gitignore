@@ -43,3 +43,4 @@ pids
 /project/*.lock
 
 */project/frontend/*.lock
+node_modules

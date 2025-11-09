@@ -1,6 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useModelBuilderStore } from '@/lib/store'
-import { useKV } from '@github/spark/hooks'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -20,10 +19,23 @@ import { Plus, Download, FloppyDisk, FolderOpen, Code, Flask } from '@phosphor-i
 import { toast } from 'sonner'
 import { generatePyTorchCode } from '@/lib/codeGenerator'
 import { Project } from '@/lib/types'
+import { ThemeToggle } from './ThemeToggle'
 
 export default function Header() {
   const { currentProject, nodes, edges, createProject, saveProject, loadProject, updateProjectInfo, validateArchitecture } = useModelBuilderStore()
-  const [projects, setProjects] = useKV<Project[]>('model-builder-projects', [])
+  const [projects, setProjects] = useState<Project[]>([])
+
+  // Load projects from localStorage on mount
+  useEffect(() => {
+    const savedProjects = localStorage.getItem('model-builder-projects')
+    if (savedProjects) {
+      try {
+        setProjects(JSON.parse(savedProjects))
+      } catch (e) {
+        console.error('Failed to parse saved projects', e)
+      }
+    }
+  }, [])
 
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false)
   const [isLoadProjectOpen, setIsLoadProjectOpen] = useState(false)
@@ -56,19 +68,20 @@ export default function Header() {
 
     saveProject()
 
-    setProjects((prevProjects) => {
-      const projectList = prevProjects || []
-      const existingIndex = projectList.findIndex((p) => p.id === currentProject.id)
-      const updatedProject = { ...currentProject, nodes, edges, updatedAt: Date.now() }
+    const projectList = projects || []
+    const existingIndex = projectList.findIndex((p) => p.id === currentProject.id)
+    const updatedProject = { ...currentProject, nodes, edges, updatedAt: Date.now() }
 
-      if (existingIndex >= 0) {
-        const updated = [...projectList]
-        updated[existingIndex] = updatedProject
-        return updated
-      } else {
-        return [...projectList, updatedProject]
-      }
-    })
+    let updatedProjects: Project[]
+    if (existingIndex >= 0) {
+      updatedProjects = [...projectList]
+      updatedProjects[existingIndex] = updatedProject
+    } else {
+      updatedProjects = [...projectList, updatedProject]
+    }
+
+    setProjects(updatedProjects)
+    localStorage.setItem('model-builder-projects', JSON.stringify(updatedProjects))
 
     toast.success('Project saved!')
   }
@@ -241,6 +254,8 @@ export default function Header() {
           <FloppyDisk size={16} className="mr-2" />
           Save
         </Button>
+
+        <ThemeToggle />
 
         <Dialog open={isExportOpen} onOpenChange={setIsExportOpen}>
           <Button

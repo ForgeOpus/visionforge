@@ -6,7 +6,9 @@ import {
   MiniMap,
   Connection,
   useReactFlow,
-  ReactFlowProvider
+  ReactFlowProvider,
+  applyNodeChanges,
+  applyEdgeChanges
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useModelBuilderStore } from '@/lib/store'
@@ -147,34 +149,92 @@ function FlowCanvas() {
     [validateConnection, addEdge, nodes, edges]
   )
 
-  const onNodesChange = useCallback(
-    (changes: any) => {
-      const updatedNodes = [...nodes]
-      changes.forEach((change: any) => {
-        if (change.type === 'position' && change.dragging === false) {
-          const nodeIndex = updatedNodes.findIndex((n) => n.id === change.id)
-          if (nodeIndex !== -1) {
-            updatedNodes[nodeIndex] = {
-              ...updatedNodes[nodeIndex],
-              position: change.position
+  const checkCollision = useCallback((nodeA: any, nodeB: any) => {
+    const padding = 20 // Extra space between nodes
+    const nodeWidth = 220
+    const nodeHeight = 100 // Approximate height
+
+    const aLeft = nodeA.position.x
+    const aRight = nodeA.position.x + nodeWidth
+    const aTop = nodeA.position.y
+    const aBottom = nodeA.position.y + nodeHeight
+
+    const bLeft = nodeB.position.x
+    const bRight = nodeB.position.x + nodeWidth
+    const bTop = nodeB.position.y
+    const bBottom = nodeB.position.y + nodeHeight
+
+    return !(
+      aRight + padding < bLeft ||
+      aLeft - padding > bRight ||
+      aBottom + padding < bTop ||
+      aTop - padding > bBottom
+    )
+  }, [])
+
+  const resolveCollisions = useCallback((updatedNodes: any[]) => {
+    const resolvedNodes = [...updatedNodes]
+
+    for (let i = 0; i < resolvedNodes.length; i++) {
+      for (let j = i + 1; j < resolvedNodes.length; j++) {
+        const nodeA = resolvedNodes[i]
+        const nodeB = resolvedNodes[j]
+
+        if (checkCollision(nodeA, nodeB)) {
+          // Calculate push direction
+          const dx = nodeB.position.x - nodeA.position.x
+          const dy = nodeB.position.y - nodeA.position.y
+          const distance = Math.sqrt(dx * dx + dy * dy)
+
+          if (distance === 0) continue
+
+          // Normalize and apply bounce
+          const pushDistance = 240 // How far to push apart
+          const nx = (dx / distance) * pushDistance
+          const ny = (dy / distance) * pushDistance
+
+          // Push the node being dragged (nodeB is typically the one being moved)
+          resolvedNodes[j] = {
+            ...nodeB,
+            position: {
+              x: nodeA.position.x + nx,
+              y: nodeA.position.y + ny
             }
           }
         }
-      })
+      }
+    }
+
+    return resolvedNodes
+  }, [checkCollision])
+
+  const onNodesChange = useCallback(
+    (changes: any) => {
+      let updatedNodes = applyNodeChanges(changes, nodes)
+
+      // Check if any position changes occurred
+      const hasPositionChange = changes.some((change: any) => change.type === 'position')
+
+      if (hasPositionChange) {
+        updatedNodes = resolveCollisions(updatedNodes)
+      }
+
       setNodes(updatedNodes)
     },
-    [nodes, setNodes]
+    [nodes, setNodes, resolveCollisions]
   )
 
   const onEdgesChange = useCallback(
     (changes: any) => {
+      setEdges(applyEdgeChanges(changes, edges))
+      // Handle edge removal for store cleanup
       changes.forEach((change: any) => {
         if (change.type === 'remove') {
           removeEdge(change.id)
         }
       })
     },
-    [removeEdge]
+    [edges, setEdges, removeEdge]
   )
 
   const onNodeClick = useCallback(
@@ -216,9 +276,25 @@ function FlowCanvas() {
         <MiniMap
           nodeColor={(node) => {
             const def = getBlockDefinition((node.data as BlockData).blockType)
-            return def?.color || '#ccc'
+            return def?.color || '#3b82f6'
           }}
-          className="bg-card border border-border"
+          nodeStrokeColor={(node) => {
+            const def = getBlockDefinition((node.data as BlockData).blockType)
+            const baseColor = def?.color || '#3b82f6'
+            // Return a slightly darker version for the stroke
+            return baseColor
+          }}
+          nodeStrokeWidth={2}
+          nodeBorderRadius={4}
+          maskColor="rgba(0, 0, 0, 0.05)"
+          className="bg-card border border-border rounded-lg shadow-lg"
+          style={{
+            backgroundColor: 'var(--card)',
+            borderColor: 'var(--border)',
+          }}
+          zoomable
+          pannable
+          position="bottom-right"
         />
       </ReactFlow>
     </div>
