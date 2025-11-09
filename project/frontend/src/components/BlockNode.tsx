@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { Handle, Position, NodeProps } from '@xyflow/react'
 import { BlockData } from '@/lib/types'
 import { getBlockDefinition } from '@/lib/blockDefinitions'
+import { useModelBuilderStore } from '@/lib/store'
 import * as Icons from '@phosphor-icons/react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -14,9 +15,15 @@ interface BlockNodeProps {
 
 const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
   const definition = getBlockDefinition(data.blockType)
+  const validationErrors = useModelBuilderStore((state) => state.validationErrors)
+
   if (!definition) return null
 
   const IconComponent = (Icons as any)[definition.icon] || Icons.Cube
+
+  // Check if this node has any validation errors
+  const nodeErrors = validationErrors.filter((error) => error.nodeId === id && error.type === 'error')
+  const hasErrors = nodeErrors.length > 0
 
   const formatShape = (dims?: (number | string)[]) => {
     if (!dims) return '?'
@@ -32,6 +39,15 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
         boxShadow: selected ? '0 0 20px rgba(0, 188, 212, 0.3)' : 'none'
       }}
     >
+      {/* Error Badge */}
+      {hasErrors && (
+        <div className="absolute -top-2 -right-2 z-20">
+          <div className="bg-red-500 rounded-full p-1 shadow-lg">
+            <Icons.Warning size={16} weight="fill" className="text-white" />
+          </div>
+        </div>
+      )}
+
       {data.blockType !== 'input' && (
         <>
           <Handle

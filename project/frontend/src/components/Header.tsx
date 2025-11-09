@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useModelBuilderStore } from '@/lib/store'
 import { useKV } from '@github/spark/hooks'
 import { Button } from '@/components/ui/button'
@@ -23,14 +23,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Download, FloppyDisk, CaretDown, Code, Flask, CheckCircle, GitBranch } from '@phosphor-icons/react'
+import { Plus, Download, FloppyDisk, CaretDown, Code, Flask, CheckCircle, GitBranch, Upload, FileCode, FilePy } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { generatePyTorchCode } from '@/lib/codeGenerator'
 import { validateModel } from '@/lib/api'
 import { Project } from '@/lib/types'
+import { exportToJSON, importFromJSON, downloadJSON, readJSONFile } from '@/lib/exportImport'
 
 export default function Header() {
-  const { currentProject, nodes, edges, createProject, saveProject, loadProject, updateProjectInfo, validateArchitecture } = useModelBuilderStore()
+  const { currentProject, nodes, edges, createProject, saveProject, loadProject, updateProjectInfo, validateArchitecture, setNodes, setEdges } = useModelBuilderStore()
   const [projects, setProjects] = useKV<Project[]>('model-builder-projects', [])
 
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false)
@@ -41,6 +42,8 @@ export default function Header() {
   const [newProjectFramework, setNewProjectFramework] = useState<'pytorch' | 'tensorflow'>('pytorch')
 
   const [exportCode, setExportCode] = useState<{model: string, train: string, config: string} | null>(null)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleCreateProject = () => {
     if (!newProjectName.trim()) {
@@ -92,7 +95,7 @@ export default function Header() {
     toast.success(`Loaded "${project.name}"`)
   }
 
-  const handleExport = () => {
+  const handleExportPyTorch = () => {
     const errors = validateArchitecture()
     const criticalErrors = errors.filter((e) => e.type === 'error')
 
@@ -118,6 +121,73 @@ export default function Header() {
         description: error instanceof Error ? error.message : 'Unknown error'
       })
     }
+  }
+
+  const handleExportJSON = () => {
+    if (nodes.length === 0) {
+      toast.error('Cannot export: No blocks in architecture')
+      return
+    }
+
+    try {
+      const exportData = exportToJSON(nodes, edges, currentProject)
+      downloadJSON(exportData)
+      toast.success('JSON exported successfully!')
+    } catch (error) {
+      toast.error('JSON export failed', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
+  }
+
+  const handleImportJSON = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      const jsonData = await readJSONFile(file)
+      const { nodes: importedNodes, edges: importedEdges, project } = importFromJSON(jsonData)
+
+      // Create a new project from imported data or update current
+      if (project.name && project.description !== undefined) {
+        createProject(
+          project.name,
+          project.description,
+          project.framework || 'pytorch'
+        )
+      }
+
+      // Set the imported nodes and edges
+      setNodes(importedNodes)
+      setEdges(importedEdges)
+
+      // Trigger validation to update error badges
+      setTimeout(() => {
+        validateArchitecture()
+      }, 100)
+
+      toast.success('Architecture imported successfully!', {
+        description: `Loaded ${importedNodes.length} blocks and ${importedEdges.length} connections`
+      })
+
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    } catch (error) {
+      toast.error('Import failed', {
+        description: error instanceof Error ? error.message : 'Invalid JSON file'
+      })
+
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
+  const triggerFileInput = () => {
+    fileInputRef.current?.click()
   }
 
   const handleValidate = async () => {
@@ -282,6 +352,15 @@ export default function Header() {
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Hidden file input for JSON import */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          onChange={handleImportJSON}
+          className="hidden"
+        />
+
         {/* New Project Dialog */}
         <Dialog open={isNewProjectOpen} onOpenChange={setIsNewProjectOpen}>
           <DialogContent>
@@ -329,6 +408,16 @@ export default function Header() {
           </DialogContent>
         </Dialog>
 
+        {/* Import Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={triggerFileInput}
+        >
+          <Upload size={16} className="mr-2" />
+          Import
+        </Button>
+
         <Button
           variant="outline"
           size="sm"
@@ -349,16 +438,43 @@ export default function Header() {
           Validate
         </Button>
 
+        {/* Export Dropdown */}
         <Dialog open={isExportOpen} onOpenChange={setIsExportOpen}>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={handleExport}
-            disabled={nodes.length === 0}
-          >
-            <Download size={16} className="mr-2" />
-            Export
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="default"
+                size="sm"
+                disabled={nodes.length === 0}
+              >
+                <Download size={16} className="mr-2" />
+                Export
+                <CaretDown size={14} className="ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Export Options</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleExportPyTorch} className="gap-2 cursor-pointer">
+                <FilePy size={16} />
+                <div>
+                  <div className="font-medium">PyTorch Code</div>
+                  <div className="text-xs text-muted-foreground">
+                    Generate model.py, train.py, config.py
+                  </div>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportJSON} className="gap-2 cursor-pointer">
+                <FileCode size={16} />
+                <div>
+                  <div className="font-medium">JSON Architecture</div>
+                  <div className="text-xs text-muted-foreground">
+                    Export as importable JSON file
+                  </div>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <DialogContent className="max-w-4xl max-h-[80vh]">
             <DialogHeader>
               <DialogTitle>Export PyTorch Code</DialogTitle>

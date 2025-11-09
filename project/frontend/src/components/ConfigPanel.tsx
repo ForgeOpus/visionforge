@@ -96,8 +96,8 @@ export default function ConfigPanel() {
   }
 
   return (
-    <div className="w-80 bg-card border-l border-border h-full flex flex-col">
-      <div className="p-4 border-b border-border flex items-center justify-between">
+    <div className="w-80 bg-card border-l border-border h-full flex flex-col overflow-hidden">
+      <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
         <div>
           <h2 className="font-semibold text-lg">{definition.label}</h2>
           <p className="text-xs text-muted-foreground">{definition.description}</p>
@@ -111,7 +111,7 @@ export default function ConfigPanel() {
         </Button>
       </div>
 
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         <div className="p-4 space-y-6">
           {definition.configSchema.length > 0 ? (
             definition.configSchema
@@ -247,9 +247,9 @@ export default function ConfigPanel() {
             </Card>
           )}
         </div>
-      </ScrollArea>
+      </div>
 
-      <div className="p-4 border-t border-border">
+      <div className="p-4 border-t border-border shrink-0">
         <Button
           variant="destructive"
           className="w-full"

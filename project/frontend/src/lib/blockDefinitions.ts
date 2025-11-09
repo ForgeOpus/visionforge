@@ -7,16 +7,45 @@ export const blockDefinitions: Record<string, BlockDefinition> = {
     category: 'input',
     color: 'var(--color-teal)',
     icon: 'ArrowDown',
-    description: 'Define input tensor shape for any modality (text, image, audio, etc.)',
+    description: 'Define input tensor shape with optional ground truth output',
     configSchema: [
       {
         name: 'shape',
-        label: 'Tensor Shape',
+        label: 'Input Shape',
         type: 'text',
         default: '[1, 3, 224, 224]',
         required: true,
         placeholder: '[batch, channels, height, width]',
-        description: 'Input tensor dimensions as JSON array. Examples: [1, 3, 224, 224] for images, [32, 512, 768] for text, [16, 1, 16000] for audio'
+        description: 'Input tensor dimensions as JSON array'
+      },
+      {
+        name: 'has_ground_truth',
+        label: 'Include Ground Truth Output',
+        type: 'boolean',
+        default: false,
+        description: 'Enable a second output for ground truth labels'
+      },
+      {
+        name: 'ground_truth_shape',
+        label: 'Ground Truth Shape',
+        type: 'text',
+        default: '[1, 10]',
+        placeholder: '[batch, num_classes]',
+        description: 'Shape for ground truth labels (used when ground truth is enabled)'
+      },
+      {
+        name: 'randomize',
+        label: 'Randomize Data',
+        type: 'boolean',
+        default: false,
+        description: 'Use random synthetic data for testing'
+      },
+      {
+        name: 'csv_file',
+        label: 'CSV File Path',
+        type: 'text',
+        placeholder: 'data/dataset.csv',
+        description: 'Path to CSV file for data loading (optional)'
       }
     ],
     computeOutputShape: (_, config) => {
@@ -34,6 +63,107 @@ export const blockDefinitions: Record<string, BlockDefinition> = {
       }
       return undefined
     }
+  },
+
+  output: {
+    type: 'output',
+    label: 'Output',
+    category: 'output',
+    color: 'var(--color-green)',
+    icon: 'ArrowUp',
+    description: 'Define model output and predictions',
+    configSchema: [
+      {
+        name: 'output_type',
+        label: 'Output Type',
+        type: 'select',
+        default: 'classification',
+        options: [
+          { value: 'classification', label: 'Classification' },
+          { value: 'regression', label: 'Regression' },
+          { value: 'segmentation', label: 'Segmentation' },
+          { value: 'custom', label: 'Custom' }
+        ],
+        description: 'Type of model output'
+      },
+      {
+        name: 'num_classes',
+        label: 'Number of Classes',
+        type: 'number',
+        default: 10,
+        min: 1,
+        description: 'Number of output classes (for classification)'
+      }
+    ],
+    computeOutputShape: (inputShape) => inputShape
+  },
+
+  loss: {
+    type: 'loss',
+    label: 'Loss Function',
+    category: 'output',
+    color: 'var(--color-destructive)',
+    icon: 'Target',
+    description: 'Define loss function for training',
+    configSchema: [
+      {
+        name: 'loss_type',
+        label: 'Loss Type',
+        type: 'select',
+        default: 'cross_entropy',
+        required: true,
+        options: [
+          { value: 'cross_entropy', label: 'Cross Entropy Loss' },
+          { value: 'mse', label: 'Mean Squared Error' },
+          { value: 'mae', label: 'Mean Absolute Error' },
+          { value: 'bce', label: 'Binary Cross Entropy' },
+          { value: 'nll', label: 'Negative Log Likelihood' },
+          { value: 'smooth_l1', label: 'Smooth L1 Loss' },
+          { value: 'kl_div', label: 'KL Divergence' },
+          { value: 'custom', label: 'Custom Loss' }
+        ],
+        description: 'Type of loss function to use'
+      },
+      {
+        name: 'reduction',
+        label: 'Reduction',
+        type: 'select',
+        default: 'mean',
+        options: [
+          { value: 'mean', label: 'Mean' },
+          { value: 'sum', label: 'Sum' },
+          { value: 'none', label: 'None' }
+        ],
+        description: 'How to reduce the loss'
+      },
+      {
+        name: 'weight',
+        label: 'Class Weights',
+        type: 'text',
+        placeholder: '[1.0, 1.0, 2.0, ...]',
+        description: 'Optional class weights as JSON array'
+      }
+    ],
+    computeOutputShape: () => ({ dims: [1], description: 'Scalar loss' })
+  },
+
+  empty: {
+    type: 'empty',
+    label: 'Empty Node',
+    category: 'utility',
+    color: 'var(--color-muted)',
+    icon: 'Circle',
+    description: 'Placeholder node for architecture planning',
+    configSchema: [
+      {
+        name: 'note',
+        label: 'Note',
+        type: 'text',
+        placeholder: 'Add notes here...',
+        description: 'Notes or comments about this placeholder'
+      }
+    ],
+    computeOutputShape: (inputShape) => inputShape
   },
 
   linear: {
@@ -471,6 +601,16 @@ export function validateBlockConnection(
   // Input blocks can't receive connections
   if (targetBlockType === 'input') {
     return 'Input blocks cannot receive connections'
+  }
+
+  // Output and Loss blocks can receive connections (they're terminal nodes)
+  if (targetBlockType === 'output' || targetBlockType === 'loss') {
+    return undefined // Always valid
+  }
+
+  // Empty nodes are passthrough, always valid
+  if (targetBlockType === 'empty' || sourceBlockType === 'empty') {
+    return undefined
   }
 
   // Source must have valid output shape (except for custom blocks which are flexible)
