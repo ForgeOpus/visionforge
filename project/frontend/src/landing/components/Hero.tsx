@@ -6,6 +6,7 @@ import { SparklesCore } from "./aceternity/Sparkles";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Play } from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
+import DemoVideo from "./DemoVideo";
 
 export default function Hero() {
   const navigate = useNavigate();
@@ -105,61 +106,8 @@ export default function Hero() {
           </Button>
         </motion.div>
 
-        {/* Preview Image/Screenshot */}
-        <motion.div
-          initial={{ opacity: 0, y: 60 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1, delay: 1.2 }}
-          className="relative max-w-6xl mx-auto"
-        >
-          {/* Glow effects */}
-          <div className="absolute -inset-4 bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-purple-500/20 rounded-3xl blur-3xl"></div>
-
-          <div className="relative rounded-2xl overflow-hidden border-2 border-cyan-500/40 shadow-[0_0_80px_rgba(0,229,255,0.3)] backdrop-blur-sm bg-slate-900/40">
-            {/* Placeholder for canvas screenshot */}
-            <div className="aspect-video bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center relative overflow-hidden">
-              {/* Grid background */}
-              <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:2rem_2rem] opacity-20"></div>
-
-              {/* Mock nodes */}
-              <div className="relative z-10 flex items-center justify-center gap-8 p-8">
-                <div className="flex flex-col gap-4">
-                  {[1, 2, 3].map((i) => (
-                    <motion.div
-                      key={i}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 1.5 + i * 0.1 }}
-                      className="w-32 h-20 rounded-lg bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 border-2 border-cyan-500/40 flex items-center justify-center backdrop-blur-sm"
-                    >
-                      <div className="w-3 h-3 bg-cyan-400 rounded-full shadow-[0_0_20px_rgba(0,229,255,0.8)]"></div>
-                    </motion.div>
-                  ))}
-                </div>
-                <div className="text-cyan-400/50 text-6xl font-thin">→</div>
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: 1.8 }}
-                  className="w-40 h-32 rounded-lg bg-gradient-to-br from-blue-500/30 to-purple-500/30 border-2 border-blue-400/40 flex items-center justify-center backdrop-blur-sm"
-                >
-                  <div className="w-4 h-4 bg-blue-400 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.8)]"></div>
-                </motion.div>
-              </div>
-
-              {/* Overlay text */}
-              <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 text-center">
-                <div className="text-cyan-400/60 text-sm font-semibold backdrop-blur-sm bg-slate-900/50 px-6 py-2 rounded-full border border-cyan-500/30">
-                  Visual Model Builder
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Decorative elements */}
-          <div className="absolute -top-8 -right-8 w-32 h-32 bg-cyan-500/20 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute -bottom-8 -left-8 w-40 h-40 bg-blue-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
-        </motion.div>
+        {/* Demo Video */}
+        <DemoVideo />
 
         {/* Framework badges and trust indicators */}
         <motion.div
