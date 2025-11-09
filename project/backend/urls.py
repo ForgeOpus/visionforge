@@ -15,9 +15,24 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
+from django.views.generic import TemplateView
+from django.conf import settings
+from django.views.static import serve
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
+
+# Ensure CSRF cookie is set when serving the React app
+@method_decorator(ensure_csrf_cookie, name='dispatch')
+class ReactAppView(TemplateView):
+    template_name = 'index.html'
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('block_manager.urls')),
+    # Serve assets directory (React build files)
+    re_path(r'^assets/(?P<path>.*)$', serve, {'document_root': settings.BASE_DIR / 'frontend_build' / 'assets'}),
+    # Catch-all pattern to serve React app for any route not matched above
+    # This must be last to allow Django routes to take precedence
+    re_path(r'^.*$', ReactAppView.as_view(), name='react-app'),
 ]

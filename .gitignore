@@ -56,3 +56,7 @@ __pycache__
 
 *.sqlite3
 *.db
+
+# Single-service deployment build artifacts
+/project/frontend_build/
+/project/staticfiles/
