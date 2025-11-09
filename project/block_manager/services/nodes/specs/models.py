@@ -38,6 +38,15 @@ class ConfigFieldSpec:
 
 
 @dataclass(frozen=True)
+class InputPortSpec:
+    """Specification for a named input port."""
+
+    id: str
+    label: str
+    description: str = ""
+
+
+@dataclass(frozen=True)
 class NodeTemplateSpec:
     """Rendering template configuration for a node."""
 
@@ -60,6 +69,7 @@ class NodeSpec:
     framework: Framework
     config_schema: Tuple[ConfigFieldSpec, ...]
     allows_multiple_inputs: bool = False
+    input_ports: Optional[Tuple[InputPortSpec, ...]] = None
     shape_fn: Optional[str] = None
     validation_fn: Optional[str] = None
     template: Optional[NodeTemplateSpec] = None

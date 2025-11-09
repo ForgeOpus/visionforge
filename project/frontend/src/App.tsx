@@ -3,7 +3,7 @@ import { Routes, Route, useNavigate, useParams } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { toast } from 'sonner'
 import Header from './components/Header'
-import BlockPalette from './components/BlockPalette'
+import ResizableBlockPalette from './components/ResizableBlockPalette'
 import Canvas from './components/Canvas'
 import ConfigPanel from './components/ConfigPanel'
 import ChatBot from './components/ChatBot'
@@ -17,7 +17,6 @@ function ProjectCanvas() {
   const { setNodes, setEdges, loadProject, currentProject } = useModelBuilderStore()
   const [isLoading, setIsLoading] = useState(false)
   const [draggedType, setDraggedType] = useState<string | null>(null)
-  const [isPaletteCollapsed, setIsPaletteCollapsed] = useState(false)
   const { selectedNodeId } = useModelBuilderStore()
   const addNodeFromPaletteRef = useRef<((blockType: string) => void) | null>(null)
 
@@ -81,11 +80,9 @@ function ProjectCanvas() {
       <Header />
 
       <div className="flex-1 flex overflow-hidden relative">
-        <BlockPalette
+        <ResizableBlockPalette
           onDragStart={handleDragStart}
           onBlockClick={handleBlockClick}
-          isCollapsed={isPaletteCollapsed}
-          onToggleCollapse={() => setIsPaletteCollapsed(!isPaletteCollapsed)}
         />
         <Canvas
           onDragStart={handleDragStart}

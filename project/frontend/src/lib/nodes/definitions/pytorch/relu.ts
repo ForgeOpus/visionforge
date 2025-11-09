@@ -10,7 +10,7 @@ export class ReLUNode extends PassthroughNodeDefinition {
   readonly metadata: NodeMetadata = {
     type: 'relu',
     label: 'ReLU',
-    category: 'basic',
+    category: 'activation',
     color: 'var(--color-accent)',
     icon: 'Pulse',
     description: 'ReLU activation function',
