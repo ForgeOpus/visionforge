@@ -1,193 +1,216 @@
 <div align="center">
-  <img src="project/frontend/public/vision_logo.png" alt="VisionForge Logo" width="120" height="120">
+  <img src="project/frontend/public/vision_logo.png" alt="VisionForge Logo" width="200">
 
   # VisionForge
 
-  **Design Neural Networks Without Writing Code**
+  **Build Neural Networks Visually — Export Production Code**
 
-  Build production-ready AI models visually. Export clean PyTorch or TensorFlow code in minutes.
+  Design deep learning architectures with drag-and-drop. Export clean PyTorch or TensorFlow code instantly.
 
   [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+  [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
+  [![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev)
+
 </div>
 
----
+<br />
 
-## ✨ Features
+## ✨ What is VisionForge?
 
-### 🎨 **Intuitive Visual Builder**
-Design complex neural network architectures with a drag-and-drop canvas. No coding required.
+VisionForge is a **visual neural network builder** that lets you design complex deep learning architectures without writing code. Perfect for researchers, students, and ML engineers who want to rapidly prototype models.
 
-### 🔄 **Automatic Shape Inference**
-Tensor dimensions calculated automatically as you build. No manual dimension tracking needed.
+- 🎨 **Drag-and-drop interface** — Build CNNs, LSTMs, ResNets visually
+- ⚡ **Automatic shape inference** — No manual tensor dimension tracking
+- 🔄 **Multi-framework export** — PyTorch or TensorFlow with one click
+- 🤖 **AI-powered assistant** — Ask questions or modify your model with natural language
+- ✅ **Real-time validation** — Catch architecture errors before export
 
-### ✅ **Intelligent Validation**
-Real-time architecture validation catches errors instantly with helpful suggestions.
-
-### 💾 **Save & Share Projects**
-Export architectures as JSON. Import pre-built models or share with your team effortlessly.
-
-### ⚡ **Multi-Framework Support**
-Export to PyTorch or TensorFlow with a single click. Maintain flexibility in your ML workflow.
-
-### 📝 **Clean, Production Code**
-Generate well-structured, documented code with type hints and best practices built-in.
-
-### 🔀 **Complex Architectures**
-Build multi-branch models with skip connections, residual blocks, and merge operations (ResNet, U-Net, and beyond).
-
-### 🛠️ **Custom Layer Support**
-Extend with your own custom implementations. Full flexibility for research and production needs.
-
-### 🤖 **AI-Powered Chatbot**
-Intelligent assistant powered by Google Gemini. Ask questions or let AI modify your workflow in real-time.
-
----
+<br />
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Python 3.8+
 - Node.js 16+
-- Google Gemini API key ([Get one here](https://aistudio.google.com/app/apikey))
+- [Google Gemini API key](https://aistudio.google.com/app/apikey) (for AI assistant)
 
-### 1. Clone & Setup Backend
+### Installation
 
+**1. Clone and setup backend**
 ```bash
-# Clone repository
 git clone https://github.com/devgunnu/visionforge.git
 cd visionforge/project
 
-# Install dependencies
+# Install Python dependencies
 pip install -r requirements.txt
 
-# Configure environment
+# Setup environment
 cp .env.example .env
-# Edit .env and add your GEMINI_API_KEY
+# Add your GEMINI_API_KEY to .env
 
-# Run migrations
-python manage.py makemigrations
+# Initialize database
 python manage.py migrate
 
 # Start Django server
 python manage.py runserver
 ```
 
-Backend runs on: `http://localhost:8000`
+Backend runs at `http://localhost:8000`
 
-### 2. Setup Frontend
-
+**2. Setup frontend**
 ```bash
 cd project/frontend
 
 # Install dependencies
 npm install
 
-# Start development server
+# Start dev server
 npm run dev
 ```
 
-Frontend runs on: `http://localhost:5173`
+Frontend runs at `http://localhost:5173`
 
-### 3. Start Building!
+**3. Open your browser**
+Navigate to `http://localhost:5173` and start building!
 
-Open `http://localhost:5173` in your browser and start designing your first neural network.
-
----
+<br />
 
 ## 🎯 How It Works
 
-1. **Drag & Drop** - Add blocks from the sidebar (Input, Conv2D, Linear, etc.)
-2. **Connect** - Draw connections between blocks to define data flow
-3. **Configure** - Click blocks to set parameters (filters, kernel size, etc.)
-4. **Validate** - Real-time validation ensures your architecture is correct
-5. **Export** - Generate production-ready PyTorch or TensorFlow code
+<div align="center">
 
----
+```
+┌─────────────┐    ┌──────────────┐    ┌──────────────┐    ┌─────────────┐
+│  Drag & Drop │ →  │  Configure   │ →  │   Validate   │ →  │   Export    │
+│    Blocks    │    │  Parameters  │    │ Architecture │    │    Code     │
+└─────────────┘    └──────────────┘    └──────────────┘    └─────────────┘
+```
 
-## 🏗️ Tech Stack
+</div>
 
-- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS
-- **Canvas**: ReactFlow (@xyflow/react)
-- **State**: Zustand
-- **Animations**: Framer Motion
-- **Backend**: Django, Python
-- **AI**: Google Gemini API
-- **UI**: Radix UI, shadcn/ui
+1. **Add layers** from the sidebar (Conv2D, LSTM, Dropout, etc.)
+2. **Connect blocks** to define your model's data flow
+3. **Set parameters** by clicking on any block
+4. **Validate** your architecture with built-in checks
+5. **Export** production-ready code for PyTorch or TensorFlow
 
----
+<br />
 
-## 📦 Available Blocks
+## 📦 Available Layers
 
-### Core Layers
-- **Input/Output** - Define model inputs and outputs
-- **Linear** - Fully connected layers
-- **Conv1D/2D/3D** - Convolutional layers
-- **Flatten** - Flatten tensors for FC layers
+<table>
+<tr>
+<td width="50%">
 
-### Activation & Normalization
-- **ReLU, Sigmoid, Tanh, Softmax** - Activation functions
-- **BatchNorm2D** - Batch normalization
-- **Dropout** - Regularization
+**Core Layers**
+- Input / Output
+- Linear (Fully Connected)
+- Conv1D / Conv2D / Conv3D
+- Flatten, Reshape
 
-### Pooling
-- **MaxPool2D, AvgPool2D** - Pooling layers
-- **AdaptiveAvgPool2D** - Adaptive pooling
+**Activation & Regularization**
+- ReLU, Sigmoid, Tanh, Softmax
+- Dropout, BatchNorm
+- Layer Normalization
 
-### Recurrent & Attention
-- **LSTM, GRU** - Recurrent layers
-- **Embedding** - Embedding layers
+</td>
+<td width="50%">
 
-### Merge & Split
-- **Add, Concat** - Combine multiple inputs
-- **Custom** - Define your own layers
+**Pooling**
+- MaxPool2D, AvgPool2D
+- AdaptiveAvgPool2D
 
----
+**Recurrent & Sequence**
+- LSTM, GRU
+- Embedding
+
+**Operations**
+- Add, Concatenate
+- Custom layers
+
+</td>
+</tr>
+</table>
+
+<br />
 
 ## 💡 Example Architectures
 
-### Simple CNN Classifier
+**Simple CNN Classifier**
 ```
-Input → Conv2D → ReLU → MaxPool2D → Flatten → Linear → Output → Loss
-```
-
-### ResNet-style Block
-```
-Input → Conv2D → BatchNorm → ReLU → Conv2D → Add (skip) → ReLU → Output
+Input → Conv2D → ReLU → MaxPool2D → Flatten → Linear → Softmax → Loss
 ```
 
-### Sequence Model
+**ResNet-style Skip Connection**
 ```
-Input → Embedding → LSTM → Linear → Output → Loss
+Input → Conv2D → BatchNorm → ReLU ┐
+                                   ├→ Add → ReLU → Output
+       Input ────────────────────→┘
 ```
 
----
+**LSTM Sequence Model**
+```
+Input → Embedding → LSTM → Dropout → Linear → Output → Loss
+```
+
+<br />
+
+## 🛠️ Tech Stack
+
+<table>
+<tr>
+<td><b>Frontend</b></td>
+<td>React 19 • TypeScript • Vite • Tailwind CSS</td>
+</tr>
+<tr>
+<td><b>Canvas</b></td>
+<td>ReactFlow • Zustand • Framer Motion</td>
+</tr>
+<tr>
+<td><b>Backend</b></td>
+<td>Django • Python • SQLite</td>
+</tr>
+<tr>
+<td><b>AI</b></td>
+<td>Google Gemini API</td>
+</tr>
+<tr>
+<td><b>UI</b></td>
+<td>Radix UI • shadcn/ui</td>
+</tr>
+</table>
+
+<br />
+
+## ⌨️ Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Z` | Undo |
+| `Ctrl+Y` | Redo |
+| `Delete` | Remove selected block |
+
+<br />
 
 ## 📖 Documentation
 
-- **[Quick Start Guide](docs/QUICKSTART.md)** - Detailed setup instructions
-- **[Chatbot Setup](docs/CHATBOT_SETUP.md)** - Configure AI assistant
-- **[Export Format](docs/EXPORT_FORMAT.md)** - Architecture JSON structure
-- **[Node Architecture](docs/NODE_DEFINITION_ARCHITECTURE.md)** - Backend node system
+- [Quick Start Guide](docs/QUICKSTART.md)
+- [AI Chatbot Setup](docs/CHATBOT_SETUP.md)
+- [Export Format Specification](docs/EXPORT_FORMAT.md)
+- [Node Architecture](docs/NODE_DEFINITION_ARCHITECTURE.md)
 
----
-
-## 🎮 Keyboard Shortcuts
-
-- `Ctrl+Z` - Undo
-- `Ctrl+Y` - Redo
-- `Delete` - Remove selected block
-
----
+<br />
 
 ## 🐛 Troubleshooting
 
-### Backend not running?
+**Backend not starting?**
 ```bash
 cd project
+python manage.py migrate
 python manage.py runserver
 ```
 
-### Frontend errors?
+**Frontend build errors?**
 ```bash
 cd project/frontend
 rm -rf node_modules package-lock.json
@@ -195,36 +218,43 @@ npm install
 npm run dev
 ```
 
-### Database issues?
-```bash
-cd project
-python manage.py migrate
-```
+**CORS issues?**
+Make sure both servers are running (Django on 8000, Vite on 5173)
 
----
+<br />
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Feel free to open issues or submit PRs.
 
----
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+<br />
 
 ## 📄 License
 
 This project is licensed under the MIT License.
 
----
+<br />
 
 ## 🙏 Acknowledgments
 
 Built with ❤️ using [GitHub Spark](https://github.com/github/spark)
 
----
+<br />
 
 <div align="center">
 
-**Ready to build your first AI model?**
+---
 
-[Get Started](#-quick-start) • [View Docs](docs/) • [Report Bug](https://github.com/devgunnu/visionforge/issues)
+**Ready to build AI models faster?**
+
+[Get Started](#-quick-start) • [View Docs](docs/) • [Report Issues](https://github.com/devgunnu/visionforge/issues)
+
+Made by [devgunnu](https://github.com/devgunnu)
 
 </div>
