@@ -21,8 +21,8 @@ urlpatterns = [
     path('', include(router.urls)),
     
     # Architecture endpoints
-    path('projects/<int:project_id>/save-architecture', save_architecture, name='save-architecture'),
-    path('projects/<int:project_id>/load-architecture', load_architecture, name='load-architecture'),
+    path('projects/<uuid:project_id>/save-architecture', save_architecture, name='save-architecture'),
+    path('projects/<uuid:project_id>/load-architecture', load_architecture, name='load-architecture'),
     
     # Node definition endpoints
     path('node-definitions', get_node_definitions, name='node-definitions'),
