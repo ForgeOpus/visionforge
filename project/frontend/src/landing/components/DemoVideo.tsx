@@ -21,6 +21,7 @@ export default function DemoVideo() {
             muted
             playsInline
             className="w-full h-full object-cover"
+            aria-label="Demo video showing the visual model builder in action"
           />
 
           {/* Overlay text */}
