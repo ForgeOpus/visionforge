@@ -112,7 +112,8 @@ export async function sendChatMessage(
   history?: any[],
   modificationMode?: boolean,
   workflowState?: { nodes: any[], edges: any[] },
-  file?: File
+  file?: File,
+  apiKey?: string
 ): Promise<ApiResponse<{
   response: string
   modifications?: any[]
@@ -127,8 +128,14 @@ export async function sendChatMessage(
     formData.append('workflowState', JSON.stringify(workflowState || null))
 
     try {
+      const headers: HeadersInit = {}
+      if (apiKey) {
+        headers['X-Gemini-Api-Key'] = apiKey
+      }
+
       const response = await fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
+        headers,
         body: formData,
       })
 
@@ -155,8 +162,14 @@ export async function sendChatMessage(
   }
 
   // No file - use regular JSON
+  const headers: HeadersInit = {}
+  if (apiKey) {
+    headers['X-Gemini-Api-Key'] = apiKey
+  }
+
   return apiFetch('/chat', {
     method: 'POST',
+    headers,
     body: JSON.stringify({
       message,
       history: history || [],

@@ -13,11 +13,14 @@ from django.core.files.uploadedfile import UploadedFile
 class GeminiChatService:
     """Service to handle Gemini AI chat interactions with workflow context."""
 
-    def __init__(self):
-        """Initialize Gemini with API key from environment."""
-        api_key = os.getenv('GEMINI_API_KEY')
+    def __init__(self, api_key: Optional[str] = None):
+        """Initialize Gemini with user-provided API key.
+
+        Args:
+            api_key: User-provided Gemini API key (required for cloud demo mode)
+        """
         if not api_key:
-            raise ValueError("GEMINI_API_KEY environment variable is not set")
+            raise ValueError("Gemini API key is required. Please provide your own API key.")
 
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel('gemini-2.0-flash')

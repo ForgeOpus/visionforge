@@ -23,7 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Download, FloppyDisk, CaretDown, Code, CheckCircle, GitBranch, Upload, FileCode, FilePy, GearSix, Trash, Info, PencilSimple } from '@phosphor-icons/react'
+import { Plus, Download, FloppyDisk, CaretDown, Code, CheckCircle, GitBranch, Upload, FileCode, FilePy, GearSix, Trash, Info, PencilSimple, Warning } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { validateModel, exportModel as apiExportModel } from '@/lib/api'
@@ -144,7 +144,9 @@ export default function Header() {
       setSaveAsProjectDesc('')
 
       toast.dismiss(loadingToast)
-      toast.success('Project created and saved!')
+      toast.success('Project saved to browser storage', {
+        description: 'Your design is stored locally in your browser'
+      })
 
       // Reload projects list
       await loadProjectsList()
@@ -188,13 +190,15 @@ export default function Header() {
         return
       }
 
-      // Save to backend for existing project
+      // Save to local storage for existing project
       await projectApi.saveArchitecture(projectIdToSave, nodes, edges)
 
       // Save to local store
       saveProject()
 
-      toast.success('Project saved!')
+      toast.success('Project saved to browser storage', {
+        description: 'Your design is stored locally in your browser'
+      })
 
       // Reload projects list
       loadProjectsList()
@@ -542,12 +546,21 @@ export default function Header() {
   }
 
   return (
-    <header className="h-16 border-b border-border bg-card px-6 flex items-center justify-between">
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <img src="/logo_navbar.png" alt="VisionForge Logo" className="h-10 w-auto" />
-          <h1 className="text-xl font-semibold">VisionForge</h1>
-        </div>
+    <div className="flex flex-col">
+      {/* Demo Mode Banner */}
+      <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1.5 flex items-center justify-center gap-2">
+        <Warning size={14} className="text-amber-600" />
+        <span className="text-xs text-amber-700 dark:text-amber-400">
+          <strong>Demo Mode:</strong> Designs are saved locally in your browser. Provide your own Gemini API key to use AI features.
+        </span>
+      </div>
+
+      <header className="h-16 border-b border-border bg-card px-6 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <img src="/logo_navbar.png" alt="VisionForge Logo" className="h-10 w-auto" />
+            <h1 className="text-xl font-semibold">VisionForge</h1>
+          </div>
 
         {/* Project Dropdown */}
         <DropdownMenu>
@@ -1120,6 +1133,7 @@ export default function Header() {
           </DialogContent>
         </Dialog>
       </div>
-    </header>
+      </header>
+    </div>
   )
 }

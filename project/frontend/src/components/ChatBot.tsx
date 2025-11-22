@@ -12,6 +12,8 @@ import { toast } from 'sonner'
 import { useModelBuilderStore } from '@/lib/store'
 import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
 import { BlockType } from '@/lib/types'
+import { useApiKey } from '@/lib/apiKeyContext'
+import ApiKeyModal from './ApiKeyModal'
 
 interface Message {
   id: string
@@ -41,8 +43,13 @@ export default function ChatBot() {
   const [isLoading, setIsLoading] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [isUploadingFile, setIsUploadingFile] = useState(false)
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false)
+  const [pendingMessage, setPendingMessage] = useState<{ input: string; file: File | null } | null>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // API Key context
+  const { apiKey, hasApiKey } = useApiKey()
 
   // Get workflow state from store
   const { nodes, edges, addNode, updateNode, removeNode, duplicateNode, addEdge, removeEdge } = useModelBuilderStore()
@@ -56,6 +63,17 @@ export default function ChatBot() {
       }
     }
   }, [messages])
+
+  // Handle API key modal success - retry sending the pending message
+  const handleApiKeySuccess = () => {
+    if (pendingMessage) {
+      // Restore the pending message to input fields
+      setInputValue(pendingMessage.input)
+      setUploadedFile(pendingMessage.file)
+      setPendingMessage(null)
+      // The user can now send the message again
+    }
+  }
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -93,6 +111,13 @@ export default function ChatBot() {
 
   const handleSendMessage = async () => {
     if ((!inputValue.trim() && !uploadedFile) || isLoading) return
+
+    // Check for API key before sending
+    if (!hasApiKey) {
+      setPendingMessage({ input: inputValue, file: uploadedFile })
+      setShowApiKeyModal(true)
+      return
+    }
 
     const currentFile = uploadedFile
     const userMessage: Message = {
@@ -133,13 +158,14 @@ export default function ChatBot() {
         }))
       }
 
-      // Send message to backend API with workflow context
+      // Send message to backend API with workflow context and API key
       const response = await sendChatMessage(
         currentInput,
         messages,
         modificationMode,
         workflowState,
-        currentFile || undefined
+        currentFile || undefined,
+        apiKey || undefined
       )
 
       if (response.success && response.data) {
@@ -401,6 +427,13 @@ export default function ChatBot() {
 
   return (
     <>
+      {/* API Key Modal */}
+      <ApiKeyModal
+        open={showApiKeyModal}
+        onOpenChange={setShowApiKeyModal}
+        onSuccess={handleApiKeySuccess}
+      />
+
       {/* Floating Chat Button */}
       {!isOpen && (
         <Button
