@@ -7,7 +7,7 @@
 
   Design deep learning architectures with drag-and-drop. Export clean PyTorch or TensorFlow code instantly.
 
-  [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+  [![BSD-3-Clause License](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
   [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
   [![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev)
 
@@ -235,9 +235,41 @@ Contributions are welcome! Feel free to open issues or submit PRs.
 
 <br />
 
-## 📄 License
+## 📄 License & Attribution
 
-Please check the `LICENSE` file.
+VisionForge is licensed under the **BSD 3-Clause License**.
+
+```
+Copyright (c) 2025, ForgeOpus
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the conditions in the
+LICENSE file are met.
+```
+
+See [LICENSE](LICENSE) for the full license text.
+
+### Third-Party Software
+
+VisionForge is built on top of many excellent open source projects. We are grateful to the open source community for their contributions.
+
+**Key Dependencies:**
+- **Frontend:** React, TypeScript, Vite, Tailwind CSS, Radix UI, XYFlow, Zustand, Framer Motion
+- **Backend:** Django, Python, Google Generative AI, Anthropic
+- **Total:** 350+ open source packages under permissive licenses (MIT, Apache-2.0, BSD, ISC)
+
+For complete license information and attributions:
+- 📋 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) - Comprehensive list of all dependencies and their licenses
+- 📄 [NOTICE](NOTICE) - Required attribution notices for specific dependencies
+
+### License Compliance
+
+All dependencies use licenses compatible with BSD-3-Clause:
+- ✅ **MIT, Apache-2.0, BSD, ISC** - Permissive licenses (majority of dependencies)
+- ✅ **MPL-2.0** - Weak copyleft (LightningCSS) - properly attributed
+- ✅ **LGPL** - Dynamically linked (Python libraries) - properly attributed
+
+We are committed to open source license compliance. If you have concerns about license compliance, please [open an issue](https://github.com/ForgeOpus/visionforge/issues).
 
 <br />
 
@@ -247,8 +279,8 @@ Please check the `LICENSE` file.
 
 **Ready to build AI models faster?**
 
-[Get Started](#-quick-start) • [View Docs](docs/) • [Report Issues](https://github.com/devgunnu/visionforge/issues)
+[Get Started](#-quick-start) • [View Docs](docs/) • [Report Issues](https://github.com/ForgeOpus/visionforge/issues)
 
-Made by [devgunnu](https://github.com/devgunnu)
+Made by [devgunnu](https://github.com/devgunnu) | Maintained by [ForgeOpus](https://github.com/ForgeOpus)
 
 </div>
