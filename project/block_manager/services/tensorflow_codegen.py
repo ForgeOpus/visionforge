@@ -310,6 +310,100 @@ def infer_shapes(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Dict[str, An
                 prev_shape = shape_map[incoming[0]]
                 shape_info.update(prev_shape)
 
+        elif node_type == 'avgpool2d':
+            # Preserve channels, reduce spatial dimensions
+            if incoming and incoming[0] in shape_map:
+                prev_shape = shape_map[incoming[0]]
+                shape_info['in_channels'] = prev_shape.get('out_channels', 64)
+                shape_info['out_channels'] = shape_info['in_channels']
+
+                pool_size = config.get('pool_size', 2)
+                strides = config.get('strides', 2)
+                padding = config.get('padding', 'valid')
+
+                if 'out_height' in prev_shape and 'out_width' in prev_shape:
+                    if padding == 'same':
+                        shape_info['out_height'] = (prev_shape['out_height'] + strides - 1) // strides
+                        shape_info['out_width'] = (prev_shape['out_width'] + strides - 1) // strides
+                    else:  # valid padding
+                        shape_info['out_height'] = (prev_shape['out_height'] - pool_size) // strides + 1
+                        shape_info['out_width'] = (prev_shape['out_width'] - pool_size) // strides + 1
+
+        elif node_type == 'adaptiveavgpool2d':
+            # Global average pooling - output is [batch, channels] or [batch, 1, 1, channels]
+            if incoming and incoming[0] in shape_map:
+                prev_shape = shape_map[incoming[0]]
+                shape_info['in_channels'] = prev_shape.get('out_channels', 64)
+
+                keepdims = config.get('keepdims', False)
+                if keepdims:
+                    shape_info['out_channels'] = shape_info['in_channels']
+                    shape_info['out_height'] = 1
+                    shape_info['out_width'] = 1
+                else:
+                    shape_info['out_units'] = shape_info['in_channels']
+
+        elif node_type == 'conv1d':
+            # Get input channels from previous layer
+            if incoming and incoming[0] in shape_map:
+                shape_info['in_channels'] = shape_map[incoming[0]].get('out_channels', 1)
+            else:
+                shape_info['in_channels'] = 1
+
+            # Output channels (filters) from config
+            shape_info['out_channels'] = config.get('filters', 64)
+
+        elif node_type == 'conv3d':
+            # Get input channels from previous layer
+            if incoming and incoming[0] in shape_map:
+                shape_info['in_channels'] = shape_map[incoming[0]].get('out_channels', 1)
+            else:
+                shape_info['in_channels'] = 1
+
+            # Output channels (filters) from config
+            shape_info['out_channels'] = config.get('filters', 64)
+
+        elif node_type in ('lstm', 'gru'):
+            # Get input units from previous layer
+            if incoming and incoming[0] in shape_map:
+                prev_shape = shape_map[incoming[0]]
+                shape_info['in_units'] = prev_shape.get('out_units', 128)
+            else:
+                shape_info['in_units'] = 128
+
+            # Output units from config
+            shape_info['out_units'] = config.get('units', 128)
+
+        elif node_type == 'embedding':
+            # Output units from output dimension
+            shape_info['out_units'] = config.get('output_dim', 128)
+
+        elif node_type == 'concat':
+            # Sum channels/units along concat dimension
+            if incoming:
+                total = 0
+                for src_id in incoming:
+                    if src_id in shape_map:
+                        prev_shape = shape_map[src_id]
+                        # TensorFlow concat typically on last axis (channels for NHWC)
+                        total += prev_shape.get('out_channels', prev_shape.get('out_units', 0))
+
+                if total > 0:
+                    # Check if spatial dimensions exist
+                    if incoming[0] in shape_map and 'out_height' in shape_map[incoming[0]]:
+                        shape_info['out_channels'] = total
+                        first = shape_map[incoming[0]]
+                        shape_info['out_height'] = first.get('out_height', 1)
+                        shape_info['out_width'] = first.get('out_width', 1)
+                    else:
+                        shape_info['out_units'] = total
+
+        elif node_type == 'add':
+            # Preserve shape from first input (all inputs must have same shape)
+            if incoming and incoming[0] in shape_map:
+                prev_shape = shape_map[incoming[0]]
+                shape_info.update(prev_shape)
+
         else:
             # For other layers, try to preserve shape from input
             if incoming and incoming[0] in shape_map:
@@ -886,6 +980,336 @@ def generate_layer_class(
         x = inputs
         return x'''
 
+    elif node_type == 'avgpool2d':
+        pool_size = config.get('pool_size', 2)
+        strides = config.get('strides', 2)
+        padding = config.get('padding', 'valid')
+
+        return f'''class {class_name}(layers.Layer):
+    """
+    2D Average Pooling Layer
+
+    Applies a 2D average pooling over an input signal.
+    Reduces spatial dimensions while preserving channel count.
+
+    Parameters:
+        - Pool size: {pool_size}x{pool_size}
+        - Strides: {strides}
+        - Padding: '{padding}'
+
+    Shape:
+        - Input: [batch, H, W, C] (NHWC format)
+        - Output: [batch, H/{strides}, W/{strides}, C]
+    """
+
+    def __init__(self):
+        """Initialize the average pooling layer."""
+        super({class_name}, self).__init__()
+        self.pool = layers.AveragePooling2D(
+            pool_size={pool_size},
+            strides={strides},
+            padding='{padding}'
+        )
+
+    def call(self, inputs: tf.Tensor, training: Optional[bool] = None) -> tf.Tensor:
+        """
+        Forward pass through the pooling layer.
+
+        Args:
+            inputs: Input tensor of shape [batch, H, W, C]
+            training: Whether in training mode
+
+        Returns:
+            Output tensor with reduced spatial dimensions
+        """
+        # Apply average pooling
+        x = self.pool(inputs)
+        return x'''
+
+    elif node_type == 'adaptiveavgpool2d':
+        keepdims = config.get('keepdims', False)
+
+        return f'''class {class_name}(layers.Layer):
+    """
+    Global Average Pooling Layer
+
+    Applies global average pooling to produce a single value per channel.
+    TensorFlow equivalent of PyTorch's AdaptiveAvgPool2d.
+
+    Parameters:
+        - Keep dimensions: {keepdims}
+
+    Shape:
+        - Input: [batch, H, W, C] (NHWC format)
+        - Output: [batch, C] or [batch, 1, 1, C] if keepdims
+    """
+
+    def __init__(self):
+        """Initialize the global average pooling layer."""
+        super({class_name}, self).__init__()
+        self.pool = layers.GlobalAveragePooling2D(keepdims={keepdims})
+
+    def call(self, inputs: tf.Tensor, training: Optional[bool] = None) -> tf.Tensor:
+        """
+        Forward pass through the global pooling layer.
+
+        Args:
+            inputs: Input tensor of shape [batch, H, W, C]
+            training: Whether in training mode
+
+        Returns:
+            Output tensor of shape [batch, C] or [batch, 1, 1, C]
+        """
+        # Apply global average pooling
+        x = self.pool(inputs)
+        return x'''
+
+    elif node_type == 'conv1d':
+        filters = config.get('filters', 64)
+        kernel_size = config.get('kernel_size', 3)
+        strides = config.get('strides', 1)
+        padding = config.get('padding', 'valid')
+
+        return f'''class {class_name}(layers.Layer):
+    """
+    1D Convolutional Layer
+
+    Applies a 1D convolution over an input signal.
+    Commonly used for sequence data like time series or text.
+
+    Parameters:
+        - Filters: {filters}
+        - Kernel size: {kernel_size}
+        - Strides: {strides}
+        - Padding: '{padding}'
+
+    Shape:
+        - Input: [batch, steps, channels]
+        - Output: [batch, steps_out, {filters}]
+    """
+
+    def __init__(self):
+        """Initialize the 1D convolutional layer."""
+        super({class_name}, self).__init__()
+        self.conv = layers.Conv1D(
+            filters={filters},
+            kernel_size={kernel_size},
+            strides={strides},
+            padding='{padding}'
+        )
+
+    def call(self, inputs: tf.Tensor, training: Optional[bool] = None) -> tf.Tensor:
+        """
+        Forward pass through the 1D convolutional layer.
+
+        Args:
+            inputs: Input tensor of shape [batch, steps, channels]
+            training: Whether in training mode
+
+        Returns:
+            Output tensor of shape [batch, steps_out, {filters}]
+        """
+        # Apply 1D convolution
+        x = self.conv(inputs)
+        return x'''
+
+    elif node_type == 'conv3d':
+        filters = config.get('filters', 64)
+        kernel_size = config.get('kernel_size', 3)
+        strides = config.get('strides', 1)
+        padding = config.get('padding', 'valid')
+
+        return f'''class {class_name}(layers.Layer):
+    """
+    3D Convolutional Layer
+
+    Applies a 3D convolution over an input signal.
+    Commonly used for volumetric data like video or 3D medical imaging.
+
+    Parameters:
+        - Filters: {filters}
+        - Kernel size: {kernel_size}x{kernel_size}x{kernel_size}
+        - Strides: {strides}
+        - Padding: '{padding}'
+
+    Shape:
+        - Input: [batch, D, H, W, C] (NDHWC format)
+        - Output: [batch, D_out, H_out, W_out, {filters}]
+    """
+
+    def __init__(self):
+        """Initialize the 3D convolutional layer."""
+        super({class_name}, self).__init__()
+        self.conv = layers.Conv3D(
+            filters={filters},
+            kernel_size={kernel_size},
+            strides={strides},
+            padding='{padding}'
+        )
+
+    def call(self, inputs: tf.Tensor, training: Optional[bool] = None) -> tf.Tensor:
+        """
+        Forward pass through the 3D convolutional layer.
+
+        Args:
+            inputs: Input tensor of shape [batch, D, H, W, C]
+            training: Whether in training mode
+
+        Returns:
+            Output tensor of shape [batch, D_out, H_out, W_out, {filters}]
+        """
+        # Apply 3D convolution
+        x = self.conv(inputs)
+        return x'''
+
+    elif node_type == 'lstm':
+        units = config.get('units', 128)
+        return_sequences = config.get('return_sequences', False)
+        dropout = config.get('dropout', 0.0)
+        recurrent_dropout = config.get('recurrent_dropout', 0.0)
+
+        output_shape = f"[batch, timesteps, {units}]" if return_sequences else f"[batch, {units}]"
+
+        return f'''class {class_name}(layers.Layer):
+    """
+    Long Short-Term Memory (LSTM) Layer
+
+    Applies an LSTM RNN to an input sequence.
+    Learns long-term dependencies in sequential data.
+
+    Parameters:
+        - Units: {units}
+        - Return sequences: {return_sequences}
+        - Dropout: {dropout}
+        - Recurrent dropout: {recurrent_dropout}
+
+    Shape:
+        - Input: [batch, timesteps, features]
+        - Output: {output_shape}
+    """
+
+    def __init__(self):
+        """Initialize the LSTM layer."""
+        super({class_name}, self).__init__()
+        self.lstm = layers.LSTM(
+            units={units},
+            return_sequences={return_sequences},
+            dropout={dropout},
+            recurrent_dropout={recurrent_dropout}
+        )
+
+    def call(self, inputs: tf.Tensor, training: Optional[bool] = None) -> tf.Tensor:
+        """
+        Forward pass through the LSTM layer.
+
+        Args:
+            inputs: Input tensor of shape [batch, timesteps, features]
+            training: Whether in training mode
+
+        Returns:
+            Output tensor of shape {output_shape}
+        """
+        # Apply LSTM
+        x = self.lstm(inputs, training=training)
+        return x'''
+
+    elif node_type == 'gru':
+        units = config.get('units', 128)
+        return_sequences = config.get('return_sequences', False)
+        dropout = config.get('dropout', 0.0)
+        recurrent_dropout = config.get('recurrent_dropout', 0.0)
+
+        output_shape = f"[batch, timesteps, {units}]" if return_sequences else f"[batch, {units}]"
+
+        return f'''class {class_name}(layers.Layer):
+    """
+    Gated Recurrent Unit (GRU) Layer
+
+    Applies a GRU RNN to an input sequence.
+    Simpler alternative to LSTM with fewer parameters.
+
+    Parameters:
+        - Units: {units}
+        - Return sequences: {return_sequences}
+        - Dropout: {dropout}
+        - Recurrent dropout: {recurrent_dropout}
+
+    Shape:
+        - Input: [batch, timesteps, features]
+        - Output: {output_shape}
+    """
+
+    def __init__(self):
+        """Initialize the GRU layer."""
+        super({class_name}, self).__init__()
+        self.gru = layers.GRU(
+            units={units},
+            return_sequences={return_sequences},
+            dropout={dropout},
+            recurrent_dropout={recurrent_dropout}
+        )
+
+    def call(self, inputs: tf.Tensor, training: Optional[bool] = None) -> tf.Tensor:
+        """
+        Forward pass through the GRU layer.
+
+        Args:
+            inputs: Input tensor of shape [batch, timesteps, features]
+            training: Whether in training mode
+
+        Returns:
+            Output tensor of shape {output_shape}
+        """
+        # Apply GRU
+        x = self.gru(inputs, training=training)
+        return x'''
+
+    elif node_type == 'embedding':
+        input_dim = config.get('input_dim', 10000)
+        output_dim = config.get('output_dim', 128)
+        mask_zero = config.get('mask_zero', False)
+
+        return f'''class {class_name}(layers.Layer):
+    """
+    Embedding Layer
+
+    Turns positive integers (indexes) into dense vectors of fixed size.
+    Commonly used for text and categorical data.
+
+    Parameters:
+        - Input dimension (vocabulary size): {input_dim}
+        - Output dimension (embedding size): {output_dim}
+        - Mask zero: {mask_zero}
+
+    Shape:
+        - Input: [batch, sequence_length] (integer indices)
+        - Output: [batch, sequence_length, {output_dim}]
+    """
+
+    def __init__(self):
+        """Initialize the embedding layer."""
+        super({class_name}, self).__init__()
+        self.embedding = layers.Embedding(
+            input_dim={input_dim},
+            output_dim={output_dim},
+            mask_zero={mask_zero}
+        )
+
+    def call(self, inputs: tf.Tensor, training: Optional[bool] = None) -> tf.Tensor:
+        """
+        Forward pass through the embedding layer.
+
+        Args:
+            inputs: Input tensor of integer indices [batch, seq_len]
+            training: Whether in training mode
+
+        Returns:
+            Output tensor of embeddings [batch, seq_len, {output_dim}]
+        """
+        # Look up embeddings
+        x = self.embedding(inputs)
+        return x'''
+
     return None
 
 
@@ -926,7 +1350,7 @@ def generate_forward_line(
         shape_comment = f"  # Shape: [batch, {u}]"
 
     # Handle layers that need training parameter
-    if node_type in ('dropout', 'batchnorm', 'batchnorm2d'):
+    if node_type in ('dropout', 'batchnorm', 'batchnorm2d', 'lstm', 'gru'):
         return f"{output_var} = self.{layer_name}({input_var}, training=training){shape_comment}"
     # Handle merge layers
     elif node_type in ('concat', 'add'):
@@ -944,12 +1368,34 @@ def get_layer_class_name(node_type: str, idx: int, config: Dict[str, Any]) -> st
         filters = config.get('filters', 64)
         kernel = config.get('kernel_size', 3)
         return f"{type_name}Layer_{filters}filters_{kernel}x{kernel}"
+    elif node_type == 'conv1d':
+        filters = config.get('filters', 64)
+        kernel = config.get('kernel_size', 3)
+        return f"Conv1DLayer_{filters}filters_{kernel}"
+    elif node_type == 'conv3d':
+        filters = config.get('filters', 64)
+        kernel = config.get('kernel_size', 3)
+        return f"Conv3DLayer_{filters}filters_{kernel}x{kernel}x{kernel}"
     elif node_type == 'linear':
         units = config.get('units', 128)
         return f"DenseLayer_{units}units"
     elif node_type in ('maxpool2d', 'maxpool'):
         pool_size = config.get('pool_size', 2)
         return f"MaxPool2DLayer_{pool_size}x{pool_size}"
+    elif node_type == 'avgpool2d':
+        pool_size = config.get('pool_size', 2)
+        return f"AvgPool2DLayer_{pool_size}x{pool_size}"
+    elif node_type == 'adaptiveavgpool2d':
+        return f"GlobalAvgPool2DLayer_{idx}"
+    elif node_type == 'lstm':
+        units = config.get('units', 128)
+        return f"LSTMLayer_{units}units"
+    elif node_type == 'gru':
+        units = config.get('units', 128)
+        return f"GRULayer_{units}units"
+    elif node_type == 'embedding':
+        output_dim = config.get('output_dim', 128)
+        return f"EmbeddingLayer_{output_dim}dim"
     else:
         return f"{type_name}Layer_{idx}"
 
@@ -960,17 +1406,33 @@ def get_layer_variable_name(node_type: str, idx: int, config: Dict[str, Any]) ->
     if node_type == 'conv2d':
         filters = config.get('filters', 64)
         return f"conv_{filters}filters"
+    elif node_type == 'conv1d':
+        filters = config.get('filters', 64)
+        return f"conv1d_{filters}filters"
+    elif node_type == 'conv3d':
+        filters = config.get('filters', 64)
+        return f"conv3d_{filters}filters"
     elif node_type == 'linear':
         units = config.get('units', 128)
         return f"dense_{units}"
     elif node_type in ('maxpool2d', 'maxpool'):
         return f"maxpool_{idx}"
+    elif node_type == 'avgpool2d':
+        return f"avgpool_{idx}"
+    elif node_type == 'adaptiveavgpool2d':
+        return f"global_avgpool_{idx}"
     elif node_type == 'flatten':
         return f"flatten"
     elif node_type == 'dropout':
         return f"dropout_{idx}"
     elif node_type in ('batchnorm', 'batchnorm2d'):
         return f"batchnorm_{idx}"
+    elif node_type == 'lstm':
+        return f"lstm_{idx}"
+    elif node_type == 'gru':
+        return f"gru_{idx}"
+    elif node_type == 'embedding':
+        return f"embedding_{idx}"
     elif node_type == 'concat':
         return f"concat_{idx}"
     elif node_type == 'add':

@@ -17,6 +17,7 @@ from .gru import GRUNode
 from .embedding import EmbeddingNode
 from .concat import ConcatNode
 from .add import AddNode
+from .custom import CustomNode
 
 __all__ = [
     'LinearNode',
@@ -36,4 +37,5 @@ __all__ = [
     'EmbeddingNode',
     'ConcatNode',
     'AddNode',
+    'CustomNode',
 ]

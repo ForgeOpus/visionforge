@@ -10,7 +10,7 @@ export type BlockType =
   | 'batchnorm'
   | 'relu'
   | 'flatten'
-  | 'maxpool'
+  | 'maxpool2d'
   | 'attention'
   | 'concat'
   | 'softmax'

@@ -259,7 +259,7 @@ def infer_shapes(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Dict[str, An
                     shape_info['out_height'] = (prev_shape['out_height'] + 2*padding - kernel_size) // stride + 1
                     shape_info['out_width'] = (prev_shape['out_width'] + 2*padding - kernel_size) // stride + 1
 
-        elif node_type == 'maxpool':
+        elif node_type == 'maxpool2d':
             # Preserve channels, reduce spatial dimensions
             if incoming and incoming[0] in shape_map:
                 prev_shape = shape_map[incoming[0]]
@@ -303,6 +303,111 @@ def infer_shapes(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Dict[str, An
                     shape_info['out_height'] = prev_shape['out_height']
                 if 'out_width' in prev_shape:
                     shape_info['out_width'] = prev_shape['out_width']
+
+        elif node_type == 'avgpool2d':
+            # Preserve channels, reduce spatial dimensions
+            if incoming and incoming[0] in shape_map:
+                prev_shape = shape_map[incoming[0]]
+                shape_info['in_channels'] = prev_shape.get('out_channels', 64)
+                shape_info['out_channels'] = shape_info['in_channels']
+
+                kernel_size = config.get('kernel_size', 2)
+                stride = config.get('stride', 2)
+                padding = config.get('padding', 0)
+
+                if 'out_height' in prev_shape and 'out_width' in prev_shape:
+                    shape_info['out_height'] = (prev_shape['out_height'] + 2*padding - kernel_size) // stride + 1
+                    shape_info['out_width'] = (prev_shape['out_width'] + 2*padding - kernel_size) // stride + 1
+
+        elif node_type == 'adaptiveavgpool2d':
+            # Preserve channels, set fixed output size
+            if incoming and incoming[0] in shape_map:
+                prev_shape = shape_map[incoming[0]]
+                shape_info['in_channels'] = prev_shape.get('out_channels', 64)
+                shape_info['out_channels'] = shape_info['in_channels']
+
+                # Parse output size
+                output_size_str = str(config.get('output_size', '1'))
+                try:
+                    if "," in output_size_str or "[" in output_size_str:
+                        output_size_str = output_size_str.strip("[]()").replace(" ", "")
+                        parts = output_size_str.split(",")
+                        shape_info['out_height'] = int(parts[0])
+                        shape_info['out_width'] = int(parts[1]) if len(parts) > 1 else int(parts[0])
+                    else:
+                        shape_info['out_height'] = int(output_size_str)
+                        shape_info['out_width'] = int(output_size_str)
+                except:
+                    shape_info['out_height'] = 1
+                    shape_info['out_width'] = 1
+
+        elif node_type == 'conv1d':
+            # Get input channels from previous layer
+            if incoming and incoming[0] in shape_map:
+                shape_info['in_channels'] = shape_map[incoming[0]].get('out_channels', 1)
+            else:
+                shape_info['in_channels'] = 1
+
+            # Output channels from config
+            shape_info['out_channels'] = config.get('out_channels', 64)
+
+        elif node_type == 'conv3d':
+            # Get input channels from previous layer
+            if incoming and incoming[0] in shape_map:
+                shape_info['in_channels'] = shape_map[incoming[0]].get('out_channels', 1)
+            else:
+                shape_info['in_channels'] = 1
+
+            # Output channels from config
+            shape_info['out_channels'] = config.get('out_channels', 64)
+
+        elif node_type in ('lstm', 'gru'):
+            # Get input features from previous layer
+            if incoming and incoming[0] in shape_map:
+                prev_shape = shape_map[incoming[0]]
+                shape_info['in_features'] = prev_shape.get('out_features', 128)
+            else:
+                shape_info['in_features'] = 128
+
+            # Output features based on hidden size and bidirectional
+            hidden_size = config.get('hidden_size', 128)
+            bidirectional = config.get('bidirectional', False)
+            shape_info['out_features'] = hidden_size * (2 if bidirectional else 1)
+
+        elif node_type == 'embedding':
+            # Output features from embedding dimension
+            shape_info['out_features'] = config.get('embedding_dim', 128)
+
+        elif node_type == 'concat':
+            # Sum channels/features along concat dimension
+            if incoming:
+                dim = config.get('dim', 1)
+                total = 0
+                for src_id in incoming:
+                    if src_id in shape_map:
+                        prev_shape = shape_map[src_id]
+                        if dim == 1:  # Channel dimension for NCHW
+                            total += prev_shape.get('out_channels', prev_shape.get('out_features', 0))
+                        else:
+                            total += prev_shape.get('out_features', prev_shape.get('out_channels', 0))
+
+                if dim == 1 and total > 0:
+                    shape_info['out_channels'] = total
+                    # Copy spatial dims from first input
+                    if incoming[0] in shape_map:
+                        first = shape_map[incoming[0]]
+                        if 'out_height' in first:
+                            shape_info['out_height'] = first['out_height']
+                        if 'out_width' in first:
+                            shape_info['out_width'] = first['out_width']
+                else:
+                    shape_info['out_features'] = total if total > 0 else 256
+
+        elif node_type == 'add':
+            # Preserve shape from first input (all inputs must have same shape)
+            if incoming and incoming[0] in shape_map:
+                prev_shape = shape_map[incoming[0]]
+                shape_info.update(prev_shape)
 
         else:
             # For other layers, try to preserve shape from input
@@ -571,7 +676,7 @@ def generate_layer_class(
         x = self.linear(x)
         return x'''
 
-    elif node_type == 'maxpool':
+    elif node_type == 'maxpool2d':
         kernel_size = config.get('kernel_size', 2)
         stride = config.get('stride', 2)
         padding = config.get('padding', 0)
@@ -906,6 +1011,454 @@ def generate_layer_class(
         # Replace this with your custom logic
         return x'''
 
+    elif node_type == 'avgpool2d':
+        kernel_size = config.get('kernel_size', 2)
+        stride = config.get('stride', 2)
+        padding = config.get('padding', 0)
+
+        return f'''class {class_name}(nn.Module):
+    """
+    2D Average Pooling Layer
+
+    Applies a 2D average pooling over an input signal.
+    Reduces spatial dimensions while preserving channel count.
+
+    Parameters:
+        - Kernel size: {kernel_size}x{kernel_size}
+        - Stride: {stride}
+        - Padding: {padding}
+
+    Shape:
+        - Input: [batch_size, C, H, W]
+        - Output: [batch_size, C, H/{stride}, W/{stride}]
+    """
+
+    def __init__(self):
+        """Initialize the average pooling layer."""
+        super({class_name}, self).__init__()
+        self.pool = nn.AvgPool2d(
+            kernel_size={kernel_size},
+            stride={stride},
+            padding={padding}
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the pooling layer.
+
+        Args:
+            x: Input tensor of shape [batch, C, H, W]
+
+        Returns:
+            Output tensor with reduced spatial dimensions
+        """
+        # Apply average pooling
+        x = self.pool(x)
+        return x'''
+
+    elif node_type == 'adaptiveavgpool2d':
+        output_size_str = str(config.get('output_size', '1'))
+
+        # Parse output size
+        if "," in output_size_str or "[" in output_size_str:
+            output_size_str = output_size_str.strip("[]()").replace(" ", "")
+            parts = output_size_str.split(",")
+            out_h = int(parts[0])
+            out_w = int(parts[1]) if len(parts) > 1 else out_h
+            output_size = f"({out_h}, {out_w})"
+        else:
+            out_h = out_w = int(output_size_str)
+            output_size = f"{out_h}"
+
+        return f'''class {class_name}(nn.Module):
+    """
+    Adaptive 2D Average Pooling Layer
+
+    Applies adaptive average pooling to produce output of specified size.
+    Automatically calculates kernel size and stride based on input and output sizes.
+
+    Parameters:
+        - Output size: {out_h}x{out_w}
+
+    Shape:
+        - Input: [batch_size, C, H, W]
+        - Output: [batch_size, C, {out_h}, {out_w}]
+    """
+
+    def __init__(self):
+        """Initialize the adaptive average pooling layer."""
+        super({class_name}, self).__init__()
+        self.pool = nn.AdaptiveAvgPool2d({output_size})
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the adaptive pooling layer.
+
+        Args:
+            x: Input tensor of shape [batch, C, H, W]
+
+        Returns:
+            Output tensor of shape [batch, C, {out_h}, {out_w}]
+        """
+        # Apply adaptive average pooling
+        x = self.pool(x)
+        return x'''
+
+    elif node_type == 'conv1d':
+        in_channels = shape_info.get('in_channels', 1)
+        out_channels = config.get('out_channels', 64)
+        kernel_size = config.get('kernel_size', 3)
+        stride = config.get('stride', 1)
+        padding = config.get('padding', 0)
+        dilation = config.get('dilation', 1)
+        bias = config.get('bias', True)
+
+        return f'''class {class_name}(nn.Module):
+    """
+    1D Convolutional Layer
+
+    Applies a 1D convolution over an input signal composed of several input channels.
+    Commonly used for sequence data like time series or text.
+
+    Parameters:
+        - Input channels: {in_channels}
+        - Output channels: {out_channels}
+        - Kernel size: {kernel_size}
+        - Stride: {stride}
+        - Padding: {padding}
+        - Dilation: {dilation}
+
+    Shape:
+        - Input: [batch_size, {in_channels}, L]
+        - Output: [batch_size, {out_channels}, L_out]
+    """
+
+    def __init__(self, in_channels: int = {in_channels}):
+        """Initialize the 1D convolutional layer."""
+        super({class_name}, self).__init__()
+        self.conv = nn.Conv1d(
+            in_channels,
+            {out_channels},
+            kernel_size={kernel_size},
+            stride={stride},
+            padding={padding},
+            dilation={dilation},
+            bias={bias}
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the 1D convolutional layer.
+
+        Args:
+            x: Input tensor of shape [batch, {in_channels}, L]
+
+        Returns:
+            Output tensor of shape [batch, {out_channels}, L_out]
+        """
+        # Apply 1D convolution
+        x = self.conv(x)
+        return x'''
+
+    elif node_type == 'conv3d':
+        in_channels = shape_info.get('in_channels', 1)
+        out_channels = config.get('out_channels', 64)
+        kernel_size = config.get('kernel_size', 3)
+        stride = config.get('stride', 1)
+        padding = config.get('padding', 0)
+        dilation = config.get('dilation', 1)
+        bias = config.get('bias', True)
+
+        return f'''class {class_name}(nn.Module):
+    """
+    3D Convolutional Layer
+
+    Applies a 3D convolution over an input signal composed of several input channels.
+    Commonly used for volumetric data like video or 3D medical imaging.
+
+    Parameters:
+        - Input channels: {in_channels}
+        - Output channels: {out_channels}
+        - Kernel size: {kernel_size}x{kernel_size}x{kernel_size}
+        - Stride: {stride}
+        - Padding: {padding}
+        - Dilation: {dilation}
+
+    Shape:
+        - Input: [batch_size, {in_channels}, D, H, W]
+        - Output: [batch_size, {out_channels}, D_out, H_out, W_out]
+    """
+
+    def __init__(self, in_channels: int = {in_channels}):
+        """Initialize the 3D convolutional layer."""
+        super({class_name}, self).__init__()
+        self.conv = nn.Conv3d(
+            in_channels,
+            {out_channels},
+            kernel_size={kernel_size},
+            stride={stride},
+            padding={padding},
+            dilation={dilation},
+            bias={bias}
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the 3D convolutional layer.
+
+        Args:
+            x: Input tensor of shape [batch, {in_channels}, D, H, W]
+
+        Returns:
+            Output tensor of shape [batch, {out_channels}, D_out, H_out, W_out]
+        """
+        # Apply 3D convolution
+        x = self.conv(x)
+        return x'''
+
+    elif node_type == 'lstm':
+        in_features = shape_info.get('in_features', 128)
+        hidden_size = config.get('hidden_size', 128)
+        num_layers = config.get('num_layers', 1)
+        bias = config.get('bias', True)
+        batch_first = config.get('batch_first', True)
+        dropout = config.get('dropout', 0.0)
+        bidirectional = config.get('bidirectional', False)
+
+        output_size = hidden_size * (2 if bidirectional else 1)
+
+        return f'''class {class_name}(nn.Module):
+    """
+    Long Short-Term Memory (LSTM) Layer
+
+    Applies a multi-layer LSTM RNN to an input sequence.
+    Learns long-term dependencies in sequential data.
+
+    Parameters:
+        - Input size: {in_features}
+        - Hidden size: {hidden_size}
+        - Number of layers: {num_layers}
+        - Bidirectional: {bidirectional}
+        - Dropout: {dropout}
+
+    Shape:
+        - Input: [batch_size, seq_len, {in_features}]
+        - Output: [batch_size, seq_len, {output_size}]
+    """
+
+    def __init__(self, in_features: int = {in_features}):
+        """Initialize the LSTM layer."""
+        super({class_name}, self).__init__()
+        self.lstm = nn.LSTM(
+            in_features,
+            {hidden_size},
+            num_layers={num_layers},
+            bias={bias},
+            batch_first={batch_first},
+            dropout={dropout},
+            bidirectional={bidirectional}
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the LSTM layer.
+
+        Args:
+            x: Input tensor of shape [batch, seq_len, {in_features}]
+
+        Returns:
+            Output tensor of shape [batch, seq_len, {output_size}]
+        """
+        # Apply LSTM (returns output, (h_n, c_n))
+        x, _ = self.lstm(x)
+        return x'''
+
+    elif node_type == 'gru':
+        in_features = shape_info.get('in_features', 128)
+        hidden_size = config.get('hidden_size', 128)
+        num_layers = config.get('num_layers', 1)
+        bias = config.get('bias', True)
+        batch_first = config.get('batch_first', True)
+        dropout = config.get('dropout', 0.0)
+        bidirectional = config.get('bidirectional', False)
+
+        output_size = hidden_size * (2 if bidirectional else 1)
+
+        return f'''class {class_name}(nn.Module):
+    """
+    Gated Recurrent Unit (GRU) Layer
+
+    Applies a multi-layer GRU RNN to an input sequence.
+    Simpler alternative to LSTM with fewer parameters.
+
+    Parameters:
+        - Input size: {in_features}
+        - Hidden size: {hidden_size}
+        - Number of layers: {num_layers}
+        - Bidirectional: {bidirectional}
+        - Dropout: {dropout}
+
+    Shape:
+        - Input: [batch_size, seq_len, {in_features}]
+        - Output: [batch_size, seq_len, {output_size}]
+    """
+
+    def __init__(self, in_features: int = {in_features}):
+        """Initialize the GRU layer."""
+        super({class_name}, self).__init__()
+        self.gru = nn.GRU(
+            in_features,
+            {hidden_size},
+            num_layers={num_layers},
+            bias={bias},
+            batch_first={batch_first},
+            dropout={dropout},
+            bidirectional={bidirectional}
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the GRU layer.
+
+        Args:
+            x: Input tensor of shape [batch, seq_len, {in_features}]
+
+        Returns:
+            Output tensor of shape [batch, seq_len, {output_size}]
+        """
+        # Apply GRU (returns output, h_n)
+        x, _ = self.gru(x)
+        return x'''
+
+    elif node_type == 'embedding':
+        num_embeddings = config.get('num_embeddings', 10000)
+        embedding_dim = config.get('embedding_dim', 128)
+        padding_idx = config.get('padding_idx', -1)
+        max_norm = config.get('max_norm', 0)
+        scale_grad_by_freq = config.get('scale_grad_by_freq', False)
+
+        # Build optional parameters
+        optional_params = []
+        if padding_idx >= 0:
+            optional_params.append(f"padding_idx={padding_idx}")
+        if max_norm > 0:
+            optional_params.append(f"max_norm={max_norm}")
+        if scale_grad_by_freq:
+            optional_params.append(f"scale_grad_by_freq={scale_grad_by_freq}")
+
+        optional_params_str = ",\n            ".join(optional_params)
+        if optional_params_str:
+            optional_params_str = ",\n            " + optional_params_str
+
+        return f'''class {class_name}(nn.Module):
+    """
+    Embedding Layer
+
+    A lookup table that stores embeddings of a fixed dictionary and size.
+    Commonly used to store word embeddings for NLP tasks.
+
+    Parameters:
+        - Vocabulary size: {num_embeddings}
+        - Embedding dimension: {embedding_dim}
+        - Padding index: {padding_idx if padding_idx >= 0 else 'None'}
+
+    Shape:
+        - Input: [batch_size, seq_len] (LongTensor of indices)
+        - Output: [batch_size, seq_len, {embedding_dim}]
+    """
+
+    def __init__(self):
+        """Initialize the embedding layer."""
+        super({class_name}, self).__init__()
+        self.embedding = nn.Embedding(
+            num_embeddings={num_embeddings},
+            embedding_dim={embedding_dim}{optional_params_str}
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the embedding layer.
+
+        Args:
+            x: Input tensor of indices [batch, seq_len]
+
+        Returns:
+            Output tensor of embeddings [batch, seq_len, {embedding_dim}]
+        """
+        # Look up embeddings
+        x = self.embedding(x)
+        return x'''
+
+    elif node_type == 'concat':
+        dim = config.get('dim', 1)
+
+        return f'''class {class_name}(nn.Module):
+    """
+    Concatenation Layer
+
+    Concatenates multiple input tensors along a specified dimension.
+    Used for skip connections and multi-path architectures.
+
+    Parameters:
+        - Dimension: {dim}
+
+    Shape:
+        - Input: List of tensors with compatible shapes
+        - Output: Single concatenated tensor
+    """
+
+    def __init__(self):
+        """Initialize the concatenation layer."""
+        super({class_name}, self).__init__()
+        self.dim = {dim}
+
+    def forward(self, inputs: list) -> torch.Tensor:
+        """
+        Forward pass through the concatenation layer.
+
+        Args:
+            inputs: List of input tensors to concatenate
+
+        Returns:
+            Concatenated output tensor
+        """
+        # Concatenate along specified dimension
+        x = torch.cat(inputs, dim=self.dim)
+        return x'''
+
+    elif node_type == 'add':
+        return f'''class {class_name}(nn.Module):
+    """
+    Element-wise Addition Layer
+
+    Performs element-wise addition of multiple input tensors.
+    Used for residual connections in architectures like ResNet.
+
+    Shape:
+        - Input: List of tensors with identical shapes
+        - Output: Single tensor with same shape as inputs
+    """
+
+    def __init__(self):
+        """Initialize the addition layer."""
+        super({class_name}, self).__init__()
+
+    def forward(self, inputs: list) -> torch.Tensor:
+        """
+        Forward pass through the addition layer.
+
+        Args:
+            inputs: List of input tensors to add
+
+        Returns:
+            Sum of input tensors
+        """
+        # Element-wise addition
+        x = inputs[0]
+        for tensor in inputs[1:]:
+            x = x + tensor
+        return x'''
+
     return None
 
 
@@ -964,12 +1517,40 @@ def get_layer_class_name(node_type: str, idx: int, config: Dict[str, Any]) -> st
         channels = config.get('out_channels', 64)
         kernel = config.get('kernel_size', 3)
         return f"{type_name}Layer_{channels}ch_{kernel}x{kernel}"
+    elif node_type == 'conv1d':
+        channels = config.get('out_channels', 64)
+        kernel = config.get('kernel_size', 3)
+        return f"{type_name}Layer_{channels}ch_{kernel}"
+    elif node_type == 'conv3d':
+        channels = config.get('out_channels', 64)
+        kernel = config.get('kernel_size', 3)
+        return f"{type_name}Layer_{channels}ch_{kernel}x{kernel}x{kernel}"
     elif node_type == 'linear':
         features = config.get('out_features', 128)
         return f"{type_name}Layer_{features}units"
-    elif node_type == 'maxpool':
+    elif node_type == 'maxpool2d':
         kernel = config.get('kernel_size', 2)
         return f"{type_name}Layer_{kernel}x{kernel}"
+    elif node_type == 'avgpool2d':
+        kernel = config.get('kernel_size', 2)
+        return f"AvgPool2DLayer_{kernel}x{kernel}"
+    elif node_type == 'adaptiveavgpool2d':
+        output_size = config.get('output_size', '1')
+        return f"AdaptiveAvgPool2DLayer_{output_size}"
+    elif node_type == 'lstm':
+        hidden = config.get('hidden_size', 128)
+        return f"LSTMLayer_{hidden}hidden"
+    elif node_type == 'gru':
+        hidden = config.get('hidden_size', 128)
+        return f"GRULayer_{hidden}hidden"
+    elif node_type == 'embedding':
+        dim = config.get('embedding_dim', 128)
+        return f"EmbeddingLayer_{dim}dim"
+    elif node_type == 'concat':
+        dim = config.get('dim', 1)
+        return f"ConcatLayer_dim{dim}"
+    elif node_type == 'add':
+        return f"AddLayer_{idx}"
     else:
         return f"{type_name}Layer_{idx}"
 
@@ -980,11 +1561,21 @@ def get_layer_variable_name(node_type: str, idx: int, config: Dict[str, Any]) ->
     if node_type == 'conv2d':
         channels = config.get('out_channels', 64)
         return f"conv_{channels}ch"
+    elif node_type == 'conv1d':
+        channels = config.get('out_channels', 64)
+        return f"conv1d_{channels}ch"
+    elif node_type == 'conv3d':
+        channels = config.get('out_channels', 64)
+        return f"conv3d_{channels}ch"
     elif node_type == 'linear':
         features = config.get('out_features', 128)
         return f"fc_{features}"
-    elif node_type == 'maxpool':
+    elif node_type == 'maxpool2d':
         return f"maxpool_{idx}"
+    elif node_type == 'avgpool2d':
+        return f"avgpool_{idx}"
+    elif node_type == 'adaptiveavgpool2d':
+        return f"adaptive_avgpool_{idx}"
     elif node_type == 'flatten':
         return f"flatten"
     elif node_type == 'relu':
@@ -997,6 +1588,16 @@ def get_layer_variable_name(node_type: str, idx: int, config: Dict[str, Any]) ->
         return f"softmax"
     elif node_type == 'attention':
         return f"attention_{idx}"
+    elif node_type == 'lstm':
+        return f"lstm_{idx}"
+    elif node_type == 'gru':
+        return f"gru_{idx}"
+    elif node_type == 'embedding':
+        return f"embedding_{idx}"
+    elif node_type == 'concat':
+        return f"concat_{idx}"
+    elif node_type == 'add':
+        return f"add_{idx}"
     else:
         return f"layer_{idx}"
 
