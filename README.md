@@ -237,7 +237,7 @@ Contributions are welcome! Feel free to open issues or submit PRs.
 
 ## 📄 License
 
-This project is licensed under the MIT License.
+Please check the `LICENSE` file.
 
 <br />
 
