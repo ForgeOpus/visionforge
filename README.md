@@ -241,12 +241,6 @@ Please check the `LICENSE` file.
 
 <br />
 
-## 🙏 Acknowledgments
-
-Built with ❤️ for Developers
-
-<br />
-
 <div align="center">
 
 ---
