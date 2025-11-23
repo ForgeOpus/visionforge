@@ -235,7 +235,7 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
 
         {!data.outputShape && data.blockType !== 'input' && data.blockType !== 'dataloader' && data.blockType !== 'empty' && (
           <div className="text-[10px] text-orange-600">
-            Configure params
+            {!data.inputShape ? 'Connect input' : 'Configure params'}
           </div>
         )}
       </div>

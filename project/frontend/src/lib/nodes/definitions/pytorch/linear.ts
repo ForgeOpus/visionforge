@@ -36,7 +36,9 @@ export class LinearNode extends NodeDefinition {
   ]
 
   computeOutputShape(inputShape: TensorShape | undefined, config: BlockConfig): TensorShape | undefined {
-    if (!inputShape || !config.out_features) {
+    // Check if out_features is properly set (not undefined, null, or empty)
+    const outFeatures = config.out_features
+    if (!inputShape || outFeatures === undefined || outFeatures === null || outFeatures === '') {
       return undefined
     }
 
@@ -44,8 +46,13 @@ export class LinearNode extends NodeDefinition {
       return undefined
     }
 
+    const numOutFeatures = Number(outFeatures)
+    if (isNaN(numOutFeatures) || numOutFeatures <= 0) {
+      return undefined
+    }
+
     return {
-      dims: [inputShape.dims[0], config.out_features as number],
+      dims: [inputShape.dims[0], numOutFeatures],
       description: 'Fully connected output'
     }
   }

@@ -1,0 +1,9 @@
+{#
+TensorFlow Embedding Template
+
+Context variables:
+- config.input_dim: Vocabulary size
+- config.output_dim: Embedding dimension
+- config.mask_zero: Whether to mask zeros
+#}
+tf.keras.layers.Embedding(input_dim={{ config.input_dim }}, output_dim={{ config.output_dim }}, mask_zero={{ config.mask_zero|lower }})

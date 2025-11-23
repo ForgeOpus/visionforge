@@ -1,0 +1,11 @@
+{#
+PyTorch LSTM Template
+
+Context variables:
+- config.hidden_size: Hidden state size
+- config.num_layers: Number of layers
+- config.bidirectional: Bidirectional flag
+- config.dropout: Dropout probability
+- in_features: Input features (from context)
+#}
+nn.LSTM(input_size={{ in_features }}, hidden_size={{ config.hidden_size }}, num_layers={{ config.num_layers }}, bidirectional={{ config.bidirectional|lower }}, dropout={{ config.dropout }}, batch_first=True)

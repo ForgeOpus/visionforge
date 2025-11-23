@@ -155,13 +155,14 @@ def get_node_definitions(request):
     Get available node definitions for a specific framework
     Returns node metadata and configuration schemas
     """
-    from block_manager.services.nodes.specs.registry import list_node_specs
-    from block_manager.services.nodes.specs.serialization import spec_to_dict
-    from block_manager.services.nodes.specs import Framework
-    
+    from block_manager.services.nodes.core import (
+        get_all_node_definitions as get_all_nodes,
+        Framework
+    )
+
     # Get framework from query params, default to PyTorch
     framework_param = request.query_params.get('framework', 'pytorch').lower()
-    
+
     try:
         framework = Framework(framework_param)
     except ValueError:
@@ -169,20 +170,20 @@ def get_node_definitions(request):
             {'success': False, 'error': f'Invalid framework: {framework_param}. Must be pytorch or tensorflow'},
             status=status.HTTP_400_BAD_REQUEST
         )
-    
-    # Get all node specs for the framework
-    node_specs = list_node_specs(framework)
-    
+
+    # Get all node definitions for the framework
+    node_definitions = get_all_nodes(framework)
+
     # Serialize to dict format
     definitions_data = []
-    for node_spec in node_specs:
+    for node_def in node_definitions:
         try:
-            definitions_data.append(spec_to_dict(node_spec))
+            definitions_data.append(node_def.to_dict())
         except Exception as e:
             # Skip nodes that fail to serialize
-            print(f"Error serializing node {node_spec.type}: {e}")
+            print(f"Error serializing node {node_def.metadata.type}: {e}")
             continue
-    
+
     return Response({
         'success': True,
         'framework': framework.value,
@@ -196,13 +197,14 @@ def get_node_definition(request, node_type):
     """
     Get a specific node definition by type
     """
-    from block_manager.services.nodes.specs.registry import get_node_spec
-    from block_manager.services.nodes.specs.serialization import spec_to_dict
-    from block_manager.services.nodes.specs import Framework
-    
+    from block_manager.services.nodes.core import (
+        get_node_definition as get_node_def,
+        Framework
+    )
+
     # Get framework from query params, default to PyTorch
     framework_param = request.query_params.get('framework', 'pytorch').lower()
-    
+
     try:
         framework = Framework(framework_param)
     except ValueError:
@@ -210,20 +212,20 @@ def get_node_definition(request, node_type):
             {'success': False, 'error': f'Invalid framework: {framework_param}'},
             status=status.HTTP_400_BAD_REQUEST
         )
-    
-    # Get the node spec
-    node_spec = get_node_spec(node_type, framework)
-    
-    if not node_spec:
+
+    # Get the node definition
+    node_def = get_node_def(node_type, framework)
+
+    if not node_def:
         return Response(
             {'success': False, 'error': f'Node type "{node_type}" not found for framework {framework.value}'},
             status=status.HTTP_404_NOT_FOUND
         )
-    
+
     try:
         return Response({
             'success': True,
-            'definition': spec_to_dict(node_spec)
+            'definition': node_def.to_dict()
         })
     except Exception as e:
         return Response(
@@ -258,8 +260,10 @@ def render_node_code(request):
         "format": "class"
     }
     """
-    from block_manager.services.nodes.specs.registry import get_node_spec
-    from block_manager.services.nodes.specs import Framework
+    from block_manager.services.nodes.core import (
+        get_node_definition as get_node_def,
+        Framework
+    )
     from block_manager.services.pytorch_codegen import generate_single_layer_class as pytorch_generate_class
     from block_manager.services.tensorflow_codegen import generate_single_layer_class as tensorflow_generate_class
 
@@ -283,10 +287,10 @@ def render_node_code(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # Get the node spec (for validation)
-    node_spec = get_node_spec(node_type, framework)
+    # Get the node definition (for validation)
+    node_def = get_node_def(node_type, framework)
 
-    if not node_spec:
+    if not node_def:
         return Response(
             {'success': False, 'error': f'Node type "{node_type}" not found for framework {framework.value}'},
             status=status.HTTP_404_NOT_FOUND

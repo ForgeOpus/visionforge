@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from ..specs import Framework, NodeSpec
+from ..core import Framework
+from ..core.base import NodeDefinition
 from .shape import TensorShape
 
 
@@ -15,8 +16,8 @@ class ValidationError(Exception):
 
 
 def validate_connection(
-    source_spec: NodeSpec,
-    target_spec: NodeSpec,
+    source_spec: NodeDefinition,
+    target_spec: NodeDefinition,
     source_output_shape: Optional[TensorShape],
 ) -> tuple[bool, Optional[str]]:
     """
@@ -26,18 +27,18 @@ def validate_connection(
         (is_valid, error_message) - error_message is None if valid
     """
     # Input nodes can connect to anything
-    if source_spec.type == "input":
+    if source_spec.metadata.type == "input":
         return True, None
 
     # Output nodes can be connected from anything
-    if target_spec.type == "output":
+    if target_spec.metadata.type == "output":
         return True, None
 
     # Check framework compatibility
-    if source_spec.framework != target_spec.framework:
+    if source_spec.metadata.framework != target_spec.metadata.framework:
         return (
             False,
-            f"Framework mismatch: {source_spec.framework.value} → {target_spec.framework.value}",
+            f"Framework mismatch: {source_spec.metadata.framework.value} → {target_spec.metadata.framework.value}",
         )
 
     # Shape-based validation
@@ -46,14 +47,14 @@ def validate_connection(
         ndim = len(dims)
 
         # Conv2D requires 4D input
-        if target_spec.type == "conv2d" and ndim != 4:
+        if target_spec.metadata.type == "conv2d" and ndim != 4:
             return (
                 False,
                 f"Conv2D requires 4D input, got {ndim}D. Consider adding Flatten if coming from 2D layer.",
             )
 
         # Linear/Dense requires 2D input
-        if target_spec.type == "linear" and ndim != 2:
+        if target_spec.metadata.type == "linear" and ndim != 2:
             if ndim == 4:
                 return (
                     False,
@@ -62,14 +63,14 @@ def validate_connection(
             return False, f"Linear layer requires 2D input, got {ndim}D."
 
         # MaxPool requires 4D input
-        if target_spec.type == "maxpool" and ndim != 4:
+        if target_spec.metadata.type == "maxpool" and ndim != 4:
             return False, f"MaxPool requires 4D input, got {ndim}D."
 
         # BatchNorm dimension requirements
-        if target_spec.type == "batchnorm":
-            if source_spec.framework == Framework.PYTORCH and ndim not in (2, 3, 4):
+        if target_spec.metadata.type == "batchnorm":
+            if source_spec.metadata.framework == Framework.PYTORCH and ndim not in (2, 3, 4):
                 return False, f"BatchNorm requires 2D, 3D, or 4D input, got {ndim}D."
-            if source_spec.framework == Framework.TENSORFLOW and ndim < 2:
+            if source_spec.metadata.framework == Framework.TENSORFLOW and ndim < 2:
                 return False, f"BatchNorm requires at least 2D input, got {ndim}D."
 
     return True, None
@@ -77,7 +78,7 @@ def validate_connection(
 
 def validate_multi_input_connection(
     input_shapes: list[Optional[TensorShape]],
-    target_spec: NodeSpec,
+    target_spec: NodeDefinition,
 ) -> tuple[bool, Optional[str]]:
     """
     Validate connections for multi-input nodes (concat, add).
@@ -85,8 +86,8 @@ def validate_multi_input_connection(
     Returns:
         (is_valid, error_message) - error_message is None if valid
     """
-    if not target_spec.allows_multiple_inputs:
-        return False, f"{target_spec.label} does not support multiple inputs"
+    if not target_spec.allows_multiple_inputs():
+        return False, f"{target_spec.metadata.label} does not support multiple inputs"
 
     valid_shapes = [s for s in input_shapes if s is not None]
     
@@ -94,7 +95,7 @@ def validate_multi_input_connection(
         return False, "Multi-input nodes require at least 2 inputs"
 
     # For Add nodes, all shapes must match exactly
-    if target_spec.type == "add":
+    if target_spec.metadata.type == "add":
         first_dims = valid_shapes[0].get("dims", [])
         for i, shape in enumerate(valid_shapes[1:], 1):
             dims = shape.get("dims", [])
@@ -106,7 +107,7 @@ def validate_multi_input_connection(
         return True, None
 
     # For Concat nodes, all dimensions except concat axis must match
-    if target_spec.type == "concat":
+    if target_spec.metadata.type == "concat":
         first_dims = valid_shapes[0].get("dims", [])
         ndim = len(first_dims)
 
@@ -124,7 +125,7 @@ def validate_multi_input_connection(
 
 
 def validate_config(
-    node_spec: NodeSpec,
+    node_spec: NodeDefinition,
     config: Dict[str, Any],
 ) -> tuple[bool, list[str]]:
     """
@@ -149,10 +150,10 @@ def validate_config(
             continue
 
         # Type-specific validation
-        if field_spec.field_type == "number":
+        if field_spec.type == "number":
             try:
                 num_value = float(value)
-                
+
                 # Check min/max
                 if field_spec.min is not None and num_value < field_spec.min:
                     errors.append(
@@ -165,16 +166,16 @@ def validate_config(
             except (ValueError, TypeError):
                 errors.append(f"'{field_spec.label}' must be a number")
 
-        elif field_spec.field_type == "boolean":
+        elif field_spec.type == "boolean":
             if not isinstance(value, bool):
                 errors.append(f"'{field_spec.label}' must be true or false")
 
-        elif field_spec.field_type == "select":
+        elif field_spec.type == "select":
             if field_spec.options:
                 valid_values = [opt.value for opt in field_spec.options]
                 if value not in valid_values:
                     errors.append(
-                        f"'{field_spec.label}' must be one of: {', '.join(valid_values)}"
+                        f"'{field_spec.label}' must be one of: {', '.join(str(v) for v in valid_values)}"
                     )
 
     return len(errors) == 0, errors
