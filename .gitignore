@@ -44,7 +44,6 @@ pids
 
 */project/frontend/*.lock
 node_modules
-.github/copilot-instructions.md
 .github/project-spec.md
 *.pyc
 *.pyo
@@ -65,3 +64,4 @@ __pycache__
 .claude
 */.claude/*
 .claude/*
+.claude/
