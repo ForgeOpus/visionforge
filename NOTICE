@@ -1,0 +1,131 @@
+VisionForge
+Copyright (c) 2025, ForgeOpus
+
+This product includes software developed by ForgeOpus and the open source community.
+
+---
+
+THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
+
+This project incorporates material from the projects listed below
+(collectively, "Third Party Code"). ForgeOpus is not the original
+author of the Third Party Code. The original copyright notice and
+the license under which ForgeOpus received such Third Party Code
+are set forth below.
+
+---
+
+## Apache License 2.0 Notices
+
+The following components are provided under the Apache License 2.0.
+See THIRD-PARTY-NOTICES.md for the full license text.
+
+### Frontend (Node.js)
+- before-after-hook
+- class-variance-authority
+- fuse.js
+
+### Backend (Python)
+- google-generativeai
+- google-ai-generativelanguage
+- google-api-core
+- google-api-python-client
+- google-auth
+- google-auth-httplib2
+- googleapis-common-protos
+- grpcio
+- grpcio-status
+- proto-plus
+- requests
+- rsa
+
+---
+
+## Mozilla Public License 2.0 Notices
+
+The following components are provided under the Mozilla Public License 2.0:
+
+### LightningCSS
+Copyright (c) Devon Govett
+
+LightningCSS is an extremely fast CSS parser, transformer, bundler, and minifier.
+Source files that are modified remain under MPL-2.0.
+See: https://github.com/parcel-bundler/lightningcss
+
+Related packages:
+- lightningcss
+- lightningcss-linux-x64-gnu
+- lightningcss-linux-x64-musl
+
+Full MPL-2.0 license: https://www.mozilla.org/en-US/MPL/2.0/
+
+---
+
+## LGPL Notices
+
+The following Python packages are provided under the GNU Lesser General
+Public License (LGPL):
+
+### launchpadlib and related packages
+- launchpadlib (LGPL)
+- lazr.restfulclient (LGPL)
+- lazr.uri (LGPL)
+- wadllib (LGPL)
+
+These packages are used as standard Python dependencies and are dynamically
+linked at runtime. Users are free to replace these dependencies with
+compatible versions.
+
+Full LGPL license: https://www.gnu.org/licenses/lgpl.html
+
+---
+
+## Special Attributions
+
+### Radix UI
+Copyright © 2022 WorkOS
+
+Multiple Radix UI components are used for the user interface.
+License: MIT
+Website: https://www.radix-ui.com/
+
+### React
+Copyright © Meta Platforms, Inc. and affiliates.
+License: MIT
+Website: https://react.dev/
+
+### XYFlow (ReactFlow)
+Copyright © XYFlow
+License: MIT
+Website: https://xyflow.com/
+
+### Django
+Copyright © Django Software Foundation and individual contributors.
+License: BSD-3-Clause
+Website: https://www.djangoproject.com/
+
+### Tailwind CSS
+Copyright © Tailwind Labs Inc.
+License: MIT
+Website: https://tailwindcss.com/
+
+### Vite
+Copyright © 2019-present Yuxi (Evan) You and Vite contributors
+License: MIT
+Website: https://vitejs.dev/
+
+---
+
+## Additional Information
+
+For a complete list of all dependencies and their licenses, please see:
+- THIRD-PARTY-NOTICES.md (comprehensive license listing)
+- LICENSE (VisionForge project license)
+
+To generate current dependency license information:
+- Frontend: Run `npx license-checker` in project/frontend/
+- Backend: Run `pip-licenses` in project/
+
+---
+
+Last updated: 2025-11-23

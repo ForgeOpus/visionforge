@@ -403,6 +403,100 @@ Your PR will be merged when:
 
 ---
 
+## License and Attribution
+
+### Project License
+
+VisionForge is licensed under the **BSD 3-Clause License**. See [LICENSE](./LICENSE) for details.
+
+By contributing to VisionForge, you agree that your contributions will be licensed under the same BSD 3-Clause License.
+
+### Contributor License Agreement
+
+By submitting a pull request, you represent that:
+
+1. You have the right to submit the contribution
+2. You grant the project maintainers a perpetual, worldwide, non-exclusive license to use your contribution
+3. Your contribution is provided under the BSD 3-Clause License
+4. You understand that your contribution may be redistributed under this license
+
+### Third-Party Code
+
+If your contribution includes third-party code or dependencies:
+
+1. **Ensure compatible licensing** - Only use code under permissive licenses (MIT, Apache-2.0, BSD, ISC)
+2. **Avoid prohibited licenses** - Do not include GPL, AGPL, or SSPL licensed code
+3. **Document properly** - Update [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md) if adding new dependencies
+4. **Preserve copyright notices** - Keep existing copyright and license headers intact
+
+### Adding Dependencies
+
+When adding new dependencies (npm packages or Python packages):
+
+1. **Check the license** first:
+   ```bash
+   # For npm packages
+   npm info <package-name> license
+   
+   # For Python packages
+   pip show <package-name> | grep License
+   ```
+
+2. **Verify license compatibility**:
+   - ✅ Approved: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD, Unlicense
+   - ⚠️ Review required: LGPL, MPL-2.0 (ask maintainers first)
+   - ❌ Prohibited: GPL, AGPL, SSPL, proprietary without approval
+
+3. **Document the dependency**:
+   - Frontend dependencies are auto-scanned from package.json
+   - Backend dependencies are auto-scanned from requirements.txt
+   - Run license scan after adding: `npx license-checker` or `pip-licenses`
+
+### Copyright Headers
+
+New source files should include SPDX license identifiers (optional but recommended):
+
+**TypeScript/JavaScript:**
+```typescript
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2025, ForgeOpus
+
+// Your code here...
+```
+
+**Python:**
+```python
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025, ForgeOpus
+
+# Your code here...
+```
+
+### Attribution
+
+When using significant code snippets from other projects:
+
+1. Preserve the original copyright notice
+2. Include a reference to the source
+3. Ensure license compatibility
+4. Document in comments
+
+Example:
+```typescript
+// Adapted from: https://github.com/example/repo
+// Original Copyright (c) 2024, Original Author
+// Licensed under MIT License
+```
+
+### Resources
+
+- [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md) - Complete dependency licenses
+- [NOTICE](./NOTICE) - Required attribution notices
+- [LICENSE](./LICENSE) - Project license
+- [SPDX License List](https://spdx.org/licenses/) - Standard license identifiers
+
+---
+
 ## Quick Reference
 
 ### Common Commands
