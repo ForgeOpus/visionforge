@@ -3,6 +3,13 @@ import { Node, Edge, Connection } from '@xyflow/react'
 import { BlockData, Project, ValidationError, TensorShape, BlockType } from './types'
 import { getNodeDefinition, BackendFramework } from './nodes/registry'
 import { arePortsCompatible } from './nodes/ports'
+import {
+  validationEngine,
+  NodeValidationState,
+  NodeShapeStatus,
+  ValidationCode
+} from './validation'
+import { hasSymbolicDims } from './validation/matchers'
 
 interface HistoryState {
   nodes: Node<BlockData>[]
@@ -477,6 +484,14 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
           // Use new registry method
           const outputShape = nodeDef.computeOutputShape(undefined, node.data.config)
           node.data.outputShape = outputShape
+
+          // Set shape status for input nodes
+          node.data.shapeStatus = {
+            state: outputShape ? NodeValidationState.VALID : NodeValidationState.UNCONFIGURED,
+            inputShapes: [],
+            outputShape: outputShape as any,
+            timestamp: Date.now()
+          }
         }
       } else {
         if (incomingEdges.length > 0) {
@@ -498,26 +513,61 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
               
               // Use computeMultiInputShape if available (for concat/add nodes)
               const nodeDefAny = nodeDef as any
+              let outputShape: TensorShape | undefined
               if (typeof nodeDefAny.computeMultiInputShape === 'function') {
-                const outputShape = nodeDefAny.computeMultiInputShape(inputShapes, node.data.config)
+                outputShape = nodeDefAny.computeMultiInputShape(inputShapes, node.data.config)
                 node.data.outputShape = outputShape
               } else {
                 // Fallback to regular computation
-                const outputShape = nodeDef.computeOutputShape(node.data.inputShape, node.data.config)
+                outputShape = nodeDef.computeOutputShape(node.data.inputShape, node.data.config)
                 node.data.outputShape = outputShape
+              }
+
+              // Set shape status for merge nodes
+              const state = outputShape
+                ? (hasSymbolicDims(outputShape) ? NodeValidationState.NEGOTIATING : NodeValidationState.VALID)
+                : NodeValidationState.ERROR
+              node.data.shapeStatus = {
+                state,
+                inputShapes: inputShapes as any,
+                outputShape: outputShape as any,
+                timestamp: Date.now()
               }
             }
           } else {
             // Regular nodes or merge nodes with single input
             const sourceNode = nodeMap.get(incomingEdges[0].source)
-            
+
             if (sourceNode?.data.outputShape) {
               node.data.inputShape = sourceNode.data.outputShape
-              
+
               if (nodeDef) {
                 // Use new registry method
                 const outputShape = nodeDef.computeOutputShape(node.data.inputShape, node.data.config)
                 node.data.outputShape = outputShape
+
+                // Set shape status for regular nodes
+                let state: NodeValidationState
+                if (!outputShape) {
+                  state = NodeValidationState.ERROR
+                } else if (hasSymbolicDims(outputShape)) {
+                  state = NodeValidationState.NEGOTIATING
+                } else {
+                  state = NodeValidationState.VALID
+                }
+                node.data.shapeStatus = {
+                  state,
+                  inputShapes: [sourceNode.data.outputShape as any],
+                  outputShape: outputShape as any,
+                  timestamp: Date.now()
+                }
+              }
+            } else {
+              // No input shape yet
+              node.data.shapeStatus = {
+                state: NodeValidationState.AWAITING_INPUT,
+                inputShapes: [],
+                timestamp: Date.now()
               }
             }
           }
@@ -530,6 +580,27 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     
     const inputNodes = updatedNodes.filter((n) => n.data.blockType === 'input')
     inputNodes.forEach((node) => processNode(node.id))
+    
+    // Process standalone nodes that haven't been visited yet
+    // These are nodes not connected to any input, but may still compute shapes
+    const standaloneNodes = updatedNodes.filter((n) => 
+      !visited.has(n.id) && 
+      n.data.blockType !== 'input' && 
+      n.data.blockType !== 'dataloader' &&
+      n.data.blockType !== 'loss'
+    )
+
+    standaloneNodes.forEach((node) => {
+      const nodeDef = getNodeDefinition(node.data.blockType, BackendFramework.PyTorch)
+      if (nodeDef) {
+        // Attempt to compute output shape even without input connection
+        // This works for nodes that can infer shape from config alone
+        const outputShape = nodeDef.computeOutputShape(node.data.inputShape, node.data.config)
+        if (outputShape) {
+          node.data.outputShape = outputShape
+        }
+      }
+    })
     
     set({ nodes: updatedNodes })
   },
