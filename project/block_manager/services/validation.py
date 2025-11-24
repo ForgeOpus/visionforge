@@ -91,14 +91,14 @@ class ArchitectureValidator:
     
     def _validate_loss_connections(self, node, edges_list):
         """Validate loss node connections match required inputs for loss type"""
-        from .nodes.specs.pytorch import LOSS_SPEC
-        
+        from .nodes.frameworks.pytorch.nodes.loss import LossNode
+
         node_id = node['id']
         config = node.get('data', {}).get('config', {})
         loss_type = config.get('loss_type', 'cross_entropy')
-        
+
         # Get required ports for this loss type
-        input_ports_config = LOSS_SPEC.input_ports_config
+        input_ports_config = LossNode.input_ports_config
         required_port_ids = input_ports_config.get(loss_type, [])
         
         # Check if connection count matches

@@ -1,3 +1,11 @@
+import type {
+  ShapePattern,
+  ShapeFlags,
+  ShapeProvenance,
+  NodeShapeStatus,
+  DimensionValue,
+} from './validation/types';
+
 export type BlockType =
   | 'input'
   | 'dataloader'
@@ -10,7 +18,7 @@ export type BlockType =
   | 'batchnorm'
   | 'relu'
   | 'flatten'
-  | 'maxpool'
+  | 'maxpool2d'
   | 'attention'
   | 'concat'
   | 'softmax'
@@ -19,10 +27,25 @@ export type BlockType =
 
 export type BlockCategory = 'input' | 'output' | 'basic' | 'activation' | 'advanced' | 'merge' | 'utility'
 
+/**
+ * Tensor shape representation
+ * Supports both numeric and symbolic dimensions for progressive resolution
+ */
 export interface TensorShape {
-  dims: (number | string)[]
-  description?: string
+  /** Dimension values - can be numbers or symbolic strings (e.g., 'B', 'T', 'F') */
+  dims: DimensionValue[];
+  /** Human-readable description */
+  description?: string;
+  /** Shape pattern this tensor conforms to */
+  pattern?: ShapePattern;
+  /** Behavior flags (auto_flatten, inferred, etc.) */
+  flags?: ShapeFlags;
+  /** Provenance information for how shape was derived */
+  provenance?: ShapeProvenance;
 }
+
+// Re-export validation types for convenience
+export type { ShapePattern, ShapeFlags, ShapeProvenance, NodeShapeStatus, DimensionValue };
 
 export interface BlockConfig {
   [key: string]: number | string | boolean | number[]
@@ -35,6 +58,8 @@ export interface BlockData extends Record<string, unknown> {
   inputShape?: TensorShape
   outputShape?: TensorShape
   category: BlockCategory
+  /** Validation and shape inference status */
+  shapeStatus?: NodeShapeStatus
 }
 
 export interface BlockDefinition {

@@ -6,13 +6,30 @@
 import type { NodeSpec, NodeDefinitionsResponse, RenderCodeResponse } from './nodeSpec.types'
 
 // API configuration
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+// For single-service deployment: use relative path (same origin, no CORS)
+// For development: use full URL to separate backend server
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
 interface ApiResponse<T = any> {
   success: boolean
   data?: T
   error?: string
   message?: string
+}
+
+/**
+ * Get CSRF token from cookie
+ */
+function getCsrfToken(): string | null {
+  const name = 'csrftoken'
+  const cookies = document.cookie.split(';')
+  for (let cookie of cookies) {
+    cookie = cookie.trim()
+    if (cookie.startsWith(name + '=')) {
+      return cookie.substring(name.length + 1)
+    }
+  }
+  return null
 }
 
 /**
@@ -23,11 +40,27 @@ async function apiFetch<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   try {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    }
+    
+    // Add CSRF token for unsafe methods (POST, PUT, DELETE, PATCH)
+    const isUnsafeMethod = options.method && 
+      !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(options.method.toUpperCase())
+    
+    if (isUnsafeMethod) {
+      const csrfToken = getCsrfToken()
+      if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken
+      } else {
+        console.warn('CSRF token not found. Cookie:', document.cookie)
+      }
+    }
+
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
+      credentials: 'include', // Always include cookies
       ...options,
     })
 
@@ -79,7 +112,8 @@ export async function sendChatMessage(
   history?: any[],
   modificationMode?: boolean,
   workflowState?: { nodes: any[], edges: any[] },
-  file?: File
+  file?: File,
+  apiKey?: string
 ): Promise<ApiResponse<{
   response: string
   modifications?: any[]
@@ -94,8 +128,14 @@ export async function sendChatMessage(
     formData.append('workflowState', JSON.stringify(workflowState || null))
 
     try {
+      const headers: HeadersInit = {}
+      if (apiKey) {
+        headers['X-Gemini-Api-Key'] = apiKey
+      }
+
       const response = await fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
+        headers,
         body: formData,
       })
 
@@ -122,8 +162,14 @@ export async function sendChatMessage(
   }
 
   // No file - use regular JSON
+  const headers: HeadersInit = {}
+  if (apiKey) {
+    headers['X-Gemini-Api-Key'] = apiKey
+  }
+
   return apiFetch('/chat', {
     method: 'POST',
+    headers,
     body: JSON.stringify({
       message,
       history: history || [],

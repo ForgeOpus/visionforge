@@ -1,0 +1,16 @@
+{#
+PyTorch Loss Function Template
+
+Context variables:
+- config.loss_type: Type of loss function
+#}
+{% if config.loss_type == 'cross_entropy' %}nn.CrossEntropyLoss()
+{%- elif config.loss_type == 'mse' %}nn.MSELoss()
+{%- elif config.loss_type == 'mae' %}nn.L1Loss()
+{%- elif config.loss_type == 'bce' %}nn.BCELoss()
+{%- elif config.loss_type == 'triplet' %}nn.TripletMarginLoss()
+{%- elif config.loss_type == 'contrastive' %}nn.CosineEmbeddingLoss()
+{%- elif config.loss_type == 'nll' %}nn.NLLLoss()
+{%- elif config.loss_type == 'kl_div' %}nn.KLDivLoss()
+{%- else %}nn.CrossEntropyLoss()
+{%- endif %}

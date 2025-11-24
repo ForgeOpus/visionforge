@@ -1,10 +1,13 @@
 /**
  * PyTorch BatchNorm Layer Node Definition
+ * Enhanced with pattern-based validation
  */
 
 import { NodeDefinition } from '../../base'
 import { NodeMetadata, BackendFramework } from '../../contracts'
-import { TensorShape, BlockConfig, ConfigField, BlockType } from '../../../types'
+import { TensorShape, BlockConfig, ConfigField, BlockType, ShapePattern } from '../../../types'
+import { rankOneOf, passThrough } from '../../../validation/patterns'
+import { getRank } from '../../../validation/matchers'
 
 export class BatchNormNode extends NodeDefinition {
   readonly metadata: NodeMetadata = {
@@ -13,9 +16,19 @@ export class BatchNormNode extends NodeDefinition {
     category: 'basic',
     color: 'var(--color-accent)',
     icon: 'ChartLineUp',
-    description: 'Batch normalization layer',
+    description: 'Batch normalization layer (2D or 4D input)',
     framework: BackendFramework.PyTorch
   }
+
+  /**
+   * Input pattern: 2D for BatchNorm1d or 4D for BatchNorm2d
+   */
+  readonly inputPattern: ShapePattern = rankOneOf([2, 3, 4])
+
+  /**
+   * Output pattern: same as input (pass-through)
+   */
+  readonly outputPattern: ShapePattern = passThrough()
 
   readonly configSchema: ConfigField[] = [
     {
@@ -45,7 +58,20 @@ export class BatchNormNode extends NodeDefinition {
   ]
 
   computeOutputShape(inputShape: TensorShape | undefined, config: BlockConfig): TensorShape | undefined {
-    return inputShape
+    if (!inputShape) {
+      return undefined
+    }
+
+    // Pass through with metadata
+    return {
+      dims: [...inputShape.dims],
+      description: 'Normalized output',
+      flags: { inferred: true },
+      provenance: {
+        source: 'computed',
+        transformation: 'batchnorm'
+      }
+    }
   }
 
   validateIncomingConnection(
@@ -63,10 +89,23 @@ export class BatchNormNode extends NodeDefinition {
       return undefined
     }
 
-    // Validate dimension requirement (2D or 4D)
-    return this.validateDimensions(sourceOutputShape, {
-      dims: [2, 4],
-      description: '(2D for BatchNorm1d or 4D for BatchNorm2d)'
-    })
+    if (!sourceOutputShape) {
+      return undefined
+    }
+
+    const rank = getRank(sourceOutputShape)
+    if (rank !== 2 && rank !== 3 && rank !== 4) {
+      return `BatchNorm requires 2D, 3D, or 4D input, got ${rank}D`
+    }
+
+    return undefined
+  }
+
+  getDefaultConfig(): BlockConfig {
+    return {
+      eps: 0.00001,
+      momentum: 0.1,
+      affine: true
+    }
   }
 }

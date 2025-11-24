@@ -1,0 +1,9 @@
+{#
+TensorFlow Multi-Head Attention Template
+
+Context variables:
+- config.num_heads: Number of attention heads
+- config.key_dim: Key dimension
+- config.dropout: Dropout probability
+#}
+tf.keras.layers.MultiHeadAttention(num_heads={{ config.num_heads }}, key_dim={{ config.key_dim }}, dropout={{ config.dropout }})

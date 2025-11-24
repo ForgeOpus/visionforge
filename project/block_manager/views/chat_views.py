@@ -73,9 +73,20 @@ def chat_message(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    # Get API key from request header
+    api_key = request.headers.get('X-Gemini-Api-Key')
+    if not api_key:
+        return Response(
+            {
+                'error': 'API key required',
+                'response': 'Please provide your Gemini API key to use the AI assistant.'
+            },
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
     try:
-        # Initialize AI service (Gemini or Claude based on AI_PROVIDER)
-        ai_service = AIServiceFactory.create_service()
+        # Initialize AI service with user-provided API key
+        ai_service = AIServiceFactory.create_service(api_key=api_key)
         provider_name = AIServiceFactory.get_provider_name()
 
         # Handle file upload if present
@@ -169,9 +180,19 @@ def get_suggestions(request):
             'suggestions': ['Start by adding an Input node to define your model input.']
         })
 
+    # Get API key from request header
+    api_key = request.headers.get('X-Gemini-Api-Key')
+    if not api_key:
+        return Response({
+            'suggestions': [
+                'Please provide your Gemini API key to get AI-powered suggestions.',
+                'Click the chat button to configure your API key.'
+            ]
+        })
+
     try:
-        # Initialize AI service (Gemini or Claude based on AI_PROVIDER)
-        ai_service = AIServiceFactory.create_service()
+        # Initialize AI service with user-provided API key
+        ai_service = AIServiceFactory.create_service(api_key=api_key)
         provider_name = AIServiceFactory.get_provider_name()
 
         # Get suggestions

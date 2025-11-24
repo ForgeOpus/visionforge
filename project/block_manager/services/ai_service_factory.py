@@ -2,7 +2,7 @@
 AI Service Factory - Provider selection for Gemini or Claude.
 """
 import os
-from typing import Union
+from typing import Union, Optional
 from block_manager.services.gemini_service import GeminiChatService
 from block_manager.services.claude_service import ClaudeChatService
 
@@ -11,9 +11,12 @@ class AIServiceFactory:
     """Factory to create the appropriate AI service based on configuration."""
 
     @staticmethod
-    def create_service() -> Union[GeminiChatService, ClaudeChatService]:
+    def create_service(api_key: Optional[str] = None) -> Union[GeminiChatService, ClaudeChatService]:
         """
         Create and return the configured AI service.
+
+        Args:
+            api_key: User-provided API key (required for cloud demo mode)
 
         Returns:
             GeminiChatService or ClaudeChatService based on AI_PROVIDER env variable
@@ -24,7 +27,7 @@ class AIServiceFactory:
         provider = os.getenv('AI_PROVIDER', 'gemini').lower()
 
         if provider == 'gemini':
-            return GeminiChatService()
+            return GeminiChatService(api_key=api_key)
         elif provider == 'claude':
             return ClaudeChatService()
         else:
