@@ -1,8 +1,8 @@
 """PyTorch Dropout Layer Node Definition"""
 
-from typing import Any, Dict, List, Optional
+from typing import List
 
-from ....core.types import ConfigField, Framework, NodeMetadata, TensorShape
+from ....core.types import ConfigField, Framework, NodeMetadata
 from ..base import PyTorchPassthroughNode
 
 

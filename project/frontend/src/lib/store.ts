@@ -4,10 +4,7 @@ import { BlockData, Project, ValidationError, TensorShape, BlockType } from './t
 import { getNodeDefinition, BackendFramework } from './nodes/registry'
 import { arePortsCompatible } from './nodes/ports'
 import {
-  validationEngine,
   NodeValidationState,
-  NodeShapeStatus,
-  ValidationCode
 } from './validation'
 import { hasSymbolicDims } from './validation/matchers'
 

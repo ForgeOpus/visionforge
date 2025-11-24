@@ -3,7 +3,7 @@ TensorFlow/Keras-specific base class for node definitions.
 Provides TensorFlow-specific utilities and conventions.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from ...core.base import (
     NodeDefinition,
@@ -12,7 +12,7 @@ from ...core.base import (
     MergeNodeDefinition,
     PassthroughNodeDefinition,
 )
-from ...core.types import Framework, TensorShape
+from ...core.types import TensorShape
 
 
 class TensorFlowNodeDefinition(NodeDefinition):

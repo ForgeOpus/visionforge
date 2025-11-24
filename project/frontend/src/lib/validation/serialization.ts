@@ -5,9 +5,7 @@
 
 import type { TensorShape } from '../types';
 import {
-  ExtendedTensorShape,
   DimensionValue,
-  ShapePattern,
   ShapeFlags,
   ShapeProvenance,
 } from './types';

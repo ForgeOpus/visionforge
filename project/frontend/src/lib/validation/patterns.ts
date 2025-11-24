@@ -7,8 +7,6 @@ import {
   ShapePattern,
   AxisSpec,
   AxisRole,
-  MergeSpec,
-  RankSpec,
   SYMBOLS,
 } from './types';
 

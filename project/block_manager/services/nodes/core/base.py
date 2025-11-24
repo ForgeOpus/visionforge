@@ -4,12 +4,10 @@ Provides abstract interfaces and shared functionality for all node types.
 """
 
 from abc import ABC, abstractmethod
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .types import (
     ConfigField,
-    Framework,
     InputPort,
     NodeMetadata,
     TensorShape,

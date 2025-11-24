@@ -20,7 +20,6 @@ import {
 } from './types';
 import {
   matchPattern,
-  matchRank,
   areFeaturesCompatible,
   getRank,
   isNumeric,
