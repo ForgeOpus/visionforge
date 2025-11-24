@@ -8,7 +8,13 @@
       "Bash(npm run dev:*)",
       "Bash(node test-icons.js:*)",
       "Bash(pip install:*)",
-      "Bash(=0.39.0)"
+      "Bash(=0.39.0)",
+      "Bash(git -C \"c:/Users/aadit/Projects/visionforge\" diff project/block_manager/views/architecture_views.py)",
+      "Bash(git -C \"c:/Users/aadit/Projects/visionforge\" diff project/frontend/src/components/BlockNode.tsx)",
+      "Bash(git -C \"c:/Users/aadit/Projects/visionforge\" diff project/frontend/src/lib/nodes/definitions/pytorch/linear.ts)",
+      "Bash(dir /s /b \"project\\block_manager\\services\\nodes\\core\" 2)",
+      "Bash(nul)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

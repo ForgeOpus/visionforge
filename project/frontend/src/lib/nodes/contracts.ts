@@ -5,6 +5,7 @@
 
 import { TensorShape, BlockConfig, ConfigField, BlockType, BlockCategory } from '../types'
 import { PortDefinition } from './ports'
+import type { ShapePattern, ValidationResult, InferenceResult } from '../validation/types'
 
 /**
  * Supported backend frameworks for model building
@@ -88,6 +89,18 @@ export interface INodeDefinition extends IShapeComputer, INodeValidator {
 
   /** Configuration schema defining editable parameters */
   readonly configSchema: ConfigField[]
+
+  /**
+   * Input shape pattern this node accepts
+   * Used by ValidationEngine for connection validation
+   */
+  readonly inputPattern?: ShapePattern
+
+  /**
+   * Output shape pattern this node produces
+   * Used for downstream validation and inference
+   */
+  readonly outputPattern?: ShapePattern
 
   /**
    * Get input ports for this node based on configuration

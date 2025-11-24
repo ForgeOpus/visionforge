@@ -13,6 +13,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { NodeValidationState } from '@/lib/validation/types'
+import { getStateBadgeInfo } from '@/lib/validation/messages'
 
 interface BlockNodeProps {
   data: BlockData & {
@@ -29,6 +31,28 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
   const edges = useModelBuilderStore((state) => state.edges)
 
   if (!nodeDef) return null
+
+  // Helper to check if all required config fields are filled
+  const isConfigComplete = () => {
+    if (!nodeDef.configSchema || nodeDef.configSchema.length === 0) return true
+    return nodeDef.configSchema
+      .filter((field) => field.required)
+      .every((field) => {
+        const value = data.config[field.name]
+        // Check if value exists and is not an empty string
+        if (value === undefined || value === null || value === '') {
+          return false
+        }
+        // For number fields, also check against min/max constraints if present
+        if (field.type === 'number') {
+          const numValue = Number(value)
+          if (isNaN(numValue)) return false
+          if (field.min !== undefined && numValue < field.min) return false
+          if (field.max !== undefined && numValue > field.max) return false
+        }
+        return true
+      })
+  }
 
   const definition = nodeDef.metadata
   const IconComponent = (Icons as any)[definition.icon] || Icons.Cube
@@ -62,6 +86,49 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
         boxShadow: selected ? '0 0 20px rgba(0, 188, 212, 0.3)' : 'none'
       }}
     >
+      {/* Status Badge */}
+      {data.shapeStatus && !hasErrors && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="absolute -top-2 -right-2 z-20">
+                {data.shapeStatus.state === NodeValidationState.VALID && (
+                  <div className="bg-green-500 rounded-full p-1 shadow-lg">
+                    <Icons.CheckCircle size={14} weight="fill" className="text-white" />
+                  </div>
+                )}
+                {data.shapeStatus.state === NodeValidationState.NEGOTIATING && (
+                  <div className="bg-yellow-500 rounded-full p-1 shadow-lg">
+                    <Icons.ArrowsClockwise size={14} weight="fill" className="text-white" />
+                  </div>
+                )}
+                {data.shapeStatus.state === NodeValidationState.AWAITING_INPUT && (
+                  <div className="bg-blue-500 rounded-full p-1 shadow-lg">
+                    <Icons.ArrowLeft size={14} weight="fill" className="text-white" />
+                  </div>
+                )}
+                {data.shapeStatus.state === NodeValidationState.UNCONFIGURED && (
+                  <div className="bg-gray-500 rounded-full p-1 shadow-lg">
+                    <Icons.Gear size={14} weight="fill" className="text-white" />
+                  </div>
+                )}
+                {data.shapeStatus.state === NodeValidationState.ERROR && (
+                  <div className="bg-red-500 rounded-full p-1 shadow-lg">
+                    <Icons.XCircle size={14} weight="fill" className="text-white" />
+                  </div>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs">
+              <div className="text-xs">
+                <div className="font-medium">{getStateBadgeInfo(data.shapeStatus.state).label}</div>
+                <div className="text-muted-foreground">{getStateBadgeInfo(data.shapeStatus.state).tooltip}</div>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+
       {/* Error Badge */}
       {hasErrors && (
         <div className="absolute -top-2 -right-2 z-20">
@@ -235,7 +302,10 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
 
         {!data.outputShape && data.blockType !== 'input' && data.blockType !== 'dataloader' && data.blockType !== 'empty' && (
           <div className="text-[10px] text-orange-600">
-            Configure params
+            {isConfigComplete() 
+              ? (!data.inputShape ? 'Connect input' : 'Waiting for shape')
+              : 'Configure params'
+            }
           </div>
         )}
       </div>

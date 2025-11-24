@@ -221,8 +221,15 @@ export default function ConfigPanel() {
                     type="number"
                     min={field.min}
                     max={field.max}
-                    value={Number(selectedNode.data.config[field.name] ?? field.default ?? 0)}
-                    onChange={(e) => handleConfigChange(field.name, parseFloat(e.target.value) || 0)}
+                    value={Number(selectedNode.data.config[field.name] ?? field.default ?? '')}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? undefined : parseFloat(e.target.value)
+                      if (value !== undefined && !isNaN(value)) {
+                        handleConfigChange(field.name, value)
+                      } else if (e.target.value === '') {
+                        handleConfigChange(field.name, undefined)
+                      }
+                    }}
                     placeholder={`Enter ${field.label.toLowerCase()}`}
                   />
                 )}

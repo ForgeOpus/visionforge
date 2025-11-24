@@ -1,0 +1,9 @@
+{#
+PyTorch Multi-Head Attention Template
+
+Context variables:
+- config.embed_dim: Embedding dimension
+- config.num_heads: Number of attention heads
+- config.dropout: Dropout probability
+#}
+nn.MultiheadAttention(embed_dim={{ config.embed_dim }}, num_heads={{ config.num_heads }}, dropout={{ config.dropout }}, batch_first=True)

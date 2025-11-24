@@ -1,0 +1,11 @@
+{#
+PyTorch Conv3D Template
+
+Context variables:
+- config.out_channels: Number of output channels
+- config.kernel_size: Kernel size
+- config.stride: Stride
+- config.padding: Padding
+- in_channels: Input channels (from context)
+#}
+nn.Conv3d({{ in_channels }}, {{ config.out_channels }}, kernel_size={{ config.kernel_size }}, stride={{ config.stride }}, padding={{ config.padding }})
