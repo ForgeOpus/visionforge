@@ -62,3 +62,6 @@ __pycache__
 /project/frontend_build/
 /project/staticfiles/
 .claude/
+.claude
+*/.claude/*
+.claude/*
