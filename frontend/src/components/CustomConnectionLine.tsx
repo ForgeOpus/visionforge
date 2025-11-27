@@ -1,6 +1,6 @@
 import { ConnectionLineComponentProps } from '@xyflow/react'
-import { useModelBuilderStore } from '@/lib/store'
-import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
+import { useModelBuilderStore } from '@visionforge/core/store'
+import { getNodeDefinition, BackendFramework } from '@visionforge/core/nodes'
 import { BlockType } from '@/lib/types'
 
 export default function CustomConnectionLine({

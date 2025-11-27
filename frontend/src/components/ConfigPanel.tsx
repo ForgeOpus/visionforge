@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { useModelBuilderStore } from '@/lib/store'
-import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
+import { useModelBuilderStore } from '@visionforge/core/store'
+import { getNodeDefinition, BackendFramework } from '@visionforge/core/nodes'
 import { Input } from '@visionforge/core/components/ui/input'
 import { Label } from '@visionforge/core/components/ui/label'
 import { Switch } from '@visionforge/core/components/ui/switch'
@@ -267,7 +267,7 @@ export default function ConfigPanel() {
                 {field.type === 'file' && (
                   <div className="space-y-2">
                     <input
-                      ref={(el) => (fileInputRefs.current[field.name] = el)}
+                      ref={(el) => { fileInputRefs.current[field.name] = el }}
                       type="file"
                       accept={field.accept || '*'}
                       onChange={(e) => {

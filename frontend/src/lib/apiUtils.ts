@@ -24,9 +24,9 @@ export function getCsrfToken(): string | null {
  * Create headers with CSRF token for unsafe HTTP methods
  */
 export function createHeaders(method?: string, additionalHeaders?: HeadersInit): HeadersInit {
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...additionalHeaders,
+    ...(additionalHeaders as Record<string, string> || {}),
   }
 
   // Add CSRF token for unsafe methods (POST, PUT, DELETE, PATCH)

@@ -3,7 +3,7 @@ import { ScrollArea } from '@visionforge/core/components/ui/scroll-area'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@visionforge/core/components/ui/accordion'
 import { Card } from '@visionforge/core/components/ui/card'
 import { Input } from '@visionforge/core/components/ui/input'
-import { getAllNodeDefinitions, getNodeDefinitionsByCategory, BackendFramework } from '@/lib/nodes/registry'
+import { getAllNodeDefinitions, getNodeDefinitionsByCategory, BackendFramework } from '@visionforge/core/nodes'
 import * as Icons from '@phosphor-icons/react'
 import Fuse from 'fuse.js'
 

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useModelBuilderStore } from '@/lib/store'
+import { useModelBuilderStore } from '@visionforge/core/store'
 import { Button } from '@visionforge/core/components/ui/button'
 import {
   Dialog,
@@ -26,14 +26,14 @@ import { Textarea } from '@visionforge/core/components/ui/textarea'
 import { Plus, Download, FloppyDisk, CaretDown, Code, CheckCircle, GitBranch, Upload, FileCode, FilePy, GearSix, Trash, Info, PencilSimple, Warning } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { validateModel, exportModel as apiExportModel } from '@/lib/api'
+import api from '@/lib/api'
 import { exportToJSON, importFromJSON, downloadJSON, readJSONFile } from '@/lib/exportImport'
 import * as projectApi from '@/lib/projectApi'
 
 export default function Header() {
   const navigate = useNavigate()
   const { projectId } = useParams<{ projectId: string }>()
-  const { currentProject, nodes, edges, createProject: createProjectInStore, saveProject, loadProject, validateArchitecture, setNodes, setEdges } = useModelBuilderStore()
+  const { currentProject, nodes, edges, saveProject, loadProject, validateArchitecture, setNodes, setEdges } = useModelBuilderStore()
 
   const [projects, setProjects] = useState<projectApi.ProjectResponse[]>([])
   const [isLoadingProjects, setIsLoadingProjects] = useState(false)
@@ -191,7 +191,9 @@ export default function Header() {
       }
 
       // Save to local storage for existing project
-      await projectApi.saveArchitecture(projectIdToSave, nodes, edges)
+      if (projectIdToSave) {
+        await projectApi.saveArchitecture(projectIdToSave, nodes, edges)
+      }
 
       // Save to local store
       saveProject()
@@ -212,8 +214,8 @@ export default function Header() {
 
   const handleLoadProject = async (project: projectApi.ProjectResponse) => {
     try {
-      // Fetch full project details
-      const fullProject = await projectApi.fetchProject(project.id)
+      // Fetch full project details (unused for now but may be needed later)
+      await projectApi.fetchProject(project.id)
 
       // Navigate to project URL
       navigate(`/project/${project.id}`)
@@ -251,7 +253,7 @@ export default function Header() {
       toast.loading('Generating code...')
 
       // Call backend API with framework selection
-      const result = await apiExportModel({
+      const result = await api.exportModel({
         nodes: nodes.map(node => ({
           id: node.id,
           type: node.data.blockType,
@@ -277,8 +279,8 @@ export default function Header() {
           train: result.data.files['train.py'],
           dataset: result.data.files['dataset.py'],
           config: result.data.files['config.py'],
-          zip: result.data.zip,
-          filename: result.data.filename
+          zip: result.data.zip || '',
+          filename: result.data.filename || 'export.zip'
         })
         setIsExportOpen(true)
         toast.success(`${result.data.framework.toUpperCase()} code generated successfully!`)
@@ -399,7 +401,7 @@ export default function Header() {
     try {
       toast.loading('Validating architecture...')
 
-      const result = await validateModel({
+      const result = await api.validateModel({
         nodes: nodes.map(node => ({
           id: node.id,
           type: node.data.blockType,

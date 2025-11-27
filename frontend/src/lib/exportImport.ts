@@ -95,7 +95,7 @@ export function exportToJSON(
 export function importFromJSON(
   jsonData: ExportData,
   existingNodes?: Node<BlockData>[],
-  existingEdges?: Edge[]
+  _existingEdges?: Edge[]
 ): {
   nodes: Node<BlockData>[]
   edges: Edge[]

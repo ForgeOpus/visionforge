@@ -1,11 +1,11 @@
 import { ArrowCounterClockwise, ArrowClockwise, TrashSimple } from '@phosphor-icons/react'
 import { Button } from '@visionforge/core/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@visionforge/core/components/ui/tooltip'
-import { useModelBuilderStore } from '../lib/store'
+import { useModelBuilderStore } from '@visionforge/core/store'
 import { toast } from 'sonner'
 
 export function HistoryToolbar() {
-  const { undo, redo, canUndo, canRedo, reset, removeNode, selectedNodeId, nodes } = useModelBuilderStore()
+  const { undo, redo, canUndo, canRedo, reset, nodes } = useModelBuilderStore()
 
   const handleReset = () => {
     if (nodes.length === 0) {
@@ -16,21 +16,6 @@ export function HistoryToolbar() {
     if (confirm('Are you sure you want to reset the canvas? This will clear all nodes and connections.')) {
       reset()
       toast.success('Canvas reset successfully')
-    }
-  }
-
-  const handleDeleteSelected = () => {
-    if (!selectedNodeId) {
-      toast.info('No node selected')
-      return
-    }
-
-    const selectedNode = nodes.find(n => n.id === selectedNodeId)
-    if (selectedNode) {
-      removeNode(selectedNodeId)
-      toast.success('Node deleted', {
-        description: `Removed ${selectedNode.data.label}`
-      })
     }
   }
 

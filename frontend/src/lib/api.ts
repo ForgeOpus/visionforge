@@ -154,3 +154,20 @@ export function downloadZip(base64Zip: string, filename: string) {
 }
 
 export default api
+
+/**
+ * Render code for a specific node
+ */
+export async function renderNodeCode(
+  nodeType: string,
+  framework: 'pytorch' | 'tensorflow',
+  config: Record<string, any>,
+  metadata?: Record<string, any>
+): Promise<any> {
+  // TODO: Implement when backend is ready
+  return Promise.resolve({ 
+    success: false, 
+    error: "Feature not yet implemented",
+    data: null 
+  });
+}

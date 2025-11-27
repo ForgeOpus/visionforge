@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Card } from '@visionforge/core/components/ui/card'
-import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
-import { BlockType } from '@/lib/types'
+import { getNodeDefinition, BackendFramework } from '@visionforge/core/nodes'
+import { BlockType } from '@visionforge/core/types'
 import * as Icons from '@phosphor-icons/react'
 
 interface ContextMenuProps {

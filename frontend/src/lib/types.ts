@@ -4,7 +4,7 @@ import type {
   ShapeProvenance,
   NodeShapeStatus,
   DimensionValue,
-} from './validation/types';
+} from '@visionforge/core/validation';
 
 export type BlockType =
   | 'input'

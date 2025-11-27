@@ -1,8 +1,8 @@
 import { memo } from 'react'
 import { Handle, Position, NodeProps } from '@xyflow/react'
-import { BlockData, BlockType } from '@/lib/types'
-import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
-import { useModelBuilderStore } from '@/lib/store'
+import { BlockData, BlockType } from '@visionforge/core/types'
+import { getNodeDefinition, BackendFramework } from '@visionforge/core/nodes'
+import { useModelBuilderStore } from '@visionforge/core/store'
 import * as Icons from '@phosphor-icons/react'
 import { Card } from '@visionforge/core/components/ui/card'
 import { Badge } from '@visionforge/core/components/ui/badge'
@@ -13,8 +13,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@visionforge/core/components/ui/tooltip'
-import { NodeValidationState } from '@/lib/validation/types'
-import { getStateBadgeInfo } from '@/lib/validation/messages'
+import { NodeValidationState } from '@visionforge/core/validation'
+import { getStateBadgeInfo } from '@visionforge/core/validation'
 
 interface BlockNodeProps {
   data: BlockData & {

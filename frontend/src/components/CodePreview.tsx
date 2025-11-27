@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from 'react'
 import { renderNodeCode } from '@/lib/api'
-import type { Framework } from '@/lib/nodeSpec.types'
+import type { Framework } from '../lib/nodeSpec.types'
 
 interface CodePreviewProps {
   nodeType: string
