@@ -3,8 +3,8 @@ import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left"
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right"
 import { DayPicker } from "react-day-picker"
 
-import { cn } from "@/lib/utils"
-import { buttonVariants } from "@/components/ui/button"
+import { cn } from "../lib/utils"
+import { buttonVariants } from "./ui/button"
 
 function Calendar({
   className,

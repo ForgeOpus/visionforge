@@ -4,7 +4,7 @@ import CheckIcon from "lucide-react/dist/esm/icons/check"
 import ChevronDownIcon from "lucide-react/dist/esm/icons/chevron-down"
 import ChevronUpIcon from "lucide-react/dist/esm/icons/chevron-up"
 
-import { cn } from "@/lib/utils"
+import { cn } from "../lib/utils"
 
 function Select({
   ...props

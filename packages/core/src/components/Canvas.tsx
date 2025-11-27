@@ -13,15 +13,15 @@ import {
   Edge
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { useModelBuilderStore } from '@/lib/store'
-import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
-import { BlockData, BlockType } from '@/lib/types'
+import { useModelBuilderStore } from '../lib/store'
+import { getNodeDefinition, BackendFramework } from '../lib/nodes/registry'
+import { BlockData, BlockType } from '../lib/types'
 import BlockNode from './BlockNode'
 import CustomConnectionLine from './CustomConnectionLine'
 import { HistoryToolbar } from './HistoryToolbar'
 import { ContextMenu } from './ContextMenu'
 import ViewCodeModal from './ViewCodeModal'
-import { renderNodeCode } from '@/lib/api'
+import { renderNodeCode } from '../lib/api'
 import { toast } from 'sonner'
 
 const nodeTypes = {

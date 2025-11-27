@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/lib/api.ts","./src/lib/apiUtils.ts","./src/lib/exportImport.ts","./src/lib/localStorageService.ts","./src/lib/projectApi.ts","./src/lib/types.ts","./src/lib/inference/index.ts","./src/lib/inference/local-client.ts"],"errors":true,"version":"5.7.3"}
