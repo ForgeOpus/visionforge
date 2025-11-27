@@ -26,7 +26,7 @@ lerna-debug.log*
 
 .env
 **/agent-eval-report*
-packages
+# packages  # Commented out - we now have packages/ directory for monorepo
 pids
 .file-manifest
 .devcontainer/
