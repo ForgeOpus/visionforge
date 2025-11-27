@@ -1,0 +1,9 @@
+{#
+TensorFlow AveragePooling2D Template
+
+Context variables:
+- config.pool_size: Size of pooling window
+- config.strides: Strides
+- config.padding: Padding mode
+#}
+tf.keras.layers.AveragePooling2D(pool_size={{ config.pool_size }}, strides={{ config.strides }}, padding='{{ config.padding }}')

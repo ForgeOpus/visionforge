@@ -1,0 +1,42 @@
+{
+  "name": "visionforge-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VisionForge - Visual Neural Network Builder",
+  "license": "BSD-3-Clause",
+  "workspaces": [
+    "packages/*",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspaces --if-present",
+    "build:frontend": "npm run build --workspace=frontend",
+    "build:core": "npm run build --workspace=@visionforge/core",
+    "lint": "npm run lint --workspaces --if-present",
+    "type-check": "npm run type-check --workspaces --if-present",
+    "clean": "rm -rf node_modules packages/*/node_modules frontend/node_modules",
+    "python:install": "cd python && pip install -e '.[dev,ai]'",
+    "python:build": "cd python && python -m build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ForgeOpus/visionforge.git"
+  },
+  "keywords": [
+    "deep-learning",
+    "neural-networks",
+    "pytorch",
+    "tensorflow",
+    "visual-programming",
+    "ai"
+  ],
+  "author": "ForgeOpus",
+  "devDependencies": {
+    "typescript": "~5.7.2"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  }
+}

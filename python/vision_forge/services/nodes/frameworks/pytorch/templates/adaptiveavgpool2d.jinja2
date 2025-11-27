@@ -1,0 +1,7 @@
+{#
+PyTorch AdaptiveAvgPool2D Template
+
+Context variables:
+- config.output_size: Target output size
+#}
+nn.AdaptiveAvgPool2d(output_size=({{ config.output_size }}, {{ config.output_size }}))

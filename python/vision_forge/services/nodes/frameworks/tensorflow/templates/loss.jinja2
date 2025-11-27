@@ -1,0 +1,14 @@
+{#
+TensorFlow/Keras Loss Function Template
+
+Context variables:
+- config.loss_type: Type of loss function
+#}
+{% if config.loss_type == 'categorical_crossentropy' %}tf.keras.losses.CategoricalCrossentropy()
+{%- elif config.loss_type == 'sparse_categorical_crossentropy' %}tf.keras.losses.SparseCategoricalCrossentropy()
+{%- elif config.loss_type == 'mse' %}tf.keras.losses.MeanSquaredError()
+{%- elif config.loss_type == 'mae' %}tf.keras.losses.MeanAbsoluteError()
+{%- elif config.loss_type == 'binary_crossentropy' %}tf.keras.losses.BinaryCrossentropy()
+{%- elif config.loss_type == 'kl_divergence' %}tf.keras.losses.KLDivergence()
+{%- else %}tf.keras.losses.CategoricalCrossentropy()
+{%- endif %}

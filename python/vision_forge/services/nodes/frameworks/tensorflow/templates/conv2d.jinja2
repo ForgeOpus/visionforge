@@ -1,0 +1,3 @@
+{# TensorFlow Conv2D Layer Template #}
+{% set activation_str = "'" + config.activation + "'" if config.activation and config.activation != 'None' else 'None' %}
+tf.keras.layers.Conv2D({{ config.filters }}, {{ config.kernel_size }}, strides={{ config.strides }}, padding='{{ config.padding }}', activation={{ activation_str }})

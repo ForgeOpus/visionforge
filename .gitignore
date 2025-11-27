@@ -60,6 +60,11 @@ __pycache__
 # Single-service deployment build artifacts
 /project/frontend_build/
 /project/staticfiles/
+
+# New structure build artifacts
+/python/vision_forge/web/
+/frontend/dist/
+/packages/*/dist/
 .claude/
 .claude
 */.claude/*
