@@ -7,13 +7,13 @@
 
 import {
   BaseInferenceClient,
-  type ChatOptions,
-  type ChatResponse,
-  type ValidationOptions,
-  type ValidationResponse,
-  type ExportOptions,
-  type ExportResponse,
-  type NodeDefinitionsResponse,
+  ChatOptions,
+  ChatResponse,
+  ValidationOptions,
+  ValidationResponse,
+  ExportOptions,
+  ExportResponse,
+  NodeDefinitionsResponse,
 } from '@visionforge/core/inference'
 
 /**

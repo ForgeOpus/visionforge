@@ -5,6 +5,7 @@
 export { BaseInferenceClient } from './base'
 export type { InferenceClientFactory, InferenceProvider } from './base'
 
+// Export all types
 export type {
   ChatOptions,
   ChatMessage,
@@ -21,3 +22,6 @@ export type {
   NodeDefinition,
   PortDefinition,
 } from './types'
+
+// Re-export types for convenience
+export * from './types'
