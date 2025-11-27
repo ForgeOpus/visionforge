@@ -2,10 +2,10 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import useEmblaCarousel from "embla-carousel-react";
-import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
-import ArrowRight from "lucide-react/dist/esm/icons/arrow-right";
-import { cn } from "../lib/utils";
-import { Button } from "./ui/button";
+import { ArrowLeft } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import { cn } from "../../lib/utils";
+import { Button } from "./button";
 const CarouselContext = createContext(null);
 function useCarousel() {
     const context = useContext(CarouselContext);

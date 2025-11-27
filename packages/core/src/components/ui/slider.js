@@ -2,7 +2,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useMemo } from "react";
 import * as SliderPrimitive from "@radix-ui/react-slider";
-import { cn } from "../lib/utils";
+import { cn } from "../../lib/utils";
 function Slider({ className, defaultValue, value, min = 0, max = 100, ...props }) {
     const _values = useMemo(() => Array.isArray(value)
         ? value

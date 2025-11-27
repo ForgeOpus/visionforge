@@ -1,9 +1,9 @@
 import { jsx as _jsx } from "react/jsx-runtime";
-import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left";
-import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
+import { ChevronLeft } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { DayPicker } from "react-day-picker";
-import { cn } from "../lib/utils";
-import { buttonVariants } from "./ui/button";
+import { cn } from "../../lib/utils";
+import { buttonVariants } from "./button";
 function Calendar({ className, classNames, showOutsideDays = true, ...props }) {
     return (_jsx(DayPicker, { showOutsideDays: showOutsideDays, className: cn("p-3", className), classNames: {
             months: "flex flex-col sm:flex-row gap-2",
@@ -32,8 +32,12 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }) {
             day_hidden: "invisible",
             ...classNames,
         }, components: {
-            PreviousMonthButton: ({ className, ...props }) => (_jsx(ChevronLeft, { className: cn("size-4", className), ...props })),
-            NextMonthButton: ({ className, ...props }) => (_jsx(ChevronRight, { className: cn("size-4", className), ...props })),
+            PreviousMonthButton: ({ className, ...props }) => (
+            // @ts-ignore - Button props don't fully match Lucide props
+            _jsx(ChevronLeft, { className: cn("size-4", className), ...props })),
+            NextMonthButton: ({ className, ...props }) => (
+            // @ts-ignore - Button props don't fully match Lucide props
+            _jsx(ChevronRight, { className: cn("size-4", className), ...props })),
         }, ...props }));
 }
 export { Calendar };

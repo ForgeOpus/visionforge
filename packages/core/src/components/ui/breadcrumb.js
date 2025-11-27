@@ -1,8 +1,8 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { Slot } from "@radix-ui/react-slot";
-import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
-import MoreHorizontal from "lucide-react/dist/esm/icons/more-horizontal";
-import { cn } from "../lib/utils";
+import { ChevronRight } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
+import { cn } from "../../lib/utils";
 function Breadcrumb({ ...props }) {
     return _jsx("nav", { "aria-label": "breadcrumb", "data-slot": "breadcrumb", ...props });
 }

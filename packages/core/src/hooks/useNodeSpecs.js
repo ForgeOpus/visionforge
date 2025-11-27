@@ -2,7 +2,7 @@
  * React hook for fetching and managing node specifications from backend
  */
 import { useState, useEffect, useCallback } from 'react';
-import { getNodeDefinitions, getNodeDefinition, renderNodeCode } from './api';
+import { getNodeDefinitions, getNodeDefinition, renderNodeCode } from '../lib/api';
 /**
  * Hook to fetch and manage all node specifications for a framework
  */

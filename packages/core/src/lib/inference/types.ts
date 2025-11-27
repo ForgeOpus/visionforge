@@ -2,6 +2,8 @@
  * Shared types for inference providers
  */
 
+import type { ValidationError as CoreValidationError } from '../types'
+
 export interface ChatOptions {
   message: string
   history?: ChatMessage[]
@@ -39,14 +41,8 @@ export interface ValidationOptions {
 
 export interface ValidationResponse {
   isValid: boolean
-  errors?: ValidationError[]
+  errors?: CoreValidationError[]
   warnings?: ValidationWarning[]
-}
-
-export interface ValidationError {
-  nodeId?: string
-  message: string
-  type: 'connection' | 'configuration' | 'shape' | 'architecture'
 }
 
 export interface ValidationWarning {

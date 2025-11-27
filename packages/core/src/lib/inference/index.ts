@@ -14,7 +14,6 @@ export type {
   WorkflowState,
   ValidationOptions,
   ValidationResponse,
-  ValidationError,
   ValidationWarning,
   ExportOptions,
   ExportResponse,

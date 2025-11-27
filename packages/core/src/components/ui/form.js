@@ -2,8 +2,8 @@ import { jsx as _jsx } from "react/jsx-runtime";
 import { createContext, useContext, useId } from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { Controller, FormProvider, useFormContext, useFormState, } from "react-hook-form";
-import { cn } from "../lib/utils";
-import { Label } from "./ui/label";
+import { cn } from "../../lib/utils";
+import { Label } from "./label";
 const Form = FormProvider;
 const FormFieldContext = createContext({});
 const FormField = ({ ...props }) => {

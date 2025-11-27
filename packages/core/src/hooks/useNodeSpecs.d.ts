@@ -1,7 +1,7 @@
 /**
  * React hook for fetching and managing node specifications from backend
  */
-import type { NodeSpec, Framework } from './nodeSpec.types';
+import type { NodeSpec, Framework } from '../lib/nodeSpec.types';
 interface UseNodeSpecsOptions {
     framework?: Framework;
     autoFetch?: boolean;
@@ -23,8 +23,8 @@ export declare function useNodeSpecs(options?: UseNodeSpecsOptions): UseNodeSpec
  */
 export declare function useNodeSpec(nodeType: string, framework?: Framework): {
     spec: any;
-    loading: any;
-    error: any;
+    loading: boolean;
+    error: string | null;
 };
 export {};
 //# sourceMappingURL=useNodeSpecs.d.ts.map

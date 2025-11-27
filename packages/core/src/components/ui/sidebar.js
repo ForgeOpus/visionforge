@@ -3,15 +3,15 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva } from "class-variance-authority";
-import PanelLeftIcon from "lucide-react/dist/esm/icons/panel-left";
-import { useIsMobile } from "../hooks/use-mobile";
-import { cn } from "../lib/utils";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Separator } from "./ui/separator";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, } from "./ui/sheet";
-import { Skeleton } from "./ui/skeleton";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, } from "./ui/tooltip";
+import { PanelLeft } from "lucide-react";
+import { useIsMobile } from "../../hooks/use-mobile";
+import { cn } from "../../lib/utils";
+import { Button } from "./button";
+import { Input } from "./input";
+import { Separator } from "./separator";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, } from "./sheet";
+import { Skeleton } from "./skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, } from "./tooltip";
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = "16rem";
@@ -103,7 +103,7 @@ function SidebarTrigger({ className, onClick, ...props }) {
     return (_jsxs(Button, { "data-sidebar": "trigger", "data-slot": "sidebar-trigger", variant: "ghost", size: "icon", className: cn("size-7", className), onClick: (event) => {
             onClick?.(event);
             toggleSidebar();
-        }, ...props, children: [_jsx(PanelLeftIcon, {}), _jsx("span", { className: "sr-only", children: "Toggle Sidebar" })] }));
+        }, ...props, children: [_jsx(PanelLeft, {}), _jsx("span", { className: "sr-only", children: "Toggle Sidebar" })] }));
 }
 function SidebarRail({ className, ...props }) {
     const { toggleSidebar } = useSidebar();

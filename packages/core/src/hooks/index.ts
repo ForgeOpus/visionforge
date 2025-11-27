@@ -3,4 +3,4 @@
  */
 
 export * from './use-mobile'
-export * from './useNodeSpecs'
+// useNodeSpecs is not exported from core as it has app-specific dependencies

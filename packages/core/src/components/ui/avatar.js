@@ -1,7 +1,7 @@
 "use client";
 import { jsx as _jsx } from "react/jsx-runtime";
 import * as AvatarPrimitive from "@radix-ui/react-avatar";
-import { cn } from "../lib/utils";
+import { cn } from "../../lib/utils";
 function Avatar({ className, ...props }) {
     return (_jsx(AvatarPrimitive.Root, { "data-slot": "avatar", className: cn("relative flex size-8 shrink-0 overflow-hidden rounded-full", className), ...props }));
 }

@@ -10,13 +10,15 @@ export * from './components'
 // Hooks
 export * from './hooks'
 
-// Types and utilities
-export * from './lib/types'
+// Utilities
 export * from './lib/utils'
 export * from './lib/store'
 
 // Node definitions
 export * from './lib/nodes'
+
+// Types
+export * from './lib/types'
 
 // Validation
 export * from './lib/validation'

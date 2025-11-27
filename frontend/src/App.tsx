@@ -5,10 +5,17 @@
  * and local inference client
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
-import { Canvas, BlockPalette, ChatBot } from '@visionforge/core/components'
+import { Toaster } from 'sonner'
+import Canvas from './components/Canvas'
+import ResizableBlockPalette from './components/ResizableBlockPalette'
+import ConfigPanel from './components/ConfigPanel'
+import ChatBot from './components/ChatBot'
+import Header from './components/Header'
 import { localClient } from './lib/inference'
+import { useModelBuilderStore } from '@visionforge/core/store'
+import { ApiKeyProvider } from './lib/apiKeyContext'
 
 function ErrorFallback({ error, resetErrorBoundary }: any) {
   return (
@@ -41,6 +48,10 @@ function App() {
     loading: true,
   })
 
+  const [draggedType, setDraggedType] = useState<string | null>(null)
+  const { selectedNodeId } = useModelBuilderStore()
+  const addNodeFromPaletteRef = useRef<((blockType: string) => void) | null>(null)
+
   // Check server health on mount
   useEffect(() => {
     const checkServer = async () => {
@@ -63,6 +74,20 @@ function App() {
 
     checkServer()
   }, [])
+
+  const handleDragStart = (type: string) => {
+    setDraggedType(type)
+  }
+
+  const handleBlockClick = (blockType: string) => {
+    if (addNodeFromPaletteRef.current) {
+      addNodeFromPaletteRef.current(blockType)
+    }
+  }
+
+  const registerAddNodeHandler = (handler: (blockType: string) => void) => {
+    addNodeFromPaletteRef.current = handler
+  }
 
   if (serverStatus.loading) {
     return (
@@ -95,54 +120,28 @@ function App() {
   }
 
   return (
-    <ErrorBoundary FallbackComponent={ErrorFallback}>
-      <div className="h-screen w-screen">
-        {/* Status Bar */}
-        <div className="flex items-center justify-between border-b bg-white px-4 py-2">
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold">VisionForge</h1>
-            <span className="text-xs text-gray-500">Local Desktop</span>
+    <ApiKeyProvider>
+      <ErrorBoundary FallbackComponent={ErrorFallback}>
+        <div className="h-screen w-screen flex flex-col overflow-hidden bg-background">
+          <Header />
+
+          <div className="flex-1 flex overflow-hidden relative">
+            <ResizableBlockPalette
+              onDragStart={handleDragStart}
+              onBlockClick={handleBlockClick}
+            />
+            <Canvas
+              onDragStart={handleDragStart}
+              onRegisterAddNode={registerAddNodeHandler}
+            />
+            {selectedNodeId && <ConfigPanel />}
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-green-500"></div>
-              <span className="text-xs text-gray-600">Server Connected</span>
-            </div>
-            {serverStatus.aiEnabled ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-600">🤖 AI Enabled</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">
-                  AI Disabled (add keys to .env)
-                </span>
-              </div>
-            )}
-          </div>
+
+          <ChatBot />
+          <Toaster position="bottom-right" richColors />
         </div>
-
-        {/* Main Application */}
-        <div className="flex h-[calc(100vh-48px)]">
-          {/* Block Palette */}
-          <div className="w-64 border-r bg-white">
-            <BlockPalette />
-          </div>
-
-          {/* Canvas */}
-          <div className="flex-1">
-            <Canvas inferenceClient={localClient} />
-          </div>
-
-          {/* ChatBot */}
-          {serverStatus.aiEnabled && (
-            <div className="w-96 border-l bg-white">
-              <ChatBot inferenceClient={localClient} />
-            </div>
-          )}
-        </div>
-      </div>
-    </ErrorBoundary>
+      </ErrorBoundary>
+    </ApiKeyProvider>
   )
 }
 

@@ -1,7 +1,7 @@
 "use client";
 import { jsx as _jsx } from "react/jsx-runtime";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
-import { cn } from "../lib/utils";
+import { cn } from "../../lib/utils";
 function Tabs({ className, ...props }) {
     return (_jsx(TabsPrimitive.Root, { "data-slot": "tabs", className: cn("flex flex-col gap-2", className), ...props }));
 }

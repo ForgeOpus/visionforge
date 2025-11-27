@@ -1,8 +1,8 @@
 "use client";
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
-import { cn } from "../lib/utils";
-import { buttonVariants } from "./ui/button";
+import { cn } from "../../lib/utils";
+import { buttonVariants } from "./button";
 function AlertDialog({ ...props }) {
     return _jsx(AlertDialogPrimitive.Root, { "data-slot": "alert-dialog", ...props });
 }
