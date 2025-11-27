@@ -3,6 +3,6 @@ interface BlockPaletteProps {
     onBlockClick: (blockType: string) => void;
     isCollapsed: boolean;
 }
-export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed }: BlockPaletteProps): import("react/jsx-runtime").JSX.Element;
+export default function BlockPalette({ onDragStart, onBlockClick, isCollapsed }: BlockPaletteProps): any;
 export {};
 //# sourceMappingURL=BlockPalette.d.ts.map

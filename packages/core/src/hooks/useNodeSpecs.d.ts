@@ -23,8 +23,8 @@ export declare function useNodeSpecs(options?: UseNodeSpecsOptions): UseNodeSpec
  */
 export declare function useNodeSpec(nodeType: string, framework?: Framework): {
     spec: any;
-    loading: boolean;
-    error: string | null;
+    loading: any;
+    error: any;
 };
 export {};
 //# sourceMappingURL=useNodeSpecs.d.ts.map

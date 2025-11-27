@@ -1,2 +1,2 @@
-export default function ChatBot(): import("react/jsx-runtime").JSX.Element;
+export default function ChatBot(): any;
 //# sourceMappingURL=ChatBot.d.ts.map
