@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Handle, Position, NodeProps } from '@xyflow/react'
+import { Handle, Position } from '@xyflow/react'
 import { BlockData, BlockType } from '@visionforge/core/types'
 import { getNodeDefinition, BackendFramework } from '@visionforge/core/nodes'
 import { useModelBuilderStore } from '@visionforge/core/store'
@@ -369,7 +369,6 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
             // Add ground truth outlet
             if (hasGT) {
               const topPercent = spacing * (numInputOutlets + 1)
-              const gtColor = '#10b981'
               const handleId = 'ground-truth-output'
               const isConnected = isHandleConnected(handleId, false)
 

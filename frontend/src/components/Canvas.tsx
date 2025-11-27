@@ -323,7 +323,7 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
     [setSelectedEdgeId]
   )
 
-  const onPaneContextMenu = useCallback(((event: any) => {
+  const onPaneContextMenu = useCallback((event: any) => {
     event.preventDefault()
     setContextMenu({
       x: event.clientX,

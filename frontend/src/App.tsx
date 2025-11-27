@@ -48,7 +48,6 @@ function App() {
     loading: true,
   })
 
-  const [draggedType, setDraggedType] = useState<string | null>(null)
   const { selectedNodeId } = useModelBuilderStore()
   const addNodeFromPaletteRef = useRef<((blockType: string) => void) | null>(null)
 
@@ -75,8 +74,8 @@ function App() {
     checkServer()
   }, [])
 
-  const handleDragStart = (type: string) => {
-    setDraggedType(type)
+  const handleDragStart = (_type: string) => {
+    // Drag type handling for future use
   }
 
   const handleBlockClick = (blockType: string) => {

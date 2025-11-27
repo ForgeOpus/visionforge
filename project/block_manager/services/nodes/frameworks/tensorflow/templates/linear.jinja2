@@ -1,3 +1,0 @@
-{# TensorFlow Dense Layer Template #}
-{% set activation_str = "'" + config.activation + "'" if config.activation and config.activation != 'None' else 'None' %}
-tf.keras.layers.Dense({{ config.units }}, activation={{ activation_str }}, use_bias={{ config.use_bias|lower }})

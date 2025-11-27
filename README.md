@@ -1,186 +1,199 @@
 <div align="center">
-  <img src="project/frontend/public/vision_logo.png" alt="VisionForge Logo" width="200">
-
-  # VisionForge
-
-  **Build Neural Networks Visually — Export Production Code**
-
-  Design deep learning architectures with drag-and-drop. Export clean PyTorch or TensorFlow code instantly.
-
+  <h1>🔮 VisionForge</h1>
+  
+  **Visual Neural Network Builder for PyTorch & TensorFlow**
+  
+  Design deep learning architectures with drag-and-drop blocks. Export production-ready code instantly.
+  
   [![BSD-3-Clause License](https://img.shields.io/badge/License-BSD--3--Clause-blue.svg)](LICENSE)
-  [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
-  [![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev)
-
+  [![Python 3.8+](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
+  [![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev)
+  
 </div>
 
-<br />
+---
 
-## ✨ What is VisionForge?
+## ✨ Features
 
-VisionForge is a **visual neural network builder** that lets you design complex deep learning architectures without writing code. Perfect for researchers, students, and ML engineers who want to rapidly prototype models.
+- 🎨 **Visual Architecture Design** — Drag-and-drop interface for building neural networks
+- ⚡ **Automatic Shape Inference** — No manual tensor dimension tracking required
+- 🔄 **Multi-Framework Export** — Generate PyTorch or TensorFlow code
+- 🤖 **AI Assistant** — Chat interface powered by Gemini/Claude for model suggestions
+- ✅ **Real-Time Validation** — Catch architecture errors before export
+- 📦 **50+ Layer Types** — Conv, LSTM, Attention, Custom layers, and more
 
-- 🎨 **Drag-and-drop interface** — Build CNNs, LSTMs, ResNets visually
-- ⚡ **Automatic shape inference** — No manual tensor dimension tracking
-- 🔄 **Multi-framework export** — PyTorch or TensorFlow with one click
-- 🤖 **AI-powered assistant** — Ask questions or modify your model with natural language
-- ✅ **Real-time validation** — Catch architecture errors before export
-
-<br />
+---
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### Desktop Application (Recommended)
+
+The desktop version runs entirely locally with a Python backend server.
+
+**Prerequisites:**
 - Python 3.8+
 - Node.js 16+
-- [Google Gemini API key](https://aistudio.google.com/app/apikey) (for AI assistant)
 
-### Installation
+**Installation:**
 
-**1. Clone and setup backend**
 ```bash
-git clone https://github.com/devgunnu/visionforge.git
-cd visionforge/project
+# Clone the repository
+git clone https://github.com/ForgeOpus/visionforge.git
+cd visionforge
 
-# Install Python dependencies
-pip install -r requirements.txt
+# Install Python package
+cd python
+pip install -e ".[dev,ai]"
 
-# Setup environment
+# Configure API keys (optional, for AI features)
 cp .env.example .env
-# Add your GEMINI_API_KEY to .env
+# Edit .env and add your GEMINI_API_KEY or ANTHROPIC_API_KEY
 
-# Initialize database
-python manage.py migrate
-
-# Start Django server
-python manage.py runserver
+# Start the backend server
+python -m vision_forge.server
 ```
 
-Backend runs at `http://localhost:8000`
+The server runs at `http://localhost:8000`
 
-**2. Setup frontend**
+**Frontend:**
+
 ```bash
-cd project/frontend
-
-# Install dependencies
+# In a new terminal
+cd frontend
 npm install
-
-# Start dev server
 npm run dev
 ```
 
-Frontend runs at `http://localhost:5173`
+The frontend runs at `http://localhost:5173`
 
-**3. Open your browser**
-Navigate to `http://localhost:5173` and start building!
+Open `http://localhost:5173` in your browser and start building!
 
-<br />
+---
 
-## 🎯 How It Works
+## 📦 Architecture
 
-<div align="center">
+VisionForge is a monorepo with three main packages:
 
 ```
-┌─────────────┐    ┌──────────────┐    ┌──────────────┐    ┌─────────────┐
-│  Drag & Drop │ →  │  Configure   │ →  │   Validate   │ →  │   Export    │
-│    Blocks    │    │  Parameters  │    │ Architecture │    │    Code     │
-└─────────────┘    └──────────────┘    └──────────────┘    └─────────────┘
+visionforge/
+├── frontend/           # React + TypeScript desktop UI
+├── packages/core/      # Shared React components & utilities
+└── python/            # FastAPI server + code generation
 ```
 
-</div>
+### Package Overview
 
-1. **Add layers** from the sidebar (Conv2D, LSTM, Dropout, etc.)
-2. **Connect blocks** to define your model's data flow
-3. **Set parameters** by clicking on any block
-4. **Validate** your architecture with built-in checks
-5. **Export** production-ready code for PyTorch or TensorFlow
+- **`frontend/`** — Desktop application with local API client
+- **`packages/core/`** — Reusable UI components (Radix UI, validation, node definitions)
+- **`python/`** — Python package with FastAPI server, code generation, AI integration
 
-<br />
+---
 
-## 📦 Available Layers
+## 🎯 Building Your First Model
 
-<table>
-<tr>
-<td width="50%">
+1. **Add Layers** — Drag blocks from the left sidebar (Input, Conv2D, Linear, etc.)
+2. **Connect Blocks** — Draw connections to define data flow
+3. **Configure** — Click any block to adjust parameters
+4. **Validate** — Real-time checks ensure your architecture is valid
+5. **Export** — Generate PyTorch or TensorFlow code with one click
 
-**Core Layers**
-- Input / Output
-- Linear (Fully Connected)
-- Conv1D / Conv2D / Conv3D
-- Flatten, Reshape
+### Example: Simple CNN Classifier
 
-**Activation & Regularization**
-- ReLU, Sigmoid, Tanh, Softmax
-- Dropout, BatchNorm
-- Layer Normalization
-
-</td>
-<td width="50%">
-
-**Pooling**
-- MaxPool2D, AvgPool2D
-- AdaptiveAvgPool2D
-
-**Recurrent & Sequence**
-- LSTM, GRU
-- Embedding
-
-**Operations**
-- Add, Concatenate
-- Custom layers
-
-</td>
-</tr>
-</table>
-
-<br />
-
-## 💡 Example Architectures
-
-**Simple CNN Classifier**
 ```
-Input → Conv2D → ReLU → MaxPool2D → Flatten → Linear → Softmax → Loss
+Input(28×28×1) → Conv2D(32) → ReLU → MaxPool2D → 
+Flatten → Linear(10) → Softmax → Output
 ```
 
-**ResNet-style Skip Connection**
+### Example: ResNet-Style Skip Connection
+
 ```
 Input → Conv2D → BatchNorm → ReLU ┐
                                    ├→ Add → ReLU → Output
-       Input ────────────────────→┘
+Input ─────────────────────────────┘
 ```
 
-**LSTM Sequence Model**
-```
-Input → Embedding → LSTM → Dropout → Linear → Output → Loss
-```
+---
 
-<br />
-
-## 🛠️ Tech Stack
+## 🧩 Available Layers
 
 <table>
 <tr>
-<td><b>Frontend</b></td>
-<td>React 19 • TypeScript • Vite • Tailwind CSS</td>
-</tr>
-<tr>
-<td><b>Canvas</b></td>
-<td>ReactFlow • Zustand • Framer Motion</td>
-</tr>
-<tr>
-<td><b>Backend</b></td>
-<td>Django • Python • SQLite</td>
-</tr>
-<tr>
-<td><b>AI</b></td>
-<td>Google Gemini API</td>
-</tr>
-<tr>
-<td><b>UI</b></td>
-<td>Radix UI • shadcn/ui</td>
+<td width="33%">
+
+**Core Layers**
+- Input / Output
+- Linear (Dense)
+- Conv1D/2D/3D
+- Flatten / Reshape
+- Embedding
+
+</td>
+<td width="33%">
+
+**Activations & Norm**
+- ReLU, Sigmoid, Tanh
+- Softmax, LogSoftmax
+- BatchNorm, LayerNorm
+- Dropout
+
+</td>
+<td width="33%">
+
+**Advanced**
+- LSTM, GRU
+- Attention
+- MaxPool, AvgPool
+- Add, Concatenate
+- Custom Layers
+
+</td>
 </tr>
 </table>
 
-<br />
+---
+
+## 🛠️ Development
+
+### Build from Source
+
+```bash
+# Install all dependencies
+npm install
+
+# Build core package
+npm run build:core
+
+# Run frontend in dev mode
+npm run dev
+
+# Run Python tests
+cd python && pytest
+```
+
+### Project Structure
+
+```
+frontend/
+  src/
+    components/     # React components (Canvas, BlockPalette, etc.)
+    lib/           # API client, utilities, types
+    
+packages/core/
+  src/
+    components/ui/ # Radix UI wrappers
+    lib/
+      nodes/      # Node definitions & registry
+      validation/ # Shape inference engine
+      store/      # Zustand state management
+      
+python/
+  vision_forge/
+    server/       # FastAPI app
+    codegen/      # PyTorch/TensorFlow code generation
+    ai/          # Gemini/Claude integrations
+```
+
+---
 
 ## ⌨️ Keyboard Shortcuts
 
@@ -189,98 +202,123 @@ Input → Embedding → LSTM → Dropout → Linear → Output → Loss
 | `Ctrl+Z` | Undo |
 | `Ctrl+Y` | Redo |
 | `Delete` | Remove selected block |
+| `Ctrl+S` | Save architecture |
 
-<br />
+---
+
+## 🤖 AI Assistant
+
+VisionForge includes an AI-powered chatbot that can:
+- Suggest layer configurations
+- Explain architectural patterns
+- Recommend improvements
+- Answer ML/DL questions
+
+**Supported Providers:**
+- Google Gemini (default)
+- Anthropic Claude
+
+Configure in `.env`:
+```bash
+GEMINI_API_KEY=your_key_here
+# or
+ANTHROPIC_API_KEY=your_key_here
+```
+
+---
 
 ## 📖 Documentation
 
-- [Quick Start Guide](docs/QUICKSTART.md)
-- [AI Chatbot Setup](docs/CHATBOT_SETUP.md)
-- [Export Format Specification](docs/EXPORT_FORMAT.md)
-- [Node Architecture](docs/NODE_DEFINITION_ARCHITECTURE.md)
+- **Getting Started:** [Quick Start Guide](docs/QUICKSTART.md)
+- **Architecture:** [System Design](ARCHITECTURE.md)
+- **Nodes & Validation:** [Node Rules](docs/NODES_AND_RULES.md)
+- **Contributing:** [Contribution Guide](CONTRIBUTING.md)
 
-<br />
+---
+
+## 🧪 Testing
+
+```bash
+# Frontend tests
+cd frontend && npm test
+
+# Python tests
+cd python && pytest
+
+# Type checking
+npm run type-check
+```
+
+---
 
 ## 🐛 Troubleshooting
 
-**Backend not starting?**
+**Backend won't start?**
 ```bash
-cd project
-python manage.py migrate
-python manage.py runserver
+cd python
+pip install -e ".[dev,ai]"
+python -m vision_forge.server
 ```
 
 **Frontend build errors?**
 ```bash
-cd project/frontend
+cd frontend
 rm -rf node_modules package-lock.json
 npm install
 npm run dev
 ```
 
-**CORS issues?**
-Make sure both servers are running (Django on 8000, Vite on 5173)
+**Shape inference issues?**
+Check [NODES_AND_RULES.md](docs/NODES_AND_RULES.md) for dimension requirements.
 
-<br />
+---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Feel free to open issues or submit PRs.
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes with tests
+4. Run linting and tests (`npm run lint && npm test`)
+5. Commit (`git commit -m 'Add amazing feature'`)
+6. Push and open a Pull Request
 
-<br />
+---
 
-## 📄 License & Attribution
+## 📄 License
 
 VisionForge is licensed under the **BSD 3-Clause License**.
 
 ```
 Copyright (c) 2025, ForgeOpus
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the conditions in the
-LICENSE file are met.
+All rights reserved.
 ```
 
-See [LICENSE](LICENSE) for the full license text.
+See [LICENSE](LICENSE) for full terms.
 
 ### Third-Party Software
 
-VisionForge is built on top of many excellent open source projects. We are grateful to the open source community for their contributions.
+VisionForge uses 350+ open source packages. See:
+- [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) — Complete dependency list
+- [NOTICE](NOTICE) — Attribution notices
 
-**Key Dependencies:**
-- **Frontend:** React, TypeScript, Vite, Tailwind CSS, Radix UI, XYFlow, Zustand, Framer Motion
-- **Backend:** Django, Python, Google Generative AI, Anthropic
-- **Total:** 350+ open source packages under permissive licenses (MIT, Apache-2.0, BSD, ISC)
-
-For complete license information and attributions:
-- 📋 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) - Comprehensive list of all dependencies and their licenses
-- 📄 [NOTICE](NOTICE) - Required attribution notices for specific dependencies
-
-### License Compliance
-
-All dependencies use licenses compatible with BSD-3-Clause:
-- ✅ **MIT, Apache-2.0, BSD, ISC** - Permissive licenses (majority of dependencies)
-- ✅ **MPL-2.0** - Weak copyleft (LightningCSS) - properly attributed
-- ✅ **LGPL** - Dynamically linked (Python libraries) - properly attributed
-
-We are committed to open source license compliance. If you have concerns about license compliance, please [open an issue](https://github.com/ForgeOpus/visionforge/issues).
-
-<br />
-
-<div align="center">
+All dependencies use BSD/MIT/Apache-2.0 compatible licenses.
 
 ---
 
-**Ready to build AI models faster?**
+## 🔗 Links
 
-[Get Started](#-quick-start) • [View Docs](docs/) • [Report Issues](https://github.com/ForgeOpus/visionforge/issues)
+- **Repository:** [github.com/ForgeOpus/visionforge](https://github.com/ForgeOpus/visionforge)
+- **Issues:** [Report bugs or request features](https://github.com/ForgeOpus/visionforge/issues)
+- **Discussions:** [Community forum](https://github.com/ForgeOpus/visionforge/discussions)
 
-Made by [devgunnu](https://github.com/devgunnu) | Maintained by [ForgeOpus](https://github.com/ForgeOpus)
+---
+
+<div align="center">
+
+**Built with ❤️ by [ForgeOpus](https://github.com/ForgeOpus)**
+
+[Get Started](#-quick-start) • [Documentation](docs/) • [Contributing](CONTRIBUTING.md)
 
 </div>

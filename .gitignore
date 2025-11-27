@@ -70,3 +70,14 @@ __pycache__
 */.claude/*
 .claude/*
 .claude/
+
+# Build artifacts
+.vite/
+*.tsbuildinfo
+dist/
+build/
+
+# Test artifacts  
+test/
+coverage/
+

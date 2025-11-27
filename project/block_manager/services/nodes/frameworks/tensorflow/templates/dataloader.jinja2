@@ -1,4 +1,0 @@
-{# TensorFlow DataLoader Template #}
-# Dataset: {{ config.dataset }}
-# Batch size: {{ config.batch_size }}
-tf.data.Dataset.from_tensor_slices((x_data, y_data)).batch({{ config.batch_size }}){% if config.shuffle %}.shuffle(buffer_size=1000){% endif %}

@@ -36,7 +36,6 @@ export default function Header() {
   const { currentProject, nodes, edges, saveProject, loadProject, validateArchitecture, setNodes, setEdges } = useModelBuilderStore()
 
   const [projects, setProjects] = useState<projectApi.ProjectResponse[]>([])
-  const [isLoadingProjects, setIsLoadingProjects] = useState(false)
 
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
@@ -65,7 +64,7 @@ export default function Header() {
   }, [])
 
   const loadProjectsList = async () => {
-    setIsLoadingProjects(true)
+    // Loading projects
     try {
       const projectsList = await projectApi.fetchProjects()
       setProjects(projectsList)
@@ -73,7 +72,7 @@ export default function Header() {
       console.error('Failed to load projects:', error)
       toast.error('Failed to load projects list')
     } finally {
-      setIsLoadingProjects(false)
+      // Done loading
     }
   }
 
