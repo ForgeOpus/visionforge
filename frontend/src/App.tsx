@@ -6,8 +6,9 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
+import { Routes, Route, useParams, useNavigate } from 'react-router-dom'
 import { ErrorBoundary } from 'react-error-boundary'
-import { Toaster } from 'sonner'
+import { Toaster, toast } from 'sonner'
 import Canvas from './components/Canvas'
 import ResizableBlockPalette from './components/ResizableBlockPalette'
 import ConfigPanel from './components/ConfigPanel'
@@ -16,6 +17,7 @@ import Header from './components/Header'
 import { localClient } from './lib/inference'
 import { useModelBuilderStore } from '@visionforge/core/store'
 import { ApiKeyProvider } from './lib/apiKeyContext'
+import { api } from './lib/api'
 
 function ErrorFallback({ error, resetErrorBoundary }: any) {
   return (
@@ -36,6 +38,99 @@ function ErrorFallback({ error, resetErrorBoundary }: any) {
   )
 }
 
+/**
+ * ProjectCanvas component - handles loading projects from URL params
+ */
+function ProjectCanvas() {
+  const { projectId } = useParams<{ projectId: string }>()
+  const navigate = useNavigate()
+  const { selectedNodeId, loadProject, createProject, currentProject } = useModelBuilderStore()
+  const addNodeFromPaletteRef = useRef<((blockType: string) => void) | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  // Load project if projectId is provided
+  useEffect(() => {
+    const loadProjectData = async () => {
+      if (projectId && projectId !== 'new') {
+        setLoading(true)
+        const result = await api.getProject(parseInt(projectId))
+        if (result.success && result.data) {
+          const project = result.data
+          loadProject({
+            id: project.id.toString(),
+            name: project.name,
+            description: project.description || '',
+            framework: project.framework as 'pytorch' | 'tensorflow',
+            nodes: project.nodes || [],
+            edges: project.edges || [],
+            createdAt: new Date(project.created_at).getTime(),
+            updatedAt: new Date(project.updated_at).getTime(),
+          })
+          toast.success(`Loaded project: ${project.name}`)
+        } else {
+          toast.error(result.error || 'Failed to load project')
+          navigate('/')
+        }
+        setLoading(false)
+      } else if (projectId === 'new' && !currentProject) {
+        // Create a new project
+        createProject('Untitled Project', '', 'pytorch')
+      }
+    }
+
+    loadProjectData()
+  }, [projectId])
+
+  const handleDragStart = (_type: string) => {
+    // Drag type handling for future use
+  }
+
+  const handleBlockClick = (blockType: string) => {
+    if (addNodeFromPaletteRef.current) {
+      addNodeFromPaletteRef.current(blockType)
+    }
+  }
+
+  const registerAddNodeHandler = (handler: (blockType: string) => void) => {
+    addNodeFromPaletteRef.current = handler
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto"></div>
+          <p className="text-foreground">Loading project...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-screen w-screen flex flex-col overflow-hidden bg-background">
+      <Header />
+
+      <div className="flex-1 flex overflow-hidden relative">
+        <ResizableBlockPalette
+          onDragStart={handleDragStart}
+          onBlockClick={handleBlockClick}
+        />
+        <Canvas
+          onDragStart={handleDragStart}
+          onRegisterAddNode={registerAddNodeHandler}
+        />
+        {selectedNodeId && <ConfigPanel />}
+      </div>
+
+      <ChatBot />
+      <Toaster position="bottom-right" richColors />
+    </div>
+  )
+}
+
+/**
+ * Main App component with server health check and routing
+ */
 function App() {
   const [serverStatus, setServerStatus] = useState<{
     connected: boolean
@@ -47,9 +142,6 @@ function App() {
     aiEnabled: false,
     loading: true,
   })
-
-  const { selectedNodeId } = useModelBuilderStore()
-  const addNodeFromPaletteRef = useRef<((blockType: string) => void) | null>(null)
 
   // Check server health on mount
   useEffect(() => {
@@ -73,20 +165,6 @@ function App() {
 
     checkServer()
   }, [])
-
-  const handleDragStart = (_type: string) => {
-    // Drag type handling for future use
-  }
-
-  const handleBlockClick = (blockType: string) => {
-    if (addNodeFromPaletteRef.current) {
-      addNodeFromPaletteRef.current(blockType)
-    }
-  }
-
-  const registerAddNodeHandler = (handler: (blockType: string) => void) => {
-    addNodeFromPaletteRef.current = handler
-  }
 
   if (serverStatus.loading) {
     return (
@@ -121,24 +199,10 @@ function App() {
   return (
     <ApiKeyProvider>
       <ErrorBoundary FallbackComponent={ErrorFallback}>
-        <div className="h-screen w-screen flex flex-col overflow-hidden bg-background">
-          <Header />
-
-          <div className="flex-1 flex overflow-hidden relative">
-            <ResizableBlockPalette
-              onDragStart={handleDragStart}
-              onBlockClick={handleBlockClick}
-            />
-            <Canvas
-              onDragStart={handleDragStart}
-              onRegisterAddNode={registerAddNodeHandler}
-            />
-            {selectedNodeId && <ConfigPanel />}
-          </div>
-
-          <ChatBot />
-          <Toaster position="bottom-right" richColors />
-        </div>
+        <Routes>
+          <Route path="/" element={<ProjectCanvas />} />
+          <Route path="/project/:projectId" element={<ProjectCanvas />} />
+        </Routes>
       </ErrorBoundary>
     </ApiKeyProvider>
   )

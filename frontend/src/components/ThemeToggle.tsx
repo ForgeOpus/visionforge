@@ -6,12 +6,23 @@ export function ThemeToggle() {
   const [isDark, setIsDark] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // Avoid hydration mismatch by only rendering after mount
+  // Load theme from localStorage on mount
   useEffect(() => {
     setMounted(true);
-    // Check if dark mode is preferred
+
+    // Check localStorage first, then system preference
+    const savedTheme = localStorage.getItem("theme");
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    setIsDark(prefersDark);
+    const shouldBeDark = savedTheme === "dark" || (!savedTheme && prefersDark);
+
+    setIsDark(shouldBeDark);
+
+    // Apply theme to document
+    if (shouldBeDark) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
   }, []);
 
   if (!mounted) {
@@ -21,8 +32,17 @@ export function ThemeToggle() {
   }
 
   const handleToggle = () => {
-    setIsDark(!isDark);
-    // Note: This is a placeholder - proper theme switching would require additional setup
+    const newIsDark = !isDark;
+    setIsDark(newIsDark);
+
+    // Apply theme to document
+    if (newIsDark) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
   };
 
   return (

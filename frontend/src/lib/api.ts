@@ -110,6 +110,147 @@ export const api = {
    * Direct access to inference client (for advanced use)
    */
   client: localClient,
+
+  /**
+   * Project Management APIs
+   */
+
+  /**
+   * Create a new project
+   */
+  async createProject(data: {
+    name: string
+    description?: string
+    framework?: 'pytorch' | 'tensorflow'
+    nodes?: any[]
+    edges?: any[]
+  }) {
+    try {
+      const apiUrl = (localClient as any).apiUrl || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}/api/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!response.ok) throw new Error('Failed to create project')
+      const result = await response.json()
+      return { success: true, data: result }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to create project',
+      }
+    }
+  },
+
+  /**
+   * Get all projects
+   */
+  async getProjects() {
+    try {
+      const apiUrl = (localClient as any).apiUrl || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}/api/projects`)
+      if (!response.ok) throw new Error('Failed to fetch projects')
+      const result = await response.json()
+      return { success: true, data: result }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch projects',
+      }
+    }
+  },
+
+  /**
+   * Get a specific project
+   */
+  async getProject(projectId: number) {
+    try {
+      const apiUrl = (localClient as any).apiUrl || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}/api/projects/${projectId}`)
+      if (!response.ok) throw new Error('Failed to fetch project')
+      const result = await response.json()
+      return { success: true, data: result }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch project',
+      }
+    }
+  },
+
+  /**
+   * Update a project
+   */
+  async updateProject(
+    projectId: number,
+    data: {
+      name?: string
+      description?: string
+      framework?: 'pytorch' | 'tensorflow'
+    }
+  ) {
+    try {
+      const apiUrl = (localClient as any).apiUrl || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}/api/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!response.ok) throw new Error('Failed to update project')
+      const result = await response.json()
+      return { success: true, data: result }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update project',
+      }
+    }
+  },
+
+  /**
+   * Delete a project
+   */
+  async deleteProject(projectId: number) {
+    try {
+      const apiUrl = (localClient as any).apiUrl || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}/api/projects/${projectId}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) throw new Error('Failed to delete project')
+      return { success: true, data: null }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to delete project',
+      }
+    }
+  },
+
+  /**
+   * Save workflow to a project
+   */
+  async saveWorkflow(projectId: number, data: { nodes: any[]; edges: any[] }) {
+    try {
+      const apiUrl = (localClient as any).apiUrl || 'http://localhost:8000'
+      const response = await fetch(
+        `${apiUrl}/api/projects/${projectId}/workflow`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        }
+      )
+      if (!response.ok) throw new Error('Failed to save workflow')
+      const result = await response.json()
+      return { success: true, data: result }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to save workflow',
+      }
+    }
+  },
 }
 
 /**
@@ -154,6 +295,28 @@ export function downloadZip(base64Zip: string, filename: string) {
 }
 
 export default api
+
+/**
+ * Convenience wrapper for chat - maintains backward compatibility
+ * Accepts individual parameters and converts to ChatOptions
+ */
+export async function sendChatMessage(
+  message: string,
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>,
+  modificationMode?: boolean,
+  workflowState?: { nodes: any[]; edges: any[] } | null,
+  file?: File,
+  apiKey?: string
+) {
+  // Note: apiKey is not used in local mode - server reads from .env
+  return api.chat({
+    message,
+    history,
+    modificationMode,
+    workflowState,
+    file,
+  })
+}
 
 /**
  * Render code for a specific node

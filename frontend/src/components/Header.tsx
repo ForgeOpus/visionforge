@@ -26,21 +26,32 @@ import { Textarea } from '@visionforge/core/components/ui/textarea'
 import { Plus, Download, FloppyDisk, CaretDown, Code, CheckCircle, GitBranch, Upload, FileCode, FilePy, GearSix, Trash, Info, PencilSimple, Warning } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import api from '@/lib/api'
+import { api } from '@/lib/api'
 import { exportToJSON, importFromJSON, downloadJSON, readJSONFile } from '@/lib/exportImport'
-import * as projectApi from '@/lib/projectApi'
+
+// Backend project type
+interface BackendProject {
+  id: number
+  name: string
+  description: string
+  framework: 'pytorch' | 'tensorflow'
+  nodes: any[]
+  edges: any[]
+  created_at: string
+  updated_at: string
+}
 
 export default function Header() {
   const navigate = useNavigate()
   const { projectId } = useParams<{ projectId: string }>()
   const { currentProject, nodes, edges, saveProject, loadProject, validateArchitecture, setNodes, setEdges } = useModelBuilderStore()
 
-  const [projects, setProjects] = useState<projectApi.ProjectResponse[]>([])
+  const [projects, setProjects] = useState<BackendProject[]>([])
 
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [isManageProjectOpen, setIsManageProjectOpen] = useState(false)
-  const [managingProject, setManagingProject] = useState<projectApi.ProjectResponse | null>(null)
+  const [managingProject, setManagingProject] = useState<BackendProject | null>(null)
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
   const [isSaveAsDialogOpen, setIsSaveAsDialogOpen] = useState(false)
 
@@ -64,15 +75,17 @@ export default function Header() {
   }, [])
 
   const loadProjectsList = async () => {
-    // Loading projects
     try {
-      const projectsList = await projectApi.fetchProjects()
-      setProjects(projectsList)
+      const result = await api.getProjects()
+      if (result.success && result.data) {
+        setProjects(result.data)
+      } else {
+        console.error('Failed to load projects:', result.error)
+        toast.error('Failed to load projects list')
+      }
     } catch (error) {
       console.error('Failed to load projects:', error)
       toast.error('Failed to load projects list')
-    } finally {
-      // Done loading
     }
   }
 
@@ -83,27 +96,41 @@ export default function Header() {
     }
 
     try {
-      const backendProject = await projectApi.createProject({
+      const result = await api.createProject({
         name: newProjectName,
         description: newProjectDesc,
-        framework: newProjectFramework
+        framework: newProjectFramework,
+        nodes: [],
+        edges: []
       })
 
-      // Load the project in the store
-      const projectData = projectApi.convertToFrontendProject(backendProject, [], [])
-      loadProject(projectData)
+      if (result.success && result.data) {
+        // Load the project in the store
+        loadProject({
+          id: result.data.id.toString(),
+          name: result.data.name,
+          description: result.data.description || '',
+          framework: result.data.framework as 'pytorch' | 'tensorflow',
+          nodes: result.data.nodes || [],
+          edges: result.data.edges || [],
+          createdAt: new Date(result.data.created_at).getTime(),
+          updatedAt: new Date(result.data.updated_at).getTime(),
+        })
 
-      setIsNewProjectOpen(false)
-      setNewProjectName('')
-      setNewProjectDesc('')
+        setIsNewProjectOpen(false)
+        setNewProjectName('')
+        setNewProjectDesc('')
 
-      toast.success('Project created!')
+        toast.success('Project created!')
 
-      // Reload projects list
-      await loadProjectsList()
+        // Reload projects list
+        await loadProjectsList()
 
-      // Navigate to the new project
-      navigate(`/project/${backendProject.id}`)
+        // Navigate to the new project
+        navigate(`/project/${result.data.id}`)
+      } else {
+        throw new Error(result.error || 'Failed to create project')
+      }
     } catch (error) {
       toast.error('Failed to create project', {
         description: error instanceof Error ? error.message : 'Unknown error'
@@ -120,38 +147,45 @@ export default function Header() {
     const loadingToast = toast.loading('Creating and saving project...')
 
     try {
-      // Create project on backend
-      const backendProject = await projectApi.createProject({
+      const result = await api.createProject({
         name: saveAsProjectName,
         description: saveAsProjectDesc,
-        framework: 'pytorch'
+        framework: currentProject?.framework || 'pytorch',
+        nodes,
+        edges
       })
 
-      // Save architecture immediately to the newly created project
-      await projectApi.saveArchitecture(backendProject.id, nodes, edges)
+      if (result.success && result.data) {
+        // Load into store
+        loadProject({
+          id: result.data.id.toString(),
+          name: result.data.name,
+          description: result.data.description || '',
+          framework: result.data.framework as 'pytorch' | 'tensorflow',
+          nodes: result.data.nodes || [],
+          edges: result.data.edges || [],
+          createdAt: new Date(result.data.created_at).getTime(),
+          updatedAt: new Date(result.data.updated_at).getTime(),
+        })
 
-      // Fetch the saved project with architecture
-      const { nodes: savedNodes, edges: savedEdges } = await projectApi.loadArchitecture(backendProject.id)
-      const projectData = projectApi.convertToFrontendProject(backendProject, savedNodes, savedEdges)
+        // Close dialog and reset fields
+        setIsSaveAsDialogOpen(false)
+        setSaveAsProjectName('')
+        setSaveAsProjectDesc('')
 
-      // Load into store
-      loadProject(projectData)
+        toast.dismiss(loadingToast)
+        toast.success('Project saved to database', {
+          description: 'Your design is stored in the SQLite database'
+        })
 
-      // Close dialog and reset fields
-      setIsSaveAsDialogOpen(false)
-      setSaveAsProjectName('')
-      setSaveAsProjectDesc('')
+        // Reload projects list
+        await loadProjectsList()
 
-      toast.dismiss(loadingToast)
-      toast.success('Project saved to browser storage', {
-        description: 'Your design is stored locally in your browser'
-      })
-
-      // Reload projects list
-      await loadProjectsList()
-
-      // Navigate to the new project
-      navigate(`/project/${backendProject.id}`, { replace: true })
+        // Navigate to the new project
+        navigate(`/project/${result.data.id}`, { replace: true })
+      } else {
+        throw new Error(result.error || 'Failed to create project')
+      }
     } catch (error) {
       toast.dismiss(loadingToast)
       toast.error('Failed to create project', {
@@ -168,14 +202,9 @@ export default function Header() {
 
     try {
       let project = currentProject
-      let projectIdToSave = project?.id
 
-      // Check if project ID is a timestamp (invalid) - treat as no project
-      const isTimestampId = project?.id && /^\d{13}$/.test(project.id)
-
-      // If no project exists or project has invalid timestamp ID, show dialog to create one
-      if (!project || isTimestampId) {
-        // Generate default name suggestion
+      // If no project exists, prompt to create one
+      if (!project) {
         const timestamp = new Date().toLocaleString('en-US', {
           month: 'short',
           day: 'numeric',
@@ -189,20 +218,23 @@ export default function Header() {
         return
       }
 
-      // Save to local storage for existing project
-      if (projectIdToSave) {
-        await projectApi.saveArchitecture(projectIdToSave, nodes, edges)
+      // Save workflow to backend
+      const projectId = parseInt(project.id)
+      const result = await api.saveWorkflow(projectId, { nodes, edges })
+
+      if (result.success) {
+        // Update store
+        saveProject()
+
+        toast.success('Project saved to database', {
+          description: 'Your design is stored in the SQLite database'
+        })
+
+        // Reload projects list
+        loadProjectsList()
+      } else {
+        throw new Error(result.error || 'Failed to save')
       }
-
-      // Save to local store
-      saveProject()
-
-      toast.success('Project saved to browser storage', {
-        description: 'Your design is stored locally in your browser'
-      })
-
-      // Reload projects list
-      loadProjectsList()
     } catch (error) {
       toast.dismiss()
       toast.error('Failed to save project', {
@@ -211,15 +243,32 @@ export default function Header() {
     }
   }
 
-  const handleLoadProject = async (project: projectApi.ProjectResponse) => {
+  const handleLoadProject = async (project: BackendProject) => {
     try {
-      // Fetch full project details (unused for now but may be needed later)
-      await projectApi.fetchProject(project.id)
+      const result = await api.getProject(project.id)
 
-      // Navigate to project URL
-      navigate(`/project/${project.id}`)
+      if (result.success && result.data) {
+        const projectData = result.data
 
-      toast.success(`Loaded "${project.name}"`)
+        // Load into store
+        loadProject({
+          id: projectData.id.toString(),
+          name: projectData.name,
+          description: projectData.description || '',
+          framework: projectData.framework as 'pytorch' | 'tensorflow',
+          nodes: projectData.nodes || [],
+          edges: projectData.edges || [],
+          createdAt: new Date(projectData.created_at).getTime(),
+          updatedAt: new Date(projectData.updated_at).getTime(),
+        })
+
+        // Navigate to project URL
+        navigate(`/project/${projectData.id}`)
+
+        toast.success(`Loaded "${projectData.name}"`)
+      } else {
+        throw new Error(result.error || 'Failed to load project')
+      }
     } catch (error) {
       toast.error('Failed to load project', {
         description: error instanceof Error ? error.message : 'Unknown error'
@@ -340,27 +389,37 @@ export default function Header() {
         setEdges(mergedEdges)
 
         // Save to backend
-        await projectApi.saveArchitecture(projectId, mergedNodes, mergedEdges)
-
-        toast.success('Architecture imported into current project!', {
-          description: `Added ${importedNodes.length} blocks to "${currentProject.name}"`
+        const result = await api.saveWorkflow(parseInt(projectId), {
+          nodes: mergedNodes,
+          edges: mergedEdges
         })
+
+        if (result.success) {
+          toast.success('Architecture imported into current project!', {
+            description: `Added ${importedNodes.length} blocks to "${currentProject.name}"`
+          })
+        } else {
+          throw new Error(result.error || 'Failed to save imported architecture')
+        }
       } else {
         // CASE 2: No active project - create a new one from import
         const { nodes: importedNodes, edges: importedEdges, project } = importFromJSON(jsonData)
 
         if (project.name && project.description !== undefined) {
-          const backendProject = await projectApi.createProject({
+          const result = await api.createProject({
             name: project.name,
             description: project.description,
-            framework: project.framework || 'pytorch'
+            framework: project.framework || 'pytorch',
+            nodes: importedNodes,
+            edges: importedEdges
           })
 
-          // Save the architecture
-          await projectApi.saveArchitecture(backendProject.id, importedNodes, importedEdges)
+          if (!result.success || !result.data) {
+            throw new Error(result.error || 'Failed to create project from import')
+          }
 
           // Navigate to new project
-          navigate(`/project/${backendProject.id}`)
+          navigate(`/project/${result.data.id}`)
 
           toast.success('Project created from import!', {
             description: `Created project "${project.name}" with ${importedNodes.length} blocks`
@@ -485,7 +544,7 @@ export default function Header() {
     toast.success(`${filename} downloaded!`)
   }
 
-  const handleOpenProjectManagement = (project: projectApi.ProjectResponse, e: React.MouseEvent) => {
+  const handleOpenProjectManagement = (project: BackendProject, e: React.MouseEvent) => {
     e.stopPropagation()
     setManagingProject(project)
     setEditProjectName(project.name)
@@ -502,18 +561,22 @@ export default function Header() {
     }
 
     try {
-      await projectApi.updateProject(managingProject.id, {
+      const result = await api.updateProject(managingProject.id, {
         name: editProjectName,
         description: editProjectDesc
       })
 
-      toast.success('Project updated!')
-      setIsManageProjectOpen(false)
-      loadProjectsList()
+      if (result.success) {
+        toast.success('Project updated!')
+        setIsManageProjectOpen(false)
+        loadProjectsList()
 
-      // If we're updating the current project, reload it
-      if (currentProject?.id === managingProject.id) {
-        navigate(`/project/${managingProject.id}`)
+        // If we're updating the current project, reload it
+        if (currentProject?.id === managingProject.id.toString()) {
+          navigate(`/project/${managingProject.id}`)
+        }
+      } else {
+        throw new Error(result.error || 'Failed to update project')
       }
     } catch (error) {
       toast.error('Failed to update project', {
@@ -526,18 +589,22 @@ export default function Header() {
     if (!managingProject) return
 
     try {
-      await projectApi.deleteProject(managingProject.id)
+      const result = await api.deleteProject(managingProject.id)
 
-      toast.success('Project deleted!')
-      setIsDeleteConfirmOpen(false)
-      setIsManageProjectOpen(false)
-      loadProjectsList()
+      if (result.success) {
+        toast.success('Project deleted!')
+        setIsDeleteConfirmOpen(false)
+        setIsManageProjectOpen(false)
+        loadProjectsList()
 
-      // If we deleted the current project, clear the store and go to blank canvas
-      if (currentProject?.id === managingProject.id) {
-        const { reset } = useModelBuilderStore.getState()
-        reset()
-        navigate('/project')
+        // If we deleted the current project, clear the store and go to blank canvas
+        if (currentProject?.id === managingProject.id.toString()) {
+          const { reset } = useModelBuilderStore.getState()
+          reset()
+          navigate('/')
+        }
+      } else {
+        throw new Error(result.error || 'Failed to delete project')
       }
     } catch (error) {
       toast.error('Failed to delete project', {
@@ -547,16 +614,7 @@ export default function Header() {
   }
 
   return (
-    <div className="flex flex-col">
-      {/* Demo Mode Banner */}
-      <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1.5 flex items-center justify-center gap-2">
-        <Warning size={14} className="text-amber-600" />
-        <span className="text-xs text-amber-700 dark:text-amber-400">
-          <strong>Demo Mode:</strong> Designs are saved locally in your browser. Provide your own Gemini API key to use AI features.
-        </span>
-      </div>
-
-      <header className="h-16 border-b border-border bg-card px-6 flex items-center justify-between">
+    <header className="h-16 border-b border-border bg-card px-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <img src="/logo_navbar.png" alt="VisionForge Logo" className="h-10 w-auto" />
@@ -617,7 +675,7 @@ export default function Header() {
                         <GitBranch size={14} className="text-muted-foreground shrink-0" />
                         <span className="font-medium flex-1 truncate">{project.name}</span>
                         <div className="flex items-center gap-1 shrink-0">
-                          {currentProject?.id === project.id && (
+                          {currentProject?.id === project.id.toString() && (
                             <CheckCircle size={14} weight="fill" className="text-primary" />
                           )}
                           <Button
@@ -1134,7 +1192,6 @@ export default function Header() {
           </DialogContent>
         </Dialog>
       </div>
-      </header>
-    </div>
+    </header>
   )
 }

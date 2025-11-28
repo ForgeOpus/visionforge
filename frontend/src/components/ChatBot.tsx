@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Card } from '@/components/ui/card'
-import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
+import { Button } from '@visionforge/core/components/ui/button'
+import { Input } from '@visionforge/core/components/ui/input'
+import { ScrollArea } from '@visionforge/core/components/ui/scroll-area'
+import { Card } from '@visionforge/core/components/ui/card'
+import { Switch } from '@visionforge/core/components/ui/switch'
+import { Label } from '@visionforge/core/components/ui/label'
 import * as Icons from '@phosphor-icons/react'
 import ReactMarkdown from 'react-markdown'
 import { sendChatMessage } from '../lib/api'
@@ -12,8 +12,6 @@ import { toast } from 'sonner'
 import { useModelBuilderStore } from '@visionforge/core/store'
 import { getNodeDefinition, BackendFramework } from '@visionforge/core/nodes'
 import { BlockType } from '@visionforge/core/types'
-import { useApiKey } from '@/lib/apiKeyContext'
-import ApiKeyModal from './ApiKeyModal'
 
 interface Message {
   id: string
@@ -43,13 +41,8 @@ export default function ChatBot() {
   const [isLoading, setIsLoading] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [isUploadingFile, setIsUploadingFile] = useState(false)
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false)
-  const [pendingMessage, setPendingMessage] = useState<{ input: string; file: File | null } | null>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // API Key context
-  const { apiKey, hasApiKey } = useApiKey()
 
   // Get workflow state from store
   const { nodes, edges, addNode, updateNode, removeNode, duplicateNode, addEdge, removeEdge } = useModelBuilderStore()
@@ -63,17 +56,6 @@ export default function ChatBot() {
       }
     }
   }, [messages])
-
-  // Handle API key modal success - retry sending the pending message
-  const handleApiKeySuccess = () => {
-    if (pendingMessage) {
-      // Restore the pending message to input fields
-      setInputValue(pendingMessage.input)
-      setUploadedFile(pendingMessage.file)
-      setPendingMessage(null)
-      // The user can now send the message again
-    }
-  }
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -111,13 +93,6 @@ export default function ChatBot() {
 
   const handleSendMessage = async () => {
     if ((!inputValue.trim() && !uploadedFile) || isLoading) return
-
-    // Check for API key before sending
-    if (!hasApiKey) {
-      setPendingMessage({ input: inputValue, file: uploadedFile })
-      setShowApiKeyModal(true)
-      return
-    }
 
     const currentFile = uploadedFile
     const userMessage: Message = {
@@ -164,8 +139,7 @@ export default function ChatBot() {
         messages,
         modificationMode,
         workflowState,
-        currentFile || undefined,
-        apiKey || undefined
+        currentFile || undefined
       )
 
       if (response.success && response.data) {
@@ -427,13 +401,6 @@ export default function ChatBot() {
 
   return (
     <>
-      {/* API Key Modal */}
-      <ApiKeyModal
-        open={showApiKeyModal}
-        onOpenChange={setShowApiKeyModal}
-        onSuccess={handleApiKeySuccess}
-      />
-
       {/* Floating Chat Button */}
       {!isOpen && (
         <Button

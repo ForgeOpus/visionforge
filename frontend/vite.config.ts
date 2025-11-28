@@ -9,7 +9,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@visionforge/core': path.resolve(__dirname, '../packages/core/src'),
     },
   },
   server: {
