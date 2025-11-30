@@ -7,7 +7,7 @@ echo "=== Building VisionForge Frontend ==="
 echo "Current directory: $(pwd)"
 
 # Navigate to frontend directory
-cd project/frontend
+cd frontend
 
 # Install Node.js dependencies
 echo "Installing frontend dependencies..."
@@ -19,7 +19,7 @@ npm run build
 
 # Verify build output
 if [ -d "dist" ]; then
-    echo "Build successful! Frontend built to project/frontend/dist/"
+    echo "Build successful! Frontend built to frontend/dist/"
     ls -la dist/
 else
     echo "ERROR: Build failed - dist directory not found"
