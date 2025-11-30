@@ -113,7 +113,7 @@ CORS_ALLOW_HEADERS = [
 ENVIRONMENT = os.getenv('ENVIRONMENT', 'DEV')
 IS_PRODUCTION = ENVIRONMENT == 'PROD'
 REQUIRES_USER_API_KEY = IS_PRODUCTION
-]
+
 
 # CSRF Configuration
 # Ensure CSRF cookie is set for single-page apps
