@@ -45,7 +45,7 @@ export function ApiKeyProvider({ children }: ApiKeyProviderProps) {
   useEffect(() => {
     const fetchEnvironmentInfo = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'}/environment`)
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api'}/environment`)
         if (response.ok) {
           const data = await response.json()
           setIsProduction(data.isProduction)
