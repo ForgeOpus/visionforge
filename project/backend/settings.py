@@ -24,12 +24,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-oy%j%4%)w%7#sx@e!h+m-hai9zvl*)-5$5uz%wlro4ry1*4vc-'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-oy%j%4%)w%7#sx@e!h+m-hai9zvl*)-5$5uz%wlro4ry1*4vc-')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
 # Application definition
@@ -49,6 +49,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -65,7 +66,7 @@ APPEND_SLASH = False
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'frontend' / 'dist'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -77,13 +78,17 @@ TEMPLATES = [
     },
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    os.getenv("FRONTEND_URL", "http://localhost:3000"),   # React dev server
-    "http://localhost:5173",  # Vite dev server
-    "http://localhost:5000",  # Alternative Vite port
-]
-
-CORS_ALLOW_CREDENTIALS = True
+# In production, CORS not needed since frontend served by Django
+if DEBUG:
+    CORS_ALLOWED_ORIGINS = [
+        os.getenv("FRONTEND_URL", "http://localhost:3000"),   # React dev server
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:5000",  # Alternative Vite port
+    ]
+    CORS_ALLOW_CREDENTIALS = True
+else:
+    # In production, same-origin policy applies
+    CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_HEADERS = [
     'accept',
     'accept-encoding',
@@ -159,9 +164,29 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Additional locations of static files
+STATICFILES_DIRS = [
+    BASE_DIR / 'frontend' / 'dist' / 'assets',
+]
+
+# WhiteNoise configuration
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_MANIFEST_STRICT = False
+WHITENOISE_ALLOW_ALL_ORIGINS = True
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Production security settings
+if not DEBUG:
+    SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True') == 'True'
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'

@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: visionforge
+    env: python
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: |
+      # Install Python dependencies
+      cd project
+      pip install -r requirements.txt
+
+      # Build frontend
+      cd ..
+      chmod +x build_frontend.sh
+      ./build_frontend.sh
+
+      # Collect Django static files
+      cd project
+      python manage.py collectstatic --noinput
+    startCommand: |
+      cd project
+      gunicorn --workers 2 --bind 0.0.0.0:$PORT backend.wsgi:application
