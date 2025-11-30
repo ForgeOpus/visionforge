@@ -5,6 +5,7 @@ import { ThemeProvider } from "next-themes";
 
 import App from './App.tsx'
 import { ErrorFallback } from './ErrorFallback.tsx'
+import { ApiKeyProvider } from './contexts/ApiKeyContext.tsx'
 
 import "./main.css"
 import "./styles/theme.css"
@@ -19,7 +20,9 @@ createRoot(document.getElementById('root')!).render(
       enableColorScheme={false}
     >
       <BrowserRouter>
-        <App />
+        <ApiKeyProvider>
+          <App />
+        </ApiKeyProvider>
       </BrowserRouter>
     </ThemeProvider>
    </ErrorBoundary>

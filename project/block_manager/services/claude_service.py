@@ -13,13 +13,23 @@ from django.core.files.uploadedfile import UploadedFile
 class ClaudeChatService:
     """Service to handle Claude AI chat interactions with workflow context."""
 
-    def __init__(self):
-        """Initialize Claude with API key from environment."""
-        api_key = os.getenv('ANTHROPIC_API_KEY')
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
+    def __init__(self, api_key: Optional[str] = None):
+        """
+        Initialize Claude with API key.
 
-        self.client = anthropic.Anthropic(api_key=api_key)
+        Args:
+            api_key: Optional API key for BYOK mode. If None, reads from environment.
+        """
+        if api_key:
+            # BYOK mode - use provided key
+            final_api_key = api_key
+        else:
+            # DEV mode - use environment variable
+            final_api_key = os.getenv('ANTHROPIC_API_KEY')
+            if not final_api_key:
+                raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
+
+        self.client = anthropic.Anthropic(api_key=final_api_key)
         self.model = 'claude-3-5-sonnet-20241022'  # Latest Claude model
 
     def _format_workflow_context(self, workflow_state: Optional[Dict[str, Any]]) -> str:

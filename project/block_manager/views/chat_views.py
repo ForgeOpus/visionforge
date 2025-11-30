@@ -11,9 +11,13 @@ logger = logging.getLogger(__name__)
 @api_view(['POST'])
 def chat_message(request):
     """
-    Handle chat messages with Gemini AI integration.
+    Handle chat messages with AI integration supporting both BYOK and server-side keys.
 
     Endpoint: POST /api/chat
+
+    Request headers (PROD mode only):
+        - X-Gemini-Api-Key: User's Gemini API key
+        - X-Anthropic-Api-Key: User's Anthropic API key
 
     Request body (JSON or FormData):
     - JSON format:
@@ -39,6 +43,11 @@ def chat_message(request):
     }
     """
     import json as json_lib
+    from django.conf import settings
+
+    # Extract API keys from headers (only used in PROD mode)
+    gemini_api_key = request.headers.get('X-Gemini-Api-Key')
+    anthropic_api_key = request.headers.get('X-Anthropic-Api-Key')
 
     # Check if request has file upload (FormData)
     uploaded_file = request.FILES.get('file', None)
@@ -74,8 +83,11 @@ def chat_message(request):
         )
 
     try:
-        # Initialize AI service (Gemini or Claude based on AI_PROVIDER)
-        ai_service = AIServiceFactory.create_service()
+        # Initialize AI service with appropriate API keys based on mode
+        ai_service = AIServiceFactory.create_service(
+            gemini_api_key=gemini_api_key,
+            anthropic_api_key=anthropic_api_key
+        )
         provider_name = AIServiceFactory.get_provider_name()
 
         # Handle file upload if present
@@ -123,13 +135,28 @@ def chat_message(request):
         # API key not configured or invalid provider
         logger.error(f"AI service configuration error: {e}")
         error_message = str(e)
-        return Response(
-            {
-                'error': error_message,
-                'response': 'Sorry, the AI chat service is not properly configured. Please contact the administrator.'
-            },
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+
+        # Check if this is a PROD mode (user key required) error
+        requires_user_key = AIServiceFactory.requires_user_api_key()
+
+        if requires_user_key and ('required' in error_message.lower() or 'provide' in error_message.lower()):
+            # PROD mode - user needs to provide API key
+            return Response(
+                {
+                    'error': error_message,
+                    'response': 'Please provide your API key to use the AI assistant.'
+                },
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        else:
+            # DEV mode - server configuration issue
+            return Response(
+                {
+                    'error': error_message,
+                    'response': 'Sorry, the AI chat service is not properly configured. Please contact the administrator.'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     except Exception as e:
         # Other errors
@@ -150,6 +177,10 @@ def get_suggestions(request):
 
     Endpoint: POST /api/suggestions
 
+    Request headers (PROD mode only):
+        - X-Gemini-Api-Key: User's Gemini API key
+        - X-Anthropic-Api-Key: User's Anthropic API key
+
     Request body:
     {
         "nodes": [...],
@@ -161,6 +192,10 @@ def get_suggestions(request):
         "suggestions": [str]
     }
     """
+    # Extract API keys from headers (only used in PROD mode)
+    gemini_api_key = request.headers.get('X-Gemini-Api-Key')
+    anthropic_api_key = request.headers.get('X-Anthropic-Api-Key')
+
     nodes = request.data.get('nodes', [])
     edges = request.data.get('edges', [])
 
@@ -170,8 +205,11 @@ def get_suggestions(request):
         })
 
     try:
-        # Initialize AI service (Gemini or Claude based on AI_PROVIDER)
-        ai_service = AIServiceFactory.create_service()
+        # Initialize AI service with appropriate API keys based on mode
+        ai_service = AIServiceFactory.create_service(
+            gemini_api_key=gemini_api_key,
+            anthropic_api_key=anthropic_api_key
+        )
         provider_name = AIServiceFactory.get_provider_name()
 
         # Get suggestions
@@ -205,3 +243,33 @@ def get_suggestions(request):
                 "Error generating suggestions. Please check your workflow configuration."
             ]
         })
+
+
+@api_view(['GET'])
+def get_environment_info(request):
+    """
+    Get environment configuration information.
+
+    Endpoint: GET /api/environment
+
+    Response:
+    {
+        'environment': 'PROD' | 'DEV' | 'LOCAL',
+        'isProduction': boolean,
+        'requiresApiKey': boolean,
+        'provider': 'Gemini' | 'Claude'
+    }
+    """
+    from django.conf import settings
+
+    environment = AIServiceFactory.get_environment_mode()
+    is_production = getattr(settings, 'IS_PRODUCTION', True)
+    requires_api_key = getattr(settings, 'REQUIRES_USER_API_KEY', True)
+    provider = AIServiceFactory.get_provider_name()
+
+    return Response({
+        'environment': environment,
+        'isProduction': is_production,
+        'requiresApiKey': requires_api_key,
+        'provider': provider
+    })

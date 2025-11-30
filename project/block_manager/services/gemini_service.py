@@ -13,13 +13,23 @@ from django.core.files.uploadedfile import UploadedFile
 class GeminiChatService:
     """Service to handle Gemini AI chat interactions with workflow context."""
 
-    def __init__(self):
-        """Initialize Gemini with API key from environment."""
-        api_key = os.getenv('GEMINI_API_KEY')
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY environment variable is not set")
+    def __init__(self, api_key: Optional[str] = None):
+        """
+        Initialize Gemini with API key.
 
-        genai.configure(api_key=api_key)
+        Args:
+            api_key: Optional API key for BYOK mode. If None, reads from environment.
+        """
+        if api_key:
+            # BYOK mode - use provided key
+            final_api_key = api_key
+        else:
+            # DEV mode - use environment variable
+            final_api_key = os.getenv('GEMINI_API_KEY')
+            if not final_api_key:
+                raise ValueError("GEMINI_API_KEY environment variable is not set")
+
+        genai.configure(api_key=final_api_key)
         self.model = genai.GenerativeModel('gemini-2.0-flash')
 
     def _format_workflow_context(self, workflow_state: Optional[Dict[str, Any]]) -> str:

@@ -94,7 +94,15 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'x-gemini-api-key',
+    'x-anthropic-api-key',
 ]
+
+# Environment mode configuration
+# Controls API key behavior: PROD/missing = BYOK, DEV/LOCAL = server keys
+ENVIRONMENT = os.getenv('ENVIRONMENT', 'DEV')
+IS_PRODUCTION = ENVIRONMENT == 'PROD'
+REQUIRES_USER_API_KEY = IS_PRODUCTION
 
 REST_FRAMEWORK = {
     # For local dev only: allow unauthenticated access to endpoints

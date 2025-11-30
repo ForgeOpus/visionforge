@@ -11,7 +11,7 @@ from block_manager.views.architecture_views import (
 )
 from block_manager.views.validation_views import validate_model
 from block_manager.views.export_views import export_model
-from block_manager.views.chat_views import chat_message, get_suggestions
+from block_manager.views.chat_views import chat_message, get_suggestions, get_environment_info
 
 # Create router for viewsets
 router = DefaultRouter()
@@ -39,4 +39,7 @@ urlpatterns = [
     # Chat endpoints (matches frontend API contract)
     path('chat', chat_message, name='chat-message'),
     path('suggestions', get_suggestions, name='suggestions'),
+
+    # Environment info endpoint
+    path('environment', get_environment_info, name='environment-info'),
 ]

@@ -23,17 +23,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Download, FloppyDisk, CaretDown, Code, CheckCircle, GitBranch, Upload, FileCode, FilePy, GearSix, Trash, Info, PencilSimple } from '@phosphor-icons/react'
+import { Plus, Download, FloppyDisk, CaretDown, Code, CheckCircle, GitBranch, Upload, FileCode, FilePy, GearSix, Trash, Info, PencilSimple, Warning, Key } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { validateModel, exportModel as apiExportModel } from '@/lib/api'
 import { exportToJSON, importFromJSON, downloadJSON, readJSONFile } from '@/lib/exportImport'
 import * as projectApi from '@/lib/projectApi'
+import { useApiKeys } from '@/contexts/ApiKeyContext'
+import ApiKeyModal from './ApiKeyModal'
 
 export default function Header() {
   const navigate = useNavigate()
   const { projectId } = useParams<{ projectId: string }>()
   const { currentProject, nodes, edges, createProject: createProjectInStore, saveProject, loadProject, validateArchitecture, setNodes, setEdges } = useModelBuilderStore()
+
+  // API Key management for demo banner
+  const { requiresApiKey, provider, environment } = useApiKeys()
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false)
 
   const [projects, setProjects] = useState<projectApi.ProjectResponse[]>([])
   const [isLoadingProjects, setIsLoadingProjects] = useState(false)
@@ -542,7 +548,29 @@ export default function Header() {
   }
 
   return (
-    <header className="h-16 border-b border-border bg-card px-6 flex items-center justify-between">
+    <>
+      {/* Demo Mode Banner */}
+      {requiresApiKey && (
+        <div className="bg-yellow-500/10 border-b border-yellow-500/50 px-4 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Warning size={20} className="text-yellow-600 dark:text-yellow-400" />
+            <span className="text-sm text-yellow-600 dark:text-yellow-400">
+              <strong>Demo Mode:</strong> Please provide your personal {provider} API key to enable AI assistant functionality.
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowApiKeyModal(true)}
+            className="text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-yellow-300"
+          >
+            <Key size={16} className="mr-2" />
+            Manage API Key
+          </Button>
+        </div>
+      )}
+
+      <header className="h-16 border-b border-border bg-card px-6 flex items-center justify-between">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <img src="/logo_navbar.png" alt="VisionForge Logo" className="h-10 w-auto" />
@@ -1121,5 +1149,13 @@ export default function Header() {
         </Dialog>
       </div>
     </header>
+
+    {/* API Key Modal */}
+    <ApiKeyModal
+      open={showApiKeyModal}
+      onOpenChange={setShowApiKeyModal}
+      required={false}
+    />
+    </>
   )
 }
