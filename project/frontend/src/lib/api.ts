@@ -17,27 +17,36 @@ interface ApiResponse<T = any> {
   message?: string
 }
 
-/**
- * Get CSRF token from cookie
- */
-function getCsrfToken(): string | null {
-  const name = 'csrftoken'
-  const cookies = document.cookie.split(';')
-  for (let cookie of cookies) {
-    cookie = cookie.trim()
-    if (cookie.startsWith(name + '=')) {
-      return cookie.substring(name.length + 1)
-    }
-  }
-  return null
+// Type for API key headers
+interface ApiKeyHeaders {
+  geminiApiKey?: string | null
+  anthropicApiKey?: string | null
 }
 
 /**
- * Generic fetch wrapper with error handling
+ * Get API key headers for requests
+ */
+function getApiKeyHeaders(keys?: ApiKeyHeaders): Record<string, string> {
+  const headers: Record<string, string> = {}
+
+  if (keys?.geminiApiKey) {
+    headers['X-Gemini-Api-Key'] = keys.geminiApiKey
+  }
+
+  if (keys?.anthropicApiKey) {
+    headers['X-Anthropic-Api-Key'] = keys.anthropicApiKey
+  }
+
+  return headers
+}
+
+/**
+ * Generic fetch wrapper with error handling and API key support
  */
 async function apiFetch<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  apiKeys?: ApiKeyHeaders
 ): Promise<ApiResponse<T>> {
   try {
     const headers: HeadersInit = {
@@ -59,8 +68,11 @@ async function apiFetch<T>(
     }
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      headers,
-      credentials: 'include', // Always include cookies
+      headers: {
+        'Content-Type': 'application/json',
+        ...getApiKeyHeaders(apiKeys),
+        ...options.headers,
+      },
       ...options,
     })
 
@@ -113,7 +125,7 @@ export async function sendChatMessage(
   modificationMode?: boolean,
   workflowState?: { nodes: any[], edges: any[] },
   file?: File,
-  apiKey?: string
+  apiKeys?: ApiKeyHeaders
 ): Promise<ApiResponse<{
   response: string
   modifications?: any[]
@@ -135,7 +147,7 @@ export async function sendChatMessage(
 
       const response = await fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
-        headers,
+        headers: getApiKeyHeaders(apiKeys),
         body: formData,
       })
 
@@ -176,7 +188,7 @@ export async function sendChatMessage(
       modificationMode: modificationMode || false,
       workflowState: workflowState || null
     }),
-  })
+  }, apiKeys)
 }
 
 /**
@@ -209,16 +221,19 @@ export async function exportModel(modelData: {
 /**
  * Get model suggestions based on current architecture
  */
-export async function getModelSuggestions(modelData: {
-  nodes: any[]
-  edges: any[]
-}): Promise<ApiResponse<{
+export async function getModelSuggestions(
+  modelData: {
+    nodes: any[]
+    edges: any[]
+  },
+  apiKeys?: ApiKeyHeaders
+): Promise<ApiResponse<{
   suggestions: string[]
 }>> {
   return apiFetch('/suggestions', {
     method: 'POST',
     body: JSON.stringify(modelData),
-  })
+  }, apiKeys)
 }
 
 /**
@@ -267,6 +282,20 @@ export async function renderNodeCode(
   })
 }
 
+/**
+ * Get environment configuration from backend
+ */
+export async function getEnvironmentInfo(): Promise<ApiResponse<{
+  environment: string
+  isProduction: boolean
+  requiresApiKey: boolean
+  provider: string
+}>> {
+  return apiFetch('/environment', {
+    method: 'GET',
+  })
+}
+
 export default {
   validateModel,
   sendChatMessage,
@@ -275,4 +304,5 @@ export default {
   getNodeDefinitions,
   getNodeDefinition,
   renderNodeCode,
+  getEnvironmentInfo,
 }

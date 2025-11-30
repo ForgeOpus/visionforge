@@ -1,148 +1,171 @@
-import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { useState, useEffect } from 'react'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogFooter
 } from '@/components/ui/dialog'
-import * as Icons from '@phosphor-icons/react'
-import { useApiKey } from '@/lib/apiKeyContext'
-import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Info, Eye, EyeSlash } from '@phosphor-icons/react'
+import { useApiKeys } from '@/contexts/ApiKeyContext'
 
 interface ApiKeyModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess?: () => void
+  required?: boolean
 }
 
-export default function ApiKeyModal({ open, onOpenChange, onSuccess }: ApiKeyModalProps) {
-  const [keyInput, setKeyInput] = useState('')
+export default function ApiKeyModal({ open, onOpenChange, required = false }: ApiKeyModalProps) {
+  const {
+    geminiApiKey,
+    anthropicApiKey,
+    provider,
+    setGeminiApiKey,
+    setAnthropicApiKey,
+    hasRequiredKey
+  } = useApiKeys()
+
+  const [inputKey, setInputKey] = useState('')
   const [showKey, setShowKey] = useState(false)
-  const { setApiKey } = useApiKey()
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  // Load existing key when modal opens
+  useEffect(() => {
+    if (open) {
+      if (provider === 'Gemini' && geminiApiKey) {
+        setInputKey(geminiApiKey)
+      } else if (provider === 'Claude' && anthropicApiKey) {
+        setInputKey(anthropicApiKey)
+      }
+    }
+  }, [open, provider, geminiApiKey, anthropicApiKey])
 
-    const trimmedKey = keyInput.trim()
-
-    // Basic validation - Gemini API keys typically start with "AI"
-    if (!trimmedKey) {
-      toast.error('API key required', {
-        description: 'Please enter your Gemini API key'
-      })
+  const handleSave = () => {
+    if (!inputKey.trim()) {
       return
     }
 
-    if (trimmedKey.length < 20) {
-      toast.error('Invalid API key', {
-        description: 'The API key appears to be too short'
-      })
-      return
+    if (provider === 'Gemini') {
+      setGeminiApiKey(inputKey.trim())
+    } else if (provider === 'Claude') {
+      setAnthropicApiKey(inputKey.trim())
     }
 
-    setApiKey(trimmedKey)
-    setKeyInput('')
     onOpenChange(false)
+  }
 
-    toast.success('API key saved', {
-      description: 'Your Gemini API key has been saved for this session'
-    })
-
-    if (onSuccess) {
-      onSuccess()
+  const handleSkip = () => {
+    if (!required) {
+      onOpenChange(false)
     }
   }
 
-  const handleClose = () => {
-    setKeyInput('')
-    onOpenChange(false)
+  const getProviderInfo = () => {
+    if (provider === 'Gemini') {
+      return {
+        name: 'Gemini',
+        url: 'https://aistudio.google.com/app/apikey',
+        placeholder: 'AIza...'
+      }
+    } else if (provider === 'Claude') {
+      return {
+        name: 'Claude',
+        url: 'https://console.anthropic.com/',
+        placeholder: 'sk-ant-...'
+      }
+    }
+    return {
+      name: 'AI Provider',
+      url: '#',
+      placeholder: 'Enter API key'
+    }
   }
+
+  const providerInfo = getProviderInfo()
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-[500px]" onPointerDownOutside={(e) => {
+        if (required && !hasRequiredKey()) {
+          e.preventDefault()
+        }
+      }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Icons.Key size={20} className="text-primary" />
-            Gemini API Key Required
+            <Info size={24} className="text-primary" />
+            {providerInfo.name} API Key Required
           </DialogTitle>
           <DialogDescription>
-            To use the AI assistant, please provide your own Gemini API key.
-            Your key is stored only in your browser session and is never saved on our servers.
+            This is a remote deployment of VisionForge. To use the AI assistant, please provide your own {providerInfo.name} API key.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="api-key">API Key</Label>
-              <div className="relative">
-                <Input
-                  id="api-key"
-                  type={showKey ? 'text' : 'password'}
-                  placeholder="Enter your Gemini API key"
-                  value={keyInput}
-                  onChange={(e) => setKeyInput(e.target.value)}
-                  className="pr-10"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full px-3"
-                  onClick={() => setShowKey(!showKey)}
-                >
-                  {showKey ? (
-                    <Icons.EyeSlash size={16} />
-                  ) : (
-                    <Icons.Eye size={16} />
-                  )}
-                </Button>
-              </div>
-            </div>
+        <div className="space-y-4 py-4">
+          <Alert>
+            <Info size={16} />
+            <AlertDescription>
+              Your API key is stored only in your browser's session storage and is sent directly to {providerInfo.name}'s API via our backend, but is not persisted on our servers.
+            </AlertDescription>
+          </Alert>
 
-            <div className="rounded-md bg-muted p-3 text-sm">
-              <p className="font-medium mb-1">How to get an API key:</p>
-              <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-                <li>Visit <a
-                  href="https://aistudio.google.com/apikey"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  Google AI Studio
-                </a></li>
-                <li>Sign in with your Google account</li>
-                <li>Click "Create API key"</li>
-                <li>Copy and paste the key above</li>
-              </ol>
+          <div className="space-y-2">
+            <Label htmlFor="api-key">{providerInfo.name} API Key</Label>
+            <div className="relative">
+              <Input
+                id="api-key"
+                type={showKey ? 'text' : 'password'}
+                placeholder={providerInfo.placeholder}
+                value={inputKey}
+                onChange={(e) => setInputKey(e.target.value)}
+                className="pr-10"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-0 top-0 h-full"
+                onClick={() => setShowKey(!showKey)}
+              >
+                {showKey ? <EyeSlash size={18} /> : <Eye size={18} />}
+              </Button>
             </div>
-
-            <div className="flex items-start gap-2 text-xs text-muted-foreground">
-              <Icons.ShieldCheck size={16} className="shrink-0 mt-0.5 text-green-500" />
-              <p>
-                Your API key is stored only in your browser's session storage and will be
-                cleared when you close this tab. It is sent directly to Google's API and
-                is never stored on our servers.
-              </p>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Don't have an API key?{' '}
+              <a
+                href={providerInfo.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                Get one from {providerInfo.name}
+              </a>
+            </p>
           </div>
+        </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={handleClose}>
-              Cancel
+        <DialogFooter className="flex-row justify-between sm:justify-between">
+          {!required && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleSkip}
+            >
+              Skip for now
             </Button>
-            <Button type="submit">
-              <Icons.Check size={16} className="mr-2" />
-              Save Key
-            </Button>
-          </DialogFooter>
-        </form>
+          )}
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={!inputKey.trim()}
+            className="ml-auto"
+          >
+            Save API Key
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

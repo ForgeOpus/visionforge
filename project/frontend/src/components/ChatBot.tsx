@@ -12,7 +12,7 @@ import { toast } from 'sonner'
 import { useModelBuilderStore } from '@/lib/store'
 import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
 import { BlockType } from '@/lib/types'
-import { useApiKey } from '@/lib/apiKeyContext'
+import { useApiKeys } from '@/contexts/ApiKeyContext'
 import ApiKeyModal from './ApiKeyModal'
 
 interface Message {
@@ -44,12 +44,17 @@ export default function ChatBot() {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [isUploadingFile, setIsUploadingFile] = useState(false)
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
-  const [pendingMessage, setPendingMessage] = useState<{ input: string; file: File | null } | null>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // API Key context
-  const { apiKey, hasApiKey } = useApiKey()
+  // API Key management
+  const {
+    geminiApiKey,
+    anthropicApiKey,
+    requiresApiKey,
+    hasRequiredKey,
+    provider
+  } = useApiKeys()
 
   // Get workflow state from store
   const { nodes, edges, addNode, updateNode, removeNode, duplicateNode, addEdge, removeEdge } = useModelBuilderStore()
@@ -64,16 +69,12 @@ export default function ChatBot() {
     }
   }, [messages])
 
-  // Handle API key modal success - retry sending the pending message
-  const handleApiKeySuccess = () => {
-    if (pendingMessage) {
-      // Restore the pending message to input fields
-      setInputValue(pendingMessage.input)
-      setUploadedFile(pendingMessage.file)
-      setPendingMessage(null)
-      // The user can now send the message again
+  // Show API key modal when chat opens if keys are required
+  useEffect(() => {
+    if (isOpen && requiresApiKey && !hasRequiredKey()) {
+      setShowApiKeyModal(true)
     }
-  }
+  }, [isOpen, requiresApiKey, hasRequiredKey])
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -165,7 +166,7 @@ export default function ChatBot() {
         modificationMode,
         workflowState,
         currentFile || undefined,
-        apiKey || undefined
+        { geminiApiKey, anthropicApiKey }
       )
 
       if (response.success && response.data) {
@@ -683,6 +684,13 @@ export default function ChatBot() {
           </div>
         </Card>
       )}
+
+      {/* API Key Modal */}
+      <ApiKeyModal
+        open={showApiKeyModal}
+        onOpenChange={setShowApiKeyModal}
+        required={requiresApiKey && !hasRequiredKey()}
+      />
     </>
   )
 }
