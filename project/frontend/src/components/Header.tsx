@@ -38,7 +38,7 @@ export default function Header() {
   const { currentProject, nodes, edges, createProject: createProjectInStore, saveProject, loadProject, validateArchitecture, setNodes, setEdges } = useModelBuilderStore()
 
   // API Key management for demo banner
-  const { requiresApiKey, provider, environment } = useApiKeys()
+  const { requiresApiKey, provider } = useApiKeys()
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
 
   const [projects, setProjects] = useState<projectApi.ProjectResponse[]>([])
