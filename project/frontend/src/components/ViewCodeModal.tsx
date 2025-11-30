@@ -1,13 +1,12 @@
 import { useState } from 'react'
-import CodeMirror from '@uiw/react-codemirror'
-import { python } from '@codemirror/lang-python'
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
+import CodeEditor from '@/components/CodeEditor'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   DialogDescription,
-  DialogFooter 
+  DialogFooter
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -38,13 +37,13 @@ export default function ViewCodeModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+      <DialogContent className="w-[80vw] sm:max-w-[80vw] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
             View Code: {nodeType} ({framework.toUpperCase()})
           </DialogTitle>
           <DialogDescription>
-            Read-only view of generated Python code for this block
+            Read-only view of generated Python code for this block. Press Esc to close.
           </DialogDescription>
         </DialogHeader>
 
@@ -59,22 +58,14 @@ export default function ViewCodeModal({
               <Skeleton className="h-6 w-5/6" />
             </div>
           ) : (
-            <div className="border rounded-md overflow-hidden">
-              <CodeMirror
-                value={code}
-                height="400px"
-                extensions={[python()]}
-                editable={false}
-                readOnly={true}
-                theme="light"
-                basicSetup={{
-                  lineNumbers: true,
-                  highlightActiveLineGutter: false,
-                  highlightActiveLine: false,
-                  foldGutter: true
-                }}
-              />
-            </div>
+            <CodeEditor
+              value={code}
+              height="80vh"
+              readOnly={true}
+              enableSearch={true}
+              onEscape={onClose}
+              ariaLabel={`Read-only Python code for ${nodeType} block`}
+            />
           )}
         </div>
 
