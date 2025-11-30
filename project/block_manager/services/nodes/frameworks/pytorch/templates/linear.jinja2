@@ -1,0 +1,11 @@
+{#
+PyTorch Linear Layer Template
+
+Context variables:
+- config.out_features: Number of output features
+- config.bias: Whether to include bias
+- in_features: Inferred from input shape
+
+Example output: nn.Linear(512, 128, bias=True)
+#}
+nn.Linear({{ in_features }}, {{ config.out_features }}, bias={{ config.bias|lower }})

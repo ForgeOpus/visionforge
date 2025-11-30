@@ -150,7 +150,9 @@ export default function Header() {
       setSaveAsProjectDesc('')
 
       toast.dismiss(loadingToast)
-      toast.success('Project created and saved!')
+      toast.success('Project saved to browser storage', {
+        description: 'Your design is stored locally in your browser'
+      })
 
       // Reload projects list
       await loadProjectsList()
@@ -194,13 +196,15 @@ export default function Header() {
         return
       }
 
-      // Save to backend for existing project
+      // Save to local storage for existing project
       await projectApi.saveArchitecture(projectIdToSave, nodes, edges)
 
       // Save to local store
       saveProject()
 
-      toast.success('Project saved!')
+      toast.success('Project saved to browser storage', {
+        description: 'Your design is stored locally in your browser'
+      })
 
       // Reload projects list
       loadProjectsList()

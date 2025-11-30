@@ -113,6 +113,13 @@ export default function ChatBot() {
   const handleSendMessage = async () => {
     if ((!inputValue.trim() && !uploadedFile) || isLoading) return
 
+    // Check for API key before sending
+    if (!hasApiKey) {
+      setPendingMessage({ input: inputValue, file: uploadedFile })
+      setShowApiKeyModal(true)
+      return
+    }
+
     const currentFile = uploadedFile
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -152,7 +159,7 @@ export default function ChatBot() {
         }))
       }
 
-      // Send message to backend API with workflow context
+      // Send message to backend API with workflow context and API key
       const response = await sendChatMessage(
         currentInput,
         messages,
@@ -421,6 +428,13 @@ export default function ChatBot() {
 
   return (
     <>
+      {/* API Key Modal */}
+      <ApiKeyModal
+        open={showApiKeyModal}
+        onOpenChange={setShowApiKeyModal}
+        onSuccess={handleApiKeySuccess}
+      />
+
       {/* Floating Chat Button */}
       {!isOpen && (
         <Button

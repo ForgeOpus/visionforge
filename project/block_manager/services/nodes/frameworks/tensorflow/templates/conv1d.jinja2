@@ -1,0 +1,10 @@
+{#
+TensorFlow Conv1D Template
+
+Context variables:
+- config.filters: Number of output filters
+- config.kernel_size: Kernel size
+- config.strides: Strides
+- config.padding: Padding mode
+#}
+tf.keras.layers.Conv1D(filters={{ config.filters }}, kernel_size={{ config.kernel_size }}, strides={{ config.strides }}, padding='{{ config.padding }}')

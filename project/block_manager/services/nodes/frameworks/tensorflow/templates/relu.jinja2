@@ -1,0 +1,8 @@
+{# TensorFlow ReLU Layer Template #}
+{% if config.negative_slope and config.negative_slope != 0 %}
+tf.keras.layers.LeakyReLU(alpha={{ config.negative_slope }})
+{% elif config.max_value %}
+tf.keras.layers.ReLU(max_value={{ config.max_value }})
+{% else %}
+tf.keras.layers.ReLU()
+{% endif %}

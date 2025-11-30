@@ -1,8 +1,9 @@
 {
-    "name": "spark-template",
+    "name": "visionforge",
     "private": true,
     "version": "0.0.0",
     "type": "module",
+    "license": "BSD-3-Clause",
     "scripts": {
         "dev": "vite",
         "kill": "fuser -k 5000/tcp",

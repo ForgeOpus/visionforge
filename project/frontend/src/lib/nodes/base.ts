@@ -9,7 +9,7 @@ import {
   BackendFramework,
   DimensionRequirement
 } from './contracts'
-import { TensorShape, BlockConfig, ConfigField, BlockType } from '../types'
+import { TensorShape, BlockConfig, ConfigField, BlockType, ShapePattern } from '../types'
 import { PortDefinition, DEFAULT_INPUT_PORT, DEFAULT_OUTPUT_PORT } from './ports'
 
 /**
@@ -19,7 +19,19 @@ import { PortDefinition, DEFAULT_INPUT_PORT, DEFAULT_OUTPUT_PORT } from './ports
 export abstract class NodeDefinition implements INodeDefinition {
   abstract readonly metadata: NodeMetadata
   abstract readonly configSchema: ConfigField[]
-  
+
+  /**
+   * Input shape pattern this node accepts
+   * Override in subclasses to define specific shape requirements
+   */
+  readonly inputPattern?: ShapePattern
+
+  /**
+   * Output shape pattern this node produces
+   * Override in subclasses to define output shape characteristics
+   */
+  readonly outputPattern?: ShapePattern
+
   /**
    * Get input ports for this node based on configuration
    * Override in subclasses for nodes with multiple or dynamic inputs

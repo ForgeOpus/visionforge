@@ -24,12 +24,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-oy%j%4%)w%7#sx@e!h+m-hai9zvl*)-5$5uz%wlro4ry1*4vc-'
+SECRET_KEY = os.getenv('SECRET_KEY') or 'django-insecure-oy%j%4%)w%7#sx@e!h+m-hai9zvl*)-5$5uz%wlro4ry1*4vc-'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    os.getenv('RENDER_EXTERNAL_HOSTNAME', ''),
+    'localhost',
+    '127.0.0.1',
+]
+# Remove empty strings
+ALLOWED_HOSTS = [host for host in ALLOWED_HOSTS if host]
 
 
 # Application definition
@@ -49,6 +55,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Add WhiteNoise for static files
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -65,7 +72,7 @@ APPEND_SLASH = False
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'frontend_build'],  # Add React build directory
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -77,10 +84,13 @@ TEMPLATES = [
     },
 ]
 
+# CORS Configuration
+# For single-service deployment, allow localhost for development
+# In production, frontend and backend are same origin, so CORS not needed
 CORS_ALLOWED_ORIGINS = [
-    os.getenv("FRONTEND_URL", "http://localhost:3000"),   # React dev server
     "http://localhost:5173",  # Vite dev server
     "http://localhost:5000",  # Alternative Vite port
+    "http://localhost:3000",  # Alternative React dev server
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -103,6 +113,22 @@ CORS_ALLOW_HEADERS = [
 ENVIRONMENT = os.getenv('ENVIRONMENT', 'DEV')
 IS_PRODUCTION = ENVIRONMENT == 'PROD'
 REQUIRES_USER_API_KEY = IS_PRODUCTION
+]
+
+# CSRF Configuration
+# Ensure CSRF cookie is set for single-page apps
+CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript to read the cookie
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_NAME = 'csrftoken'
+CSRF_HEADER_NAME = 'HTTP_X_CSRFTOKEN'
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+]
+
+# Add Render hostname to trusted origins in production
+if os.getenv('RENDER_EXTERNAL_HOSTNAME'):
+    CSRF_TRUSTED_ORIGINS.append(f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}")
 
 REST_FRAMEWORK = {
     # For local dev only: allow unauthenticated access to endpoints
@@ -159,7 +185,23 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Additional locations for static files (React build output)
+STATICFILES_DIRS = [
+    BASE_DIR / 'frontend_build' / 'assets',  # Vite outputs assets to dist/assets
+]
+
+# WhiteNoise configuration for serving static files
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

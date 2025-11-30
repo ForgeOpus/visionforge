@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Optional
 
-from ..specs import Framework
+from ..core import Framework
 
 
 class TensorShape(dict):

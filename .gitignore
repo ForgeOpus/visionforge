@@ -55,4 +55,13 @@ __pycache__
 
 *.sqlite3
 *.db
+*.claude
+*/.claude
+# Single-service deployment build artifacts
+/project/frontend_build/
+/project/staticfiles/
+.claude/
+.claude
+*/.claude/*
+.claude/*
 .claude/

@@ -8,7 +8,7 @@ import { TensorShape, BlockConfig, ConfigField, BlockType } from '../../../types
 
 export class MaxPool2DNode extends NodeDefinition {
   readonly metadata: NodeMetadata = {
-    type: 'maxpool',
+    type: 'maxpool2d',
     label: 'MaxPool2D',
     category: 'basic',
     color: 'var(--color-purple)',
