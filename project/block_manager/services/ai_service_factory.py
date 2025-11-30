@@ -89,4 +89,4 @@ class AIServiceFactory:
         Returns:
             'PROD', 'DEV', 'LOCAL', etc.
         """
-        return os.getenv('ENVIRONMENT', 'PROD')
+        return getattr(settings, 'ENVIRONMENT', 'PROD')
