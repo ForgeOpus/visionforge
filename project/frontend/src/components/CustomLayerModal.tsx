@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
-import CodeMirror from '@uiw/react-codemirror'
-import { python } from '@codemirror/lang-python'
+import CodeEditor from '@/components/CodeEditor'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -103,11 +102,11 @@ export default function CustomLayerModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+      <DialogContent className="w-[80vw] sm:max-w-[80vw] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Configure Custom Layer</DialogTitle>
           <DialogDescription>
-            Define your custom layer implementation in Python
+            Define your custom layer implementation in Python. Press Ctrl/Cmd+S to save, Esc to close.
           </DialogDescription>
         </DialogHeader>
 
@@ -129,21 +128,17 @@ export default function CustomLayerModal({
             <Label htmlFor="layer-code">
               Python Code <span className="text-destructive">*</span>
             </Label>
-            <div className="border rounded-md overflow-hidden">
-              <CodeMirror
-                value={code}
-                height="250px"
-                extensions={[python()]}
-                onChange={(value) => setCode(value)}
-                theme="light"
-                basicSetup={{
-                  lineNumbers: true,
-                  highlightActiveLineGutter: true,
-                  highlightActiveLine: true,
-                  foldGutter: true
-                }}
-              />
-            </div>
+            <CodeEditor
+              value={code}
+              onChange={(value) => setCode(value)}
+              height="60vh"
+              editable={true}
+              enableSearch={true}
+              onSave={handleSave}
+              onEscape={onClose}
+              ariaLabel="Custom layer Python code editor"
+              placeholder="Write your custom PyTorch layer code here..."
+            />
             <p className="text-xs text-muted-foreground">
               Write the forward pass logic. Input tensor is available as <code className="text-xs bg-muted px-1 py-0.5 rounded">x</code>
             </p>
