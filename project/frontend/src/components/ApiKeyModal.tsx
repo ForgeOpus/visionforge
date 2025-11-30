@@ -108,8 +108,7 @@ export default function ApiKeyModal({ open, onOpenChange, required = false }: Ap
           <Alert>
             <Info size={16} />
             <AlertDescription>
-              Your API key is stored only in your browser's session storage and is never sent to our servers.
-              It's only used to communicate directly with {providerInfo.name}'s API.
+              Your API key is stored only in your browser's session storage and is sent directly to {providerInfo.name}'s API via our backend, but is not persisted on our servers.
             </AlertDescription>
           </Alert>
 
