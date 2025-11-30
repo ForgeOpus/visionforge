@@ -114,8 +114,7 @@ export default function ChatBot() {
     if ((!inputValue.trim() && !uploadedFile) || isLoading) return
 
     // Check for API key before sending
-    if (!hasApiKey) {
-      setPendingMessage({ input: inputValue, file: uploadedFile })
+    if (requiresApiKey && !hasRequiredKey()) {
       setShowApiKeyModal(true)
       return
     }
@@ -428,13 +427,6 @@ export default function ChatBot() {
 
   return (
     <>
-      {/* API Key Modal */}
-      <ApiKeyModal
-        open={showApiKeyModal}
-        onOpenChange={setShowApiKeyModal}
-        onSuccess={handleApiKeySuccess}
-      />
-
       {/* Floating Chat Button */}
       {!isOpen && (
         <Button

@@ -4,11 +4,12 @@
  */
 
 import type { NodeSpec, NodeDefinitionsResponse, RenderCodeResponse } from './nodeSpec.types'
+import { getCsrfToken } from './apiUtils'
 
 // API configuration
 // For single-service deployment: use relative path (same origin, no CORS)
 // For development: use full URL to separate backend server
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 interface ApiResponse<T = any> {
   success: boolean
@@ -49,15 +50,15 @@ async function apiFetch<T>(
   apiKeys?: ApiKeyHeaders
 ): Promise<ApiResponse<T>> {
   try {
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...getApiKeyHeaders(apiKeys),
     }
-    
+
     // Add CSRF token for unsafe methods (POST, PUT, DELETE, PATCH)
-    const isUnsafeMethod = options.method && 
+    const isUnsafeMethod = options.method &&
       !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(options.method.toUpperCase())
-    
+
     if (isUnsafeMethod) {
       const csrfToken = getCsrfToken()
       if (csrfToken) {
@@ -69,14 +70,25 @@ async function apiFetch<T>(
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       headers: {
-        'Content-Type': 'application/json',
-        ...getApiKeyHeaders(apiKeys),
+        ...headers,
         ...options.headers,
       },
       ...options,
     })
 
-    const data = await response.json()
+    // Handle non-JSON responses (like 404 HTML pages)
+    let data: any
+    try {
+      data = await response.json()
+    } catch (jsonError) {
+      if (!response.ok) {
+        return {
+          success: false,
+          error: `Server error (${response.status}): ${response.statusText}`,
+        }
+      }
+      throw jsonError
+    }
 
     if (!response.ok) {
       return {
@@ -140,11 +152,6 @@ export async function sendChatMessage(
     formData.append('workflowState', JSON.stringify(workflowState || null))
 
     try {
-      const headers: HeadersInit = {}
-      if (apiKey) {
-        headers['X-Gemini-Api-Key'] = apiKey
-      }
-
       const response = await fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
         headers: getApiKeyHeaders(apiKeys),
@@ -174,14 +181,8 @@ export async function sendChatMessage(
   }
 
   // No file - use regular JSON
-  const headers: HeadersInit = {}
-  if (apiKey) {
-    headers['X-Gemini-Api-Key'] = apiKey
-  }
-
   return apiFetch('/chat', {
     method: 'POST',
-    headers,
     body: JSON.stringify({
       message,
       history: history || [],
