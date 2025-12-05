@@ -1054,8 +1054,11 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
         console.warn(`${lostEdges.length} connection(s) could not be rewired during collapse:`, lostEdges)
       }
 
-      // Remove expanded nodes and add collapsed group block
-      const newNodes = state.nodes.filter(n => !expandedNodeIds.has(n.id))
+      // Remove expanded nodes, container, and add collapsed group block
+      const containerNodeId = `${nodeId}-container`
+      const newNodes = state.nodes.filter(n =>
+        !expandedNodeIds.has(n.id) && n.id !== containerNodeId
+      )
       newNodes.push(collapsedGroupNode as any)
 
       set({
@@ -1167,10 +1170,44 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
         console.warn(`${lostEdges.length} connection(s) could not be rewired during expansion:`, lostEdges)
       }
 
-      // Remove group node from canvas and add internal nodes
+      // Calculate bounding box for container
+      const minX = Math.min(...restoredNodes.map(n => n.position.x))
+      const minY = Math.min(...restoredNodes.map(n => n.position.y))
+      const maxX = Math.max(...restoredNodes.map(n => n.position.x + (n.width || 280)))
+      const maxY = Math.max(...restoredNodes.map(n => n.position.y + (n.height || 150)))
+
+      const padding = 30
+      const containerWidth = maxX - minX + (2 * padding)
+      const containerHeight = maxY - minY + (2 * padding)
+
+      // Create container node
+      const containerNode = {
+        id: `${nodeId}-container`,
+        type: 'expandedGroupContainer',
+        position: {
+          x: minX - padding,
+          y: minY - padding
+        },
+        data: {
+          _expandedFrom: nodeId,
+          _groupDefinitionId: groupData.groupDefinitionId,
+          groupName: groupDef.name,
+          groupColor: groupDef.color
+        },
+        style: {
+          width: containerWidth,
+          height: containerHeight,
+          zIndex: -1  // Place behind the actual nodes
+        },
+        selectable: false,
+        draggable: false
+      }
+
+      // Remove group node from canvas and add internal nodes + container
       // Note: We don't keep the expanded group node in the nodes array
       // The expanded internal nodes themselves represent the expanded state
       const newNodes = state.nodes.filter(n => n.id !== nodeId)
+      newNodes.push(containerNode as any)
       newNodes.push(...restoredNodes)
 
       set({

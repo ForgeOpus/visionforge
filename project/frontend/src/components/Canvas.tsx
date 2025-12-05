@@ -18,6 +18,7 @@ import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
 import { BlockData, BlockType, GroupBlockData } from '@/lib/types'
 import BlockNode from './BlockNode'
 import GroupBlockNode from './GroupBlockNode'
+import ExpandedGroupContainer from './ExpandedGroupContainer'
 import CustomConnectionLine from './CustomConnectionLine'
 import { HistoryToolbar } from './HistoryToolbar'
 import { ContextMenu } from './ContextMenu'
@@ -29,7 +30,8 @@ import { toast } from 'sonner'
 
 const nodeTypes = {
   custom: BlockNode,
-  group: GroupBlockNode
+  group: GroupBlockNode,
+  expandedGroupContainer: ExpandedGroupContainer
 }
 
 interface CanvasProps {
