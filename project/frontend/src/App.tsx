@@ -14,7 +14,7 @@ import { LandingPage } from './landing'
 function ProjectCanvas() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
-  const { setNodes, setEdges, loadProject, currentProject, reset } = useModelBuilderStore()
+  const { setNodes, setEdges, loadProject, loadGroupDefinitions, currentProject, reset } = useModelBuilderStore()
   const [isLoading, setIsLoading] = useState(false)
   const [draggedType, setDraggedType] = useState<string | null>(null)
   const { selectedNodeId } = useModelBuilderStore()
@@ -28,9 +28,14 @@ function ProjectCanvas() {
         .then(async (backendProject) => {
           // Load architecture if it exists
           try {
-            const { nodes, edges } = await loadArchitecture(projectId)
+            const { nodes, edges, groupDefinitions } = await loadArchitecture(projectId)
             const project = convertToFrontendProject(backendProject, nodes, edges)
             loadProject(project)
+            
+            // Load group definitions if they exist
+            if (groupDefinitions && groupDefinitions.length > 0) {
+              loadGroupDefinitions(groupDefinitions)
+            }
           } catch (error) {
             // No architecture yet, just load project metadata
             const project = convertToFrontendProject(backendProject)
@@ -48,7 +53,7 @@ function ProjectCanvas() {
           setIsLoading(false)
         })
     }
-  }, [projectId, currentProject, setNodes, setEdges, loadProject, navigate])
+  }, [projectId, currentProject, setNodes, setEdges, loadProject, loadGroupDefinitions, navigate])
 
   const handleDragStart = (type: string) => {
     setDraggedType(type)

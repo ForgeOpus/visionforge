@@ -1,14 +1,43 @@
 from rest_framework import serializers
-from .models import Project, ModelArchitecture, Block, Connection
+from .models import Project, ModelArchitecture, Block, Connection, GroupBlockDefinition
+
+
+class GroupBlockDefinitionSerializer(serializers.ModelSerializer):
+    """Serializer for GroupBlockDefinition model"""
+    internalNodes = serializers.SerializerMethodField()
+    internalEdges = serializers.SerializerMethodField()
+    portMappings = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = GroupBlockDefinition
+        fields = [
+            'id', 'name', 'description', 'category', 'color',
+            'internalNodes', 'internalEdges', 'portMappings',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_internalNodes(self, obj):
+        return obj.internal_structure.get('nodes', [])
+    
+    def get_internalEdges(self, obj):
+        return obj.internal_structure.get('edges', [])
+    
+    def get_portMappings(self, obj):
+        return obj.internal_structure.get('portMappings', [])
 
 
 class BlockSerializer(serializers.ModelSerializer):
     """Serializer for Block model"""
+    group_definition = GroupBlockDefinitionSerializer(read_only=True)
+
     class Meta:
         model = Block
         fields = [
             'id', 'node_id', 'block_type', 'position_x', 'position_y',
-            'config', 'input_shape', 'output_shape', 'created_at'
+            'config', 'input_shape', 'output_shape',
+            'group_definition', 'is_expanded', 'repetition_metadata',
+            'created_at'
         ]
         read_only_fields = ['id', 'created_at']
 
@@ -69,6 +98,7 @@ class SaveArchitectureSerializer(serializers.Serializer):
     """Serializer for saving architecture from frontend"""
     nodes = serializers.ListField(child=serializers.DictField())
     edges = serializers.ListField(child=serializers.DictField())
+    groupDefinitions = serializers.ListField(child=serializers.DictField(), required=False, default=list)
 
 
 class ValidationResponseSerializer(serializers.Serializer):

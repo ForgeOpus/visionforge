@@ -9,12 +9,14 @@ interface ContextMenuProps {
   y: number
   type: 'canvas' | 'node'
   nodeId?: string
+  isGroupBlock?: boolean
   recentlyUsedNodes?: BlockType[]
   onClose: () => void
   onAddNode?: (nodeType: BlockType, x: number, y: number) => void
   onDeleteNode?: (nodeId: string) => void
   onDuplicateNode?: (nodeId: string) => void
   onReplicateNode?: (nodeId: string) => void
+  onUngroupNode?: (nodeId: string) => void
 }
 
 export function ContextMenu({
@@ -22,12 +24,14 @@ export function ContextMenu({
   y,
   type,
   nodeId,
+  isGroupBlock = false,
   recentlyUsedNodes = [],
   onClose,
   onAddNode,
   onDeleteNode,
   onDuplicateNode,
-  onReplicateNode
+  onReplicateNode,
+  onUngroupNode
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -118,6 +122,21 @@ export function ContextMenu({
         <Icons.Code size={16} />
         <span>Replicate as Custom</span>
       </button>
+      {isGroupBlock && (
+        <>
+          <div className="h-px bg-border my-1 -mx-1" />
+          <button
+            className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-accent rounded-sm text-sm transition-colors"
+            onClick={() => {
+              if (nodeId) onUngroupNode?.(nodeId)
+              onClose()
+            }}
+          >
+            <Icons.SquaresFour size={16} />
+            <span>Ungroup</span>
+          </button>
+        </>
+      )}
       <div className="h-px bg-border my-1 -mx-1" />
       <button
         className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-destructive/10 hover:text-destructive rounded-sm text-sm transition-colors"

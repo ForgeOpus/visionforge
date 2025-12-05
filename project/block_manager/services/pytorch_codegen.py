@@ -7,10 +7,390 @@ from typing import List, Dict, Any, Optional, Tuple
 from collections import deque
 
 
+class PyTorchBlockGenerator:
+    """
+    Generator for PyTorch nn.Module code for group blocks.
+    
+    Converts GroupBlockDefinition into reusable nn.Module subclasses
+    with proper initialization and forward pass logic.
+    """
+    
+    def __init__(self, group_definitions: List[Dict[str, Any]]):
+        """
+        Initialize the block generator.
+        
+        Args:
+            group_definitions: List of GroupBlockDefinition dictionaries
+        """
+        self.group_definitions = {defn['id']: defn for defn in group_definitions}
+        self.generated_classes = {}  # Cache generated class code
+        
+    def generate_all_block_classes(self) -> str:
+        """
+        Generate all block class definitions.
+        
+        Returns:
+            String containing all block class definitions
+        """
+        if not self.group_definitions:
+            return ""
+            
+        code_parts = []
+        code_parts.append("# ============================================")
+        code_parts.append("# Custom Block Definitions")
+        code_parts.append("# ============================================\n")
+        
+        for defn_id, definition in self.group_definitions.items():
+            block_class = self.generate_block_class(definition)
+            code_parts.append(block_class)
+            code_parts.append("\n")
+            
+        return "\n".join(code_parts)
+    
+    def generate_block_class(self, definition: Dict[str, Any]) -> str:
+        """
+        Generate nn.Module subclass for a single block definition.
+        
+        Args:
+            definition: GroupBlockDefinition dictionary
+            
+        Returns:
+            String containing the complete block class definition
+        """
+        block_name = definition['name']
+        class_name = self._to_class_name(block_name)
+        description = definition.get('description', '')
+        
+        # Get internal structure
+        internal_structure = definition.get('internal_structure', {})
+        internal_nodes = internal_structure.get('nodes', [])
+        internal_edges = internal_structure.get('edges', [])
+        port_mappings = internal_structure.get('portMappings', [])
+        
+        # Sort internal nodes topologically
+        sorted_nodes = topological_sort(internal_nodes, internal_edges)
+        
+        # Infer shapes for internal nodes
+        shape_map = infer_shapes(sorted_nodes, internal_edges)
+        
+        # Generate __init__ method
+        init_method = self._generate_init_method(sorted_nodes, shape_map, port_mappings)
+        
+        # Generate forward method
+        forward_method = self._generate_forward_method(
+            sorted_nodes, internal_edges, shape_map, port_mappings
+        )
+        
+        # Build class docstring
+        docstring = self._generate_block_docstring(
+            block_name, description, port_mappings, sorted_nodes
+        )
+        
+        # Assemble the complete class
+        class_code = f'''class {class_name}(nn.Module):
+    """{docstring}"""
+
+{init_method}
+
+{forward_method}'''
+        
+        # Cache the generated class
+        self.generated_classes[definition['id']] = class_name
+        
+        return class_code
+    
+    def _generate_init_method(
+        self,
+        nodes: List[Dict[str, Any]],
+        shape_map: Dict[str, Dict[str, Any]],
+        port_mappings: List[Dict[str, Any]]
+    ) -> str:
+        """Generate __init__ method with layer instantiation."""
+        lines = []
+        lines.append("    def __init__(self):")
+        lines.append('        """Initialize all internal layers."""')
+        lines.append(f"        super().__init__()")
+        lines.append("")
+        
+        # Track which nodes need to be instantiated
+        layer_count = {}
+        
+        for idx, node in enumerate(nodes):
+            node_id = node['id']
+            node_type = get_node_type(node)
+            config = node.get('data', {}).get('config', {})
+            shape_info = shape_map.get(node_id, {})
+            
+            # Skip input/output nodes
+            if node_type in ('input', 'dataloader', 'output'):
+                continue
+            
+            # Generate layer instantiation
+            layer_name = self._get_internal_layer_name(node_type, node_id, layer_count)
+            layer_class_name = self._get_layer_class_name_for_node(node_type, config)
+            
+            # Generate instantiation with proper arguments
+            instantiation = self._generate_layer_instantiation_line(
+                layer_name, layer_class_name, node_type, shape_info, config
+            )
+            
+            if instantiation:
+                lines.append(f"        {instantiation}")
+        
+        return "\n".join(lines)
+    
+    def _generate_forward_method(
+        self,
+        nodes: List[Dict[str, Any]],
+        edges: List[Dict[str, Any]],
+        shape_map: Dict[str, Dict[str, Any]],
+        port_mappings: List[Dict[str, Any]]
+    ) -> str:
+        """Generate forward method with internal connection logic."""
+        lines = []
+        
+        # Determine input parameters from port mappings
+        input_ports = [pm for pm in port_mappings if pm['type'] == 'input']
+        output_ports = [pm for pm in port_mappings if pm['type'] == 'output']
+        
+        # Generate method signature
+        if len(input_ports) == 1:
+            lines.append("    def forward(self, x: torch.Tensor) -> torch.Tensor:")
+        else:
+            param_names = [f"input_{i}" for i in range(len(input_ports))]
+            params = ", ".join([f"{name}: torch.Tensor" for name in param_names])
+            lines.append(f"    def forward(self, {params}) -> torch.Tensor:")
+        
+        lines.append('        """')
+        lines.append('        Forward pass through the block.')
+        lines.append('')
+        lines.append('        Args:')
+        if len(input_ports) == 1:
+            lines.append('            x: Input tensor')
+        else:
+            for i, port in enumerate(input_ports):
+                label = port.get('externalPortLabel', f'input_{i}')
+                lines.append(f'            input_{i}: {label}')
+        lines.append('')
+        lines.append('        Returns:')
+        if len(output_ports) == 1:
+            lines.append('            Output tensor')
+        else:
+            lines.append('            Tuple of output tensors')
+        lines.append('        """')
+        
+        # Build edge map for finding inputs
+        edge_map = {}
+        for edge in edges:
+            target = edge.get('target')
+            source = edge.get('source')
+            if target not in edge_map:
+                edge_map[target] = []
+            edge_map[target].append(source)
+        
+        # Map internal node IDs to variable names
+        var_map = {}
+        layer_count = {}
+        
+        # Map input ports to initial variables
+        for i, port in enumerate(input_ports):
+            internal_node_id = port['internalNodeId']
+            if len(input_ports) == 1:
+                var_map[internal_node_id] = 'x'
+            else:
+                var_map[internal_node_id] = f'input_{i}'
+        
+        # Generate forward pass for each internal node
+        for node in nodes:
+            node_id = node['id']
+            node_type = get_node_type(node)
+            config = node.get('data', {}).get('config', {})
+            
+            # Skip input/output nodes
+            if node_type in ('input', 'dataloader', 'output'):
+                # Input nodes are already mapped
+                if node_id not in var_map:
+                    var_map[node_id] = 'x'
+                continue
+            
+            # Get layer name
+            layer_name = self._get_internal_layer_name(node_type, node_id, layer_count)
+            
+            # Get input variable(s)
+            incoming = edge_map.get(node_id, [])
+            if not incoming:
+                # No incoming edges, might be an input node we missed
+                input_var = 'x'
+            elif len(incoming) == 1:
+                input_var = var_map.get(incoming[0], 'x')
+            else:
+                # Multiple inputs (for concat, add, etc.)
+                input_vars = [var_map.get(src, 'x') for src in incoming]
+                input_var = f"[{', '.join(input_vars)}]"
+            
+            # Generate output variable name
+            output_var = f"x_{node_id[:8]}"
+            var_map[node_id] = output_var
+            
+            # Generate forward line
+            if node_type in ('concat', 'add'):
+                lines.append(f"        {output_var} = self.{layer_name}({input_var})")
+            else:
+                lines.append(f"        {output_var} = self.{layer_name}({input_var})")
+        
+        # Map output ports to return values
+        if len(output_ports) == 1:
+            output_node_id = output_ports[0]['internalNodeId']
+            output_var = var_map.get(output_node_id, 'x')
+            lines.append(f"        return {output_var}")
+        else:
+            output_vars = []
+            for port in output_ports:
+                output_node_id = port['internalNodeId']
+                output_vars.append(var_map.get(output_node_id, 'x'))
+            lines.append(f"        return ({', '.join(output_vars)})")
+        
+        return "\n".join(lines)
+    
+    def _generate_block_docstring(
+        self,
+        block_name: str,
+        description: str,
+        port_mappings: List[Dict[str, Any]],
+        nodes: List[Dict[str, Any]]
+    ) -> str:
+        """Generate comprehensive docstring for block class."""
+        lines = []
+        lines.append(f"Custom Block: {block_name}")
+        lines.append("")
+        
+        if description:
+            lines.append(description)
+            lines.append("")
+        
+        lines.append("This block encapsulates a reusable subgraph of layers.")
+        lines.append("")
+        
+        # Document ports
+        input_ports = [pm for pm in port_mappings if pm['type'] == 'input']
+        output_ports = [pm for pm in port_mappings if pm['type'] == 'output']
+        
+        if input_ports:
+            lines.append("Input Ports:")
+            for port in input_ports:
+                label = port.get('externalPortLabel', 'input')
+                lines.append(f"    - {label}")
+        
+        if output_ports:
+            lines.append("")
+            lines.append("Output Ports:")
+            for port in output_ports:
+                label = port.get('externalPortLabel', 'output')
+                lines.append(f"    - {label}")
+        
+        lines.append("")
+        lines.append(f"Internal Layers: {len([n for n in nodes if get_node_type(n) not in ('input', 'dataloader', 'output')])}")
+        
+        return "\n    ".join(lines)
+    
+    def _generate_layer_instantiation_line(
+        self,
+        layer_name: str,
+        layer_class_name: str,
+        node_type: str,
+        shape_info: Dict[str, Any],
+        config: Dict[str, Any]
+    ) -> str:
+        """Generate layer instantiation line with proper arguments."""
+        # Determine if layer needs shape arguments
+        if node_type == 'conv2d':
+            in_channels = shape_info.get('in_channels', 3)
+            return f"self.{layer_name} = {layer_class_name}(in_channels={in_channels})"
+        elif node_type == 'linear':
+            in_features = shape_info.get('in_features', 512)
+            return f"self.{layer_name} = {layer_class_name}(in_features={in_features})"
+        elif node_type == 'batchnorm':
+            num_features = shape_info.get('num_features', 64)
+            return f"self.{layer_name} = {layer_class_name}(num_features={num_features})"
+        else:
+            return f"self.{layer_name} = {layer_class_name}()"
+    
+    def _get_internal_layer_name(
+        self,
+        node_type: str,
+        node_id: str,
+        layer_count: Dict[str, int]
+    ) -> str:
+        """Generate unique layer variable name for internal node."""
+        # Use node_id suffix for uniqueness
+        suffix = node_id[:8]
+        base_name = node_type.replace('_', '')
+        
+        # Track count for this type
+        if node_type not in layer_count:
+            layer_count[node_type] = 0
+        layer_count[node_type] += 1
+        
+        return f"{base_name}_{suffix}"
+    
+    def _get_layer_class_name_for_node(
+        self,
+        node_type: str,
+        config: Dict[str, Any]
+    ) -> str:
+        """Get the layer class name that will be used in the main model."""
+        # These should match the class names generated by generate_layer_class
+        type_name = node_type.replace('_', '').title()
+        
+        if node_type == 'conv2d':
+            channels = config.get('out_channels', 64)
+            kernel = config.get('kernel_size', 3)
+            return f"{type_name}Layer_{channels}ch_{kernel}x{kernel}"
+        elif node_type == 'linear':
+            features = config.get('out_features', 128)
+            return f"{type_name}Layer_{features}units"
+        elif node_type == 'maxpool':
+            kernel = config.get('kernel_size', 2)
+            return f"{type_name}Layer_{kernel}x{kernel}"
+        elif node_type == 'custom':
+            name = config.get('name', 'CustomLayer')
+            safe_name = name.replace(' ', '_').replace('-', '_')
+            return f"CustomLayer_{safe_name}"
+        else:
+            # For other types, we'll need to generate a generic name
+            # This will be handled by the main code generation
+            return f"{type_name}Layer"
+    
+    def _to_class_name(self, name: str) -> str:
+        """Convert block name to valid Python class name."""
+        import re
+        # Remove special characters and convert to PascalCase
+        name = re.sub(r'[^a-zA-Z0-9]', ' ', name)
+        name = ''.join(word.capitalize() for word in name.split())
+        if not name:
+            return 'CustomBlock'
+        if name[0].isdigit():
+            name = 'Block' + name
+        return name + 'Block'
+    
+    def get_block_class_name(self, definition_id: str) -> Optional[str]:
+        """
+        Get the generated class name for a block definition.
+        
+        Args:
+            definition_id: ID of the GroupBlockDefinition
+            
+        Returns:
+            Class name if generated, None otherwise
+        """
+        return self.generated_classes.get(definition_id)
+
+
 def generate_pytorch_code(
     nodes: List[Dict[str, Any]],
     edges: List[Dict[str, Any]],
-    project_name: str = "GeneratedModel"
+    project_name: str = "GeneratedModel",
+    group_definitions: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, str]:
     """
     Generate complete PyTorch code including model, training, and data loading.
@@ -20,6 +400,7 @@ def generate_pytorch_code(
         nodes: List of node dictionaries from architecture
         edges: List of edge dictionaries defining connections
         project_name: Name for the generated model class
+        group_definitions: Optional list of GroupBlockDefinition dictionaries
 
     Returns:
         Dictionary with keys: 'model', 'train', 'dataset', 'config'
@@ -30,8 +411,13 @@ def generate_pytorch_code(
     # Infer shapes through the graph
     shape_map = infer_shapes(sorted_nodes, edges)
 
+    # Initialize block generator if we have group definitions
+    block_generator = None
+    if group_definitions:
+        block_generator = PyTorchBlockGenerator(group_definitions)
+
     # Generate different components
-    model_code = generate_model_file(sorted_nodes, edges, project_name, shape_map)
+    model_code = generate_model_file(sorted_nodes, edges, project_name, shape_map, block_generator)
     train_code = generate_training_script(project_name)
     dataset_code = generate_dataset_class(nodes)
     config_code = generate_config_file(nodes)
@@ -319,11 +705,17 @@ def generate_model_file(
     nodes: List[Dict],
     edges: List[Dict],
     project_name: str,
-    shape_map: Dict[str, Dict[str, Any]]
+    shape_map: Dict[str, Dict[str, Any]],
+    block_generator: Optional[PyTorchBlockGenerator] = None
 ) -> str:
     """Generate complete model.py file with layer classes and main model class"""
 
     class_name = to_class_name(project_name)
+
+    # Generate block class definitions FIRST (if any) - this populates the cache
+    block_classes_code = ""
+    if block_generator:
+        block_classes_code = block_generator.generate_all_block_classes()
 
     # Generate individual layer classes
     layer_classes = []
@@ -350,6 +742,33 @@ def generate_model_file(
         if node_type in ('input', 'dataloader', 'output'):
             # Skip input/output nodes
             var_map[node_id] = 'x' if not var_map else 'x'
+            continue
+
+        # Handle group blocks differently
+        if node_type == 'group':
+            # Get the group definition ID
+            group_def_id = node.get('data', {}).get('groupDefinitionId')
+            
+            if block_generator and group_def_id:
+                # Use the block class name from the generator
+                block_class_name = block_generator.get_block_class_name(group_def_id)
+                
+                if block_class_name:
+                    layer_name = f"block_{node_id[:8]}"
+                    layer_instantiations.append(f"self.{layer_name} = {block_class_name}()")
+                    
+                    # Generate forward pass line
+                    incoming = edge_map.get(node_id, [])
+                    input_var = get_input_variable(incoming, var_map)
+                    output_var = 'x'
+                    forward_pass_lines.append(f"{output_var} = self.{layer_name}({input_var})")
+                    var_map[node_id] = output_var
+                else:
+                    # Block class not found, skip
+                    var_map[node_id] = 'x'
+            else:
+                # No block generator or definition ID, skip
+                var_map[node_id] = 'x'
             continue
 
         # Generate layer class
@@ -389,6 +808,10 @@ from typing import Tuple, Optional
 
 
 '''
+
+    # Add block class definitions (already generated at the start)
+    if block_classes_code:
+        code += block_classes_code + '\n\n'
 
     # Add all layer class definitions
     for layer_class in layer_classes:

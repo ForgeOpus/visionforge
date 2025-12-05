@@ -15,17 +15,21 @@ import {
 import '@xyflow/react/dist/style.css'
 import { useModelBuilderStore } from '@/lib/store'
 import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
-import { BlockData, BlockType } from '@/lib/types'
+import { BlockData, BlockType, GroupBlockData } from '@/lib/types'
 import BlockNode from './BlockNode'
+import GroupBlockNode from './GroupBlockNode'
 import CustomConnectionLine from './CustomConnectionLine'
 import { HistoryToolbar } from './HistoryToolbar'
 import { ContextMenu } from './ContextMenu'
 import ViewCodeModal from './ViewCodeModal'
+import GroupCreationDialog from './GroupCreationDialog'
+import ValidationErrorsPanel from './ValidationErrorsPanel'
 import { renderNodeCode } from '@/lib/api'
 import { toast } from 'sonner'
 
 const nodeTypes = {
-  custom: BlockNode
+  custom: BlockNode,
+  group: GroupBlockNode
 }
 
 interface CanvasProps {
@@ -50,8 +54,11 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
     duplicateNode,
     recentlyUsedNodes,
     validateConnection,
+    validateArchitecture,
     undo,
-    redo
+    redo,
+    groupDefinitions,
+    ungroupBlock
   } = useModelBuilderStore()
 
   const { screenToFlowPosition, getViewport } = useReactFlow()
@@ -68,7 +75,15 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
   const [isLoadingCode, setIsLoadingCode] = useState(false)
   const currentProject = useModelBuilderStore((state) => state.currentProject)
 
-  // Keyboard shortcuts for undo/redo/delete
+  // GroupCreationDialog state
+  const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false)
+  const [selectedNodesForGrouping, setSelectedNodesForGrouping] = useState<string[]>([])
+  const createGroupBlock = useModelBuilderStore((state) => state.createGroupBlock)
+
+  // Validation is now triggered manually via the Validate button in Header
+  // Removed automatic validation on nodes/edges change
+
+  // Keyboard shortcuts for undo/redo/delete/group/expand
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Check for Ctrl (Windows/Linux) or Cmd (Mac)
@@ -80,6 +95,19 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
       } else if (isMod && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
         e.preventDefault()
         redo()
+      } else if (isMod && e.key === 'g' && !e.shiftKey) {
+        // Ctrl+G: Create group from selection
+        e.preventDefault()
+        const target = e.target as HTMLElement
+        if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA' && !target.isContentEditable) {
+          const selectedNodes = nodes.filter(n => n.selected)
+          if (selectedNodes.length >= 2) {
+            setSelectedNodesForGrouping(selectedNodes.map(n => n.id))
+            setIsGroupDialogOpen(true)
+          } else {
+            toast.error('Select at least 2 nodes to create a group')
+          }
+        }
       } else if ((e.key === 'Delete' || e.key === 'Backspace')) {
         // Only delete if not typing in an input field
         const target = e.target as HTMLElement
@@ -97,7 +125,7 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, removeNode, removeEdge, selectedNodeId, selectedEdgeId, setSelectedEdgeId])
+  }, [undo, redo, removeNode, removeEdge, selectedNodeId, selectedEdgeId, setSelectedEdgeId, nodes])
 
   // Find a suitable position for a new node
   const findAvailablePosition = useCallback(() => {
@@ -128,10 +156,49 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
   // Handle block click from palette
   useEffect(() => {
     const handleBlockClickInternal = (blockType: string) => {
+      const position = findAvailablePosition()
+
+      // Check if it's a group block
+      if (blockType.startsWith('group:')) {
+        const groupId = blockType.substring(6) // Remove 'group:' prefix
+        const groupDef = useModelBuilderStore.getState().groupDefinitions.get(groupId)
+        
+        if (!groupDef) {
+          toast.error('Group definition not found')
+          return
+        }
+
+        // Create a new instance of the group block
+        const groupNodeId = `group-block-${Date.now()}`
+        const groupNode = {
+          id: groupNodeId,
+          type: 'group',
+          position,
+          data: {
+            blockType: 'group',
+            label: groupDef.name,
+            config: {},
+            category: groupDef.category,
+            groupDefinitionId: groupId,
+            isExpanded: false
+          }
+        }
+
+        addNode(groupNode as any)
+
+        setTimeout(() => {
+          useModelBuilderStore.getState().inferDimensions()
+        }, 0)
+
+        toast.success(`Added ${groupDef.name}`, {
+          description: 'Group block instance added to canvas'
+        })
+        return
+      }
+
+      // Regular node
       const nodeDef = getNodeDefinition(blockType as BlockType, BackendFramework.PyTorch)
       if (!nodeDef) return
-
-      const position = findAvailablePosition()
 
       const newNode = {
         id: `${blockType}-${Date.now()}`,
@@ -178,37 +245,75 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
       const type = (window as any).draggedBlockTypeGlobal
       if (!type) return
 
-      const nodeDef = getNodeDefinition(type as BlockType, BackendFramework.PyTorch)
-      if (!nodeDef) return
-
       const position = screenToFlowPosition({
         x: event.clientX,
         y: event.clientY
       })
 
-      const newNode = {
-        id: `${type}-${Date.now()}`,
-        type: 'custom',
-        position,
-        data: {
-          blockType: nodeDef.metadata.type,
-          label: nodeDef.metadata.label,
-          config: {},
-          category: nodeDef.metadata.category
-        } as BlockData
-      }
-
-      nodeDef.configSchema.forEach((field) => {
-        if (field.default !== undefined) {
-          newNode.data.config[field.name] = field.default
+      // Check if it's a group block
+      if (type.startsWith('group:')) {
+        const groupId = type.substring(6) // Remove 'group:' prefix
+        const groupDef = useModelBuilderStore.getState().groupDefinitions.get(groupId)
+        
+        if (!groupDef) {
+          toast.error('Group definition not found')
+          return
         }
-      })
 
-      addNode(newNode)
+        // Create a new instance of the group block
+        const groupNodeId = `group-block-${Date.now()}`
+        const groupNode = {
+          id: groupNodeId,
+          type: 'group',
+          position,
+          data: {
+            blockType: 'group',
+            label: groupDef.name,
+            config: {},
+            category: groupDef.category,
+            groupDefinitionId: groupId,
+            isExpanded: false
+          }
+        }
 
-      setTimeout(() => {
-        useModelBuilderStore.getState().inferDimensions()
-      }, 0)
+        addNode(groupNode as any)
+
+        setTimeout(() => {
+          useModelBuilderStore.getState().inferDimensions()
+        }, 0)
+
+        toast.success(`Added ${groupDef.name}`, {
+          description: 'Group block instance added to canvas'
+        })
+      } else {
+        // Regular node
+        const nodeDef = getNodeDefinition(type as BlockType, BackendFramework.PyTorch)
+        if (!nodeDef) return
+
+        const newNode = {
+          id: `${type}-${Date.now()}`,
+          type: 'custom',
+          position,
+          data: {
+            blockType: nodeDef.metadata.type,
+            label: nodeDef.metadata.label,
+            config: {},
+            category: nodeDef.metadata.category
+          } as BlockData
+        }
+
+        nodeDef.configSchema.forEach((field) => {
+          if (field.default !== undefined) {
+            newNode.data.config[field.name] = field.default
+          }
+        })
+
+        addNode(newNode)
+
+        setTimeout(() => {
+          useModelBuilderStore.getState().inferDimensions()
+        }, 0)
+      }
 
       ;(window as any).draggedBlockTypeGlobal = null
     },
@@ -643,12 +748,14 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
           y={contextMenu.y}
           type={contextMenu.type}
           nodeId={contextMenu.nodeId}
+          isGroupBlock={contextMenu.nodeId ? nodes.find(n => n.id === contextMenu.nodeId)?.data.blockType === 'group' : false}
           recentlyUsedNodes={recentlyUsedNodes}
           onClose={() => setContextMenu(null)}
           onAddNode={handleAddNodeFromContextMenu}
           onDeleteNode={removeNode}
           onDuplicateNode={duplicateNode}
           onReplicateNode={handleReplicateNode}
+          onUngroupNode={ungroupBlock}
         />
       )}
       <ViewCodeModal
@@ -659,6 +766,30 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
         framework={viewCodeData.framework}
         isLoading={isLoadingCode}
       />
+      <GroupCreationDialog
+        isOpen={isGroupDialogOpen}
+        onClose={() => {
+          setIsGroupDialogOpen(false)
+          setSelectedNodesForGrouping([])
+        }}
+        onSave={(config) => {
+          // Pass the full config including portMappings to createGroupBlock
+          const result = createGroupBlock(selectedNodesForGrouping, config)
+
+          // Only show toast if creation succeeded (result is a valid node ID)
+          if (result) {
+            toast.success(`Created block: ${config.name}`)
+            setIsGroupDialogOpen(false)
+            setSelectedNodesForGrouping([])
+          } else {
+            toast.error('Failed to create block', {
+              description: 'Check console for validation errors'
+            })
+          }
+        }}
+        selectedNodeIds={selectedNodesForGrouping}
+      />
+      <ValidationErrorsPanel />
     </div>
   )
 }

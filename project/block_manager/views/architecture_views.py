@@ -3,10 +3,11 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 
-from block_manager.models import Project, ModelArchitecture, Block, Connection
+from block_manager.models import Project, ModelArchitecture, Block, Connection, GroupBlockDefinition
 from block_manager.serializers import (
     SaveArchitectureSerializer,
     ModelArchitectureSerializer,
+    GroupBlockDefinitionSerializer,
 )
 
 
@@ -27,21 +28,45 @@ def save_architecture(request, project_id):
     
     nodes = serializer.validated_data['nodes']
     edges = serializer.validated_data['edges']
-    
+    group_definitions = serializer.validated_data.get('groupDefinitions', [])
+
     # Get or create architecture
     architecture, created = ModelArchitecture.objects.get_or_create(project=project)
-    
-    # Clear existing blocks and connections
+
+    # Clear existing blocks, connections, and group definitions
     architecture.blocks.all().delete()
     architecture.connections.all().delete()
-    
+    project.group_definitions.all().delete()
+
+    # Save group definitions first
+    group_def_id_map = {}
+    for group_def in group_definitions:
+        gbd = GroupBlockDefinition.objects.create(
+            project=project,
+            id=group_def.get('id'),
+            name=group_def.get('name'),
+            description=group_def.get('description', ''),
+            category=group_def.get('category'),
+            color=group_def.get('color'),
+            internal_structure={
+                'nodes': group_def.get('internalNodes', []),
+                'edges': group_def.get('internalEdges', []),
+                'portMappings': group_def.get('portMappings', [])
+            }
+        )
+        group_def_id_map[group_def.get('id')] = gbd
+
     # Create blocks from nodes
     node_id_to_block = {}
     for node in nodes:
         node_id = node.get('id')
         node_data = node.get('data', {})
         position = node.get('position', {'x': 0, 'y': 0})
-        
+
+        # Get group definition if this is a group block
+        group_def_id = node_data.get('groupDefinitionId')
+        group_definition = group_def_id_map.get(group_def_id) if group_def_id else None
+
         block = Block.objects.create(
             architecture=architecture,
             node_id=node_id,
@@ -51,6 +76,9 @@ def save_architecture(request, project_id):
             config=node_data.get('config', {}),
             input_shape=node_data.get('inputShape'),
             output_shape=node_data.get('outputShape'),
+            group_definition=group_definition,
+            is_expanded=node_data.get('isExpanded', False),
+            repetition_metadata=node_data.get('repetitionMetadata')
         )
         node_id_to_block[node_id] = block
     
@@ -77,6 +105,7 @@ def save_architecture(request, project_id):
     architecture.canvas_state = {
         'nodes': nodes,
         'edges': edges,
+        'groupDefinitions': group_definitions,
     }
     architecture.save()
     
@@ -118,21 +147,30 @@ def load_architecture(request, project_id):
     # Reconstruct from database
     nodes = []
     for block in architecture.blocks.all():
+        node_data = {
+            'blockType': block.block_type,
+            'config': block.config,
+            'inputShape': block.input_shape,
+            'outputShape': block.output_shape,
+        }
+
+        # Add group block specific data
+        if block.block_type == 'group' and block.group_definition:
+            node_data['groupDefinitionId'] = str(block.group_definition.id)
+            node_data['isExpanded'] = block.is_expanded
+            if block.repetition_metadata:
+                node_data['repetitionMetadata'] = block.repetition_metadata
+
         nodes.append({
             'id': block.node_id,
-            'type': block.block_type,
+            'type': 'group' if block.block_type == 'group' else 'custom',
             'position': {
                 'x': block.position_x,
                 'y': block.position_y,
             },
-            'data': {
-                'blockType': block.block_type,
-                'config': block.config,
-                'inputShape': block.input_shape,
-                'outputShape': block.output_shape,
-            }
+            'data': node_data
         })
-    
+
     edges = []
     for conn in architecture.connections.all():
         edges.append({
@@ -142,10 +180,17 @@ def load_architecture(request, project_id):
             'sourceHandle': conn.source_handle,
             'targetHandle': conn.target_handle,
         })
+
+    # Load group definitions
+    group_definitions = []
+    for group_def in project.group_definitions.all():
+        serializer = GroupBlockDefinitionSerializer(group_def)
+        group_definitions.append(serializer.data)
     
     return Response({
         'nodes': nodes,
         'edges': edges,
+        'groupDefinitions': group_definitions,
     })
 
 

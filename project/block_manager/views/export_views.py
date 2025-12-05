@@ -26,6 +26,7 @@ def export_model(request):
     edges = request.data.get('edges', [])
     export_format = request.data.get('format', 'pytorch')
     project_name = request.data.get('projectName', 'GeneratedModel')
+    group_definitions = request.data.get('groupDefinitions', [])
 
     if not nodes:
         return Response(
@@ -36,9 +37,9 @@ def export_model(request):
     try:
         # Generate code based on framework
         if export_format == 'pytorch':
-            generated = generate_pytorch_code(nodes, edges, project_name)
+            generated = generate_pytorch_code(nodes, edges, project_name, group_definitions)
         elif export_format == 'tensorflow':
-            generated = generate_tensorflow_code(nodes, edges, project_name)
+            generated = generate_tensorflow_code(nodes, edges, project_name, group_definitions)
         else:
             return Response(
                 {'error': f'Unsupported export format: {export_format}'},
