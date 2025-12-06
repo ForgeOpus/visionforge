@@ -2,6 +2,7 @@
 Validation service for model architectures
 Handles shape checking, connection validation, and architecture integrity
 """
+import ast
 from typing import List, Dict, Any, Tuple, Optional
 
 
@@ -233,7 +234,19 @@ class ArchitectureValidator:
                     ))
             
             elif block_type == 'input':
-                input_shape = eval(config.get('shape'))
+                # Use ast.literal_eval for safe evaluation of shape configuration
+                shape_value = config.get('shape')
+                try:
+                    input_shape = ast.literal_eval(shape_value) if shape_value else None
+                except (ValueError, SyntaxError):
+                    self.errors.append(ValidationError(
+                        message='Input block has invalid shape format',
+                        node_id=node_id,
+                        error_type='error',
+                        suggestion='Shape must be a valid Python literal (list or tuple)'
+                    ))
+                    input_shape = None
+                
                 if not input_shape:
                     self.errors.append(ValidationError(
                         message='Input block requires input shape configuration',

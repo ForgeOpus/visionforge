@@ -2,6 +2,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
+from django.db import transaction
 
 from block_manager.models import Project, ModelArchitecture, Block, Connection, GroupBlockDefinition
 from block_manager.serializers import (
@@ -12,10 +13,14 @@ from block_manager.serializers import (
 
 
 @api_view(['POST'])
+@transaction.atomic
 def save_architecture(request, project_id):
     """
     Save architecture for a project
     Accepts nodes and edges from frontend canvas
+    
+    Uses atomic transaction to ensure data integrity - all database
+    operations succeed or rollback together on failure.
     """
     project = get_object_or_404(Project, pk=project_id)
     serializer = SaveArchitectureSerializer(data=request.data)
@@ -38,23 +43,24 @@ def save_architecture(request, project_id):
     architecture.connections.all().delete()
     project.group_definitions.all().delete()
 
-    # Save group definitions first
+    # Save group definitions first - use serializer for validation
     group_def_id_map = {}
     for group_def in group_definitions:
-        gbd = GroupBlockDefinition.objects.create(
-            project=project,
-            id=group_def.get('id'),
-            name=group_def.get('name'),
-            description=group_def.get('description', ''),
-            category=group_def.get('category'),
-            color=group_def.get('color'),
-            internal_structure={
-                'nodes': group_def.get('internalNodes', []),
-                'edges': group_def.get('internalEdges', []),
-                'portMappings': group_def.get('portMappings', [])
-            }
-        )
-        group_def_id_map[group_def.get('id')] = gbd
+        # Validate and create group definition using serializer
+        group_serializer = GroupBlockDefinitionSerializer(data=group_def)
+        if not group_serializer.is_valid():
+            return Response(
+                {
+                    'success': False, 
+                    'error': 'Invalid group definition',
+                    'details': group_serializer.errors
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Save with project context
+        gbd = group_serializer.save(project=project)
+        group_def_id_map[str(gbd.id)] = gbd
 
     # Create blocks from nodes
     node_id_to_block = {}
