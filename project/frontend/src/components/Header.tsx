@@ -268,7 +268,21 @@ export default function Header() {
           targetHandle: edge.targetHandle || ''
         })),
         format: currentProject.framework as 'pytorch' | 'tensorflow',
-        projectName: currentProject.name
+        projectName: currentProject.name,
+        groupDefinitions: Array.from(groupDefinitions.values()).map(def => ({
+          id: def.id,
+          name: def.name,
+          description: def.description,
+          category: def.category,
+          color: def.color,
+          internal_structure: {
+            nodes: def.internalNodes,
+            edges: def.internalEdges,
+            portMappings: def.portMappings
+          },
+          createdAt: def.createdAt,
+          updatedAt: def.updatedAt
+        }))
       })
 
       toast.dismiss()

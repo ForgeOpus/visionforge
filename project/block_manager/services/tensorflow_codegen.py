@@ -700,6 +700,67 @@ def infer_shapes(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Dict[str, An
     return shape_map
 
 
+def collect_all_nodes_with_internals(
+    main_nodes: List[Dict],
+    block_generator: Optional[TensorFlowBlockGenerator] = None
+) -> List[Tuple[Dict, int, str]]:
+    """
+    Collect all nodes including internal nodes from group blocks.
+    Returns list of tuples: (node, index, source_context)
+    source_context is either 'main' or 'group_{group_def_id}'
+
+    This ensures we generate layer classes for ALL nodes, not just main model nodes.
+    """
+    all_nodes = []
+    node_index = 0
+
+    # Add main model nodes
+    for node in main_nodes:
+        all_nodes.append((node, node_index, 'main'))
+        node_index += 1
+
+    # Add internal nodes from group definitions
+    if block_generator:
+        for group_def_id, group_def in block_generator.group_definitions.items():
+            internal_structure = group_def.get('internal_structure', {})
+            internal_nodes = internal_structure.get('nodes', [])
+
+            for internal_node in internal_nodes:
+                node_type = get_node_type(internal_node)
+                # Skip input/output nodes
+                if node_type not in ('input', 'dataloader', 'output'):
+                    all_nodes.append((internal_node, node_index, f'group_{group_def_id}'))
+                    node_index += 1
+
+    return all_nodes
+
+
+def get_layer_signature(node: Dict, config: Dict[str, Any], node_type: str) -> str:
+    """
+    Generate a unique signature for a layer based on its type and config.
+    Used for deduplication - layers with same signature can share the same class.
+    """
+    if node_type == 'conv2d':
+        return f"conv2d_{config.get('out_channels', 64)}_{config.get('kernel_size', 3)}_{config.get('stride', 1)}_{config.get('padding', 0)}_{config.get('dilation', 1)}"
+    elif node_type == 'linear':
+        return f"linear_{config.get('out_features', 128)}_{config.get('bias', True)}"
+    elif node_type == 'maxpool':
+        return f"maxpool_{config.get('kernel_size', 2)}_{config.get('stride', 2)}_{config.get('padding', 0)}"
+    elif node_type == 'dropout':
+        return f"dropout_{config.get('p', 0.5)}"
+    elif node_type == 'batchnorm':
+        return f"batchnorm_{config.get('eps', 1e-5)}_{config.get('momentum', 0.1)}_{config.get('affine', True)}"
+    elif node_type == 'softmax':
+        return f"softmax_{config.get('dim', 1)}"
+    elif node_type == 'attention':
+        return f"attention_{config.get('embed_dim', 512)}_{config.get('num_heads', 8)}_{config.get('dropout', 0.0)}"
+    elif node_type == 'custom':
+        return f"custom_{config.get('name', 'CustomLayer')}"
+    else:
+        # For layers without config (relu, flatten, etc.)
+        return node_type
+
+
 def generate_model_file(
     nodes: List[Dict],
     edges: List[Dict],
@@ -716,8 +777,35 @@ def generate_model_file(
     if block_generator:
         block_classes_code = block_generator.generate_all_block_classes()
 
-    # Generate individual layer classes
+    # COLLECT ALL NODES (main + internal from groups) and generate layer classes
+    all_nodes_to_generate = collect_all_nodes_with_internals(nodes, block_generator)
+
+    # DEDUPLICATE by signature and generate layer classes
+    seen_signatures = set()
     layer_classes = []
+
+    for node, idx, source_context in all_nodes_to_generate:
+        node_type = get_node_type(node)
+        config = node.get('data', {}).get('config', {})
+        node_id = node['id']
+
+        # Get shape info (use shape_map for main nodes, extract for internal)
+        if source_context == 'main':
+            shape_info = shape_map.get(node_id, {})
+        else:
+            shape_info = extract_shape_info_from_node(node)
+
+        # Generate signature for deduplication
+        signature = get_layer_signature(node, config, node_type)
+
+        # Only generate if we haven't seen this signature before
+        if signature not in seen_signatures:
+            seen_signatures.add(signature)
+            layer_class_code = generate_layer_class(node, idx, config, node_type, shape_info)
+            if layer_class_code:
+                layer_classes.append(layer_class_code)
+
+    # Now generate layer instantiations and forward pass for MAIN MODEL ONLY
     layer_instantiations = []
     forward_pass_lines = []
 
@@ -747,15 +835,15 @@ def generate_model_file(
         if node_type == 'group':
             # Get the group definition ID
             group_def_id = node.get('data', {}).get('groupDefinitionId')
-            
+
             if block_generator and group_def_id:
                 # Use the block class name from the generator
                 block_class_name = block_generator.get_block_class_name(group_def_id)
-                
+
                 if block_class_name:
                     layer_name = f"block_{node_id[:8]}"
                     layer_instantiations.append(f"self.{layer_name} = {block_class_name}()")
-                    
+
                     # Generate forward pass line
                     incoming = edge_map.get(node_id, [])
                     input_var = get_input_variable(incoming, var_map)
@@ -770,10 +858,7 @@ def generate_model_file(
                 var_map[node_id] = 'x'
             continue
 
-        # Generate layer class
-        layer_class_code = generate_layer_class(node, idx, config, node_type, shape_info)
-        if layer_class_code:
-            layer_classes.append(layer_class_code)
+        # For regular nodes, we already generated the layer class above (no need to generate again)
 
         # Generate layer instantiation for __init__
         layer_name = get_layer_variable_name(node_type, idx, config)

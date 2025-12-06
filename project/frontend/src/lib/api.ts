@@ -168,6 +168,7 @@ export async function exportModel(modelData: {
   edges: any[]
   format: 'pytorch' | 'tensorflow'
   projectName: string
+  groupDefinitions?: any[]
 }): Promise<ApiResponse<{
   success: boolean
   framework: string
@@ -183,7 +184,10 @@ export async function exportModel(modelData: {
 }>> {
   return apiFetch('/export', {
     method: 'POST',
-    body: JSON.stringify(modelData),
+    body: JSON.stringify({
+      ...modelData,
+      groupDefinitions: modelData.groupDefinitions || []
+    }),
   })
 }
 
