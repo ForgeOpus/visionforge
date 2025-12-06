@@ -233,7 +233,7 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
           return shapes
         })()}
 
-        {!data.outputShape && data.blockType !== 'input' && data.blockType !== 'dataloader' && data.blockType !== 'empty' && (
+        {!data.outputShape && data.blockType !== 'input' && data.blockType !== 'dataloader' && data.blockType !== 'empty' && data.blockType !== 'output' &&  data.blockType !== 'loss' && (
           <div className="text-[10px] text-orange-600">
             Configure params
           </div>

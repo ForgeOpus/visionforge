@@ -173,7 +173,7 @@ class ArchitectureValidator:
         if not self.edges:
             # If there are no edges but there are nodes, all non-input nodes are orphaned
             for node in self.nodes:
-                if self._get_block_type(node) != 'input':
+                if self._get_block_type(node) != 'input' and self._get_block_type(node) != 'output' and self._get_block_type(node) != 'loss':
                     self.warnings.append(ValidationError(
                         message='Block is not connected to the graph',
                         node_id=node['id'],

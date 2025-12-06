@@ -470,7 +470,7 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
         })
       }
       
-      if (!hasOutput) {
+      if (!hasOutput && node.data.blockType !== 'output' && node.data.blockType !== 'loss') {
         errors.push({
           nodeId: node.id,
           message: `Block "${node.data.label}" has no output connection`,
