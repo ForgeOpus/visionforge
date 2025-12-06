@@ -5,6 +5,18 @@ Generates tf.keras.Model code from architecture graphs with professional class-b
 
 from typing import List, Dict, Any, Optional, Tuple
 from collections import deque
+import logging
+
+# Import the GroupBlockShapeComputer from PyTorch codegen (it's framework-agnostic)
+from .pytorch_codegen import (
+    GroupBlockShapeComputer,
+    GroupDefinitionNotFoundError,
+    ShapeMismatchError,
+    CyclicDependencyError
+)
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 class TensorFlowBlockGenerator:
@@ -15,15 +27,21 @@ class TensorFlowBlockGenerator:
     with proper initialization and call method logic.
     """
     
-    def __init__(self, group_definitions: List[Dict[str, Any]]):
+    def __init__(
+        self,
+        group_definitions: List[Dict[str, Any]],
+        shape_computer: Optional[GroupBlockShapeComputer] = None
+    ):
         """
         Initialize the block generator.
         
         Args:
             group_definitions: List of GroupBlockDefinition dictionaries
+            shape_computer: Optional shape computer for internal shape inference
         """
         self.group_definitions = {defn['id']: defn for defn in group_definitions}
         self.generated_classes = {}  # Cache generated class code
+        self.shape_computer = shape_computer or GroupBlockShapeComputer(self.group_definitions)
         
     def generate_all_block_classes(self) -> str:
         """
@@ -47,12 +65,17 @@ class TensorFlowBlockGenerator:
             
         return "\n".join(code_parts)
     
-    def generate_block_class(self, definition: Dict[str, Any]) -> str:
+    def generate_block_class(
+        self,
+        definition: Dict[str, Any],
+        example_input_shape: Optional[Dict[str, Any]] = None
+    ) -> str:
         """
         Generate tf.keras.Model subclass for a single block definition.
         
         Args:
             definition: GroupBlockDefinition dictionary
+            example_input_shape: Optional example input shape for computing internal shapes
             
         Returns:
             String containing the complete block class definition
@@ -70,11 +93,22 @@ class TensorFlowBlockGenerator:
         # Sort internal nodes topologically
         sorted_nodes = topological_sort(internal_nodes, internal_edges)
         
-        # Infer shapes for internal nodes
-        shape_map = infer_shapes(sorted_nodes, internal_edges)
+        # Compute internal shapes if example provided
+        internal_shape_map = {}
+        if example_input_shape:
+            internal_shape_map, _ = self.shape_computer.compute_internal_shapes(
+                internal_nodes,
+                internal_edges,
+                port_mappings,
+                example_input_shape,
+                block_name
+            )
+        else:
+            # Fallback to old behavior without shape computer
+            internal_shape_map, _ = infer_shapes(sorted_nodes, internal_edges)
         
         # Generate __init__ method
-        init_method = self._generate_init_method(sorted_nodes, shape_map, port_mappings)
+        init_method = self._generate_init_method(sorted_nodes, internal_shape_map, port_mappings)
         
         # Generate call method
         call_method = self._generate_call_method(
@@ -107,36 +141,72 @@ class TensorFlowBlockGenerator:
     ) -> str:
         """Generate __init__ method with layer instantiation."""
         lines = []
-        lines.append("    def __init__(self):")
+
+        # Detect which shape parameters are needed by scanning nodes
+        needs_in_channels = False
+        needs_in_features = False
+        needs_num_features = False
+
+        for node in nodes:
+            node_type = get_node_type(node)
+            if node_type in ('input', 'dataloader', 'output'):
+                continue
+            if node_type == 'conv2d':
+                needs_in_channels = True
+            elif node_type == 'linear':
+                needs_in_features = True
+            elif node_type in ('batchnorm', 'batchnorm2d'):
+                needs_num_features = True
+
+        # Generate __init__ signature with detected parameters
+        params = []
+        if needs_in_channels:
+            params.append("in_channels=None")
+        if needs_in_features:
+            params.append("in_features=None")
+        if needs_num_features:
+            params.append("num_features=None")
+
+        if params:
+            lines.append(f"    def __init__(self, {', '.join(params)}):")
+        else:
+            lines.append("    def __init__(self):")
+
         lines.append('        """Initialize all internal layers."""')
         lines.append(f"        super().__init__()")
         lines.append("")
-        
-        # Track which nodes need to be instantiated
+
+        # Track which nodes need to be instantiated and which is first of each type
         layer_count = {}
-        
+        first_layer_of_type = {}
+
         for idx, node in enumerate(nodes):
             node_id = node['id']
             node_type = get_node_type(node)
             config = node.get('data', {}).get('config', {})
             shape_info = shape_map.get(node_id, {})
-            
+
             # Skip input/output nodes
             if node_type in ('input', 'dataloader', 'output'):
                 continue
-            
+
+            # Track if this is the first layer of its type
+            is_first = node_type not in first_layer_of_type
+            if is_first:
+                first_layer_of_type[node_type] = node_id
+
             # Generate layer instantiation
             layer_name = self._get_internal_layer_name(node_type, node_id, layer_count)
             layer_class_name = self._get_layer_class_name_for_node(node_type, config)
-            
+
             # Generate instantiation with proper arguments
             instantiation = self._generate_layer_instantiation_line(
-                layer_name, layer_class_name, node_type, shape_info, config
+                layer_name, layer_class_name, node_type, shape_info, config, is_first
             )
-            
+
             if instantiation:
                 lines.append(f"        {instantiation}")
-        
+
         return "\n".join(lines)
     
     def _generate_call_method(
@@ -229,8 +299,8 @@ class TensorFlowBlockGenerator:
                 input_vars = [var_map.get(src, 'inputs') for src in incoming]
                 input_var = f"[{', '.join(input_vars)}]"
             
-            # Generate output variable name
-            output_var = f"x_{node_id[:8]}"
+            # Generate output variable name (sanitize node_id to avoid hyphens)
+            output_var = f"x_{node_id[:8].replace('-', '_')}"
             var_map[node_id] = output_var
             
             # Generate forward line with training parameter for layers that need it
@@ -302,11 +372,40 @@ class TensorFlowBlockGenerator:
         layer_class_name: str,
         node_type: str,
         shape_info: Dict[str, Any],
-        config: Dict[str, Any]
+        config: Dict[str, Any],
+        is_first: bool = False
     ) -> str:
         """Generate layer instantiation line with proper arguments."""
-        # TensorFlow layers typically don't need input shape in constructor
-        return f"self.{layer_name} = {layer_class_name}()"
+        # Determine if layer needs shape arguments
+        if node_type == 'conv2d':
+            if is_first:
+                # Use parameter for first conv2d layer
+                return f"self.{layer_name} = {layer_class_name}(in_channels=in_channels)"
+            else:
+                # Use inferred value from shape map for subsequent layers
+                in_channels = shape_info.get('in_channels', 3)
+                return f"self.{layer_name} = {layer_class_name}(in_channels={in_channels})"
+        elif node_type == 'linear':
+            if is_first:
+                # Use parameter for first linear layer
+                return f"self.{layer_name} = {layer_class_name}(in_features=in_features)"
+            else:
+                # Use inferred value from shape map for subsequent layers
+                # TensorFlow uses 'in_units' instead of 'in_features'
+                in_units = shape_info.get('in_units', shape_info.get('in_features', 512))
+                return f"self.{layer_name} = {layer_class_name}(in_features={in_units})"
+        elif node_type in ('batchnorm', 'batchnorm2d'):
+            if is_first:
+                # Use parameter for first batchnorm layer
+                return f"self.{layer_name} = {layer_class_name}(num_features=num_features)"
+            else:
+                # Use inferred value from shape map for subsequent layers
+                # TensorFlow batch norm uses out_channels
+                num_features = shape_info.get('num_features', shape_info.get('out_channels', 64))
+                return f"self.{layer_name} = {layer_class_name}(num_features={num_features})"
+        else:
+            # TensorFlow layers typically don't need input shape in constructor
+            return f"self.{layer_name} = {layer_class_name}()"
     
     def _get_internal_layer_name(
         self,
@@ -315,15 +414,15 @@ class TensorFlowBlockGenerator:
         layer_count: Dict[str, int]
     ) -> str:
         """Generate unique layer variable name for internal node."""
-        # Use node_id suffix for uniqueness
-        suffix = node_id[:8]
+        # Use node_id suffix for uniqueness (sanitize to avoid hyphens)
+        suffix = node_id[:8].replace('-', '_')
         base_name = node_type.replace('_', '')
-        
+
         # Track count for this type
         if node_type not in layer_count:
             layer_count[node_type] = 0
         layer_count[node_type] += 1
-        
+
         return f"{base_name}_{suffix}"
     
     def _get_layer_class_name_for_node(
@@ -384,7 +483,7 @@ def generate_tensorflow_code(
     edges: List[Dict[str, Any]],
     project_name: str = "GeneratedModel",
     group_definitions: Optional[List[Dict[str, Any]]] = None
-) -> Dict[str, str]:
+) -> Tuple[Dict[str, str], List[Exception]]:
     """
     Generate complete TensorFlow/Keras code including model, training, and data loading.
     Each layer gets its own reusable class, all combined in a main model class.
@@ -396,18 +495,25 @@ def generate_tensorflow_code(
         group_definitions: Optional list of GroupBlockDefinition dictionaries
 
     Returns:
-        Dictionary with keys: 'model', 'train', 'dataset', 'config'
+        Tuple of (dictionary with keys: 'model', 'train', 'dataset', 'config', list of errors)
     """
     # Topologically sort nodes
     sorted_nodes = topological_sort(nodes, edges)
 
-    # Infer shapes through the graph
-    shape_map = infer_shapes(sorted_nodes, edges)
+    # Convert group_definitions list to dict for shape inference
+    group_defs_dict = None
+    if group_definitions:
+        group_defs_dict = {defn['id']: defn for defn in group_definitions}
+
+    # Infer shapes through the graph with group block support
+    shape_map, shape_errors = infer_shapes(sorted_nodes, edges, group_defs_dict)
 
     # Initialize block generator if we have group definitions
     block_generator = None
     if group_definitions:
-        block_generator = TensorFlowBlockGenerator(group_definitions)
+        # Create shape computer for block generator
+        shape_computer = GroupBlockShapeComputer(group_defs_dict) if group_defs_dict else None
+        block_generator = TensorFlowBlockGenerator(group_definitions, shape_computer)
 
     # Generate different components
     model_code = generate_model_file(sorted_nodes, edges, project_name, shape_map, block_generator)
@@ -415,12 +521,13 @@ def generate_tensorflow_code(
     dataset_code = generate_dataset_class(nodes)
     config_code = generate_config_file(nodes)
 
+    # Return generated code with any shape inference errors
     return {
         'model': model_code,
         'train': train_code,
         'dataset': dataset_code,
         'config': config_code
-    }
+    }, shape_errors
 
 
 def generate_single_layer_class(
@@ -571,15 +678,31 @@ def topological_sort(nodes: List[Dict], edges: List[Dict]) -> List[Dict]:
     return [node_map[node_id] for node_id in sorted_ids if node_id in node_map]
 
 
-def infer_shapes(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Dict[str, Any]]:
+def infer_shapes(
+    nodes: List[Dict],
+    edges: List[Dict],
+    group_definitions: Optional[Dict[str, Dict[str, Any]]] = None
+) -> Tuple[Dict[str, Dict[str, Any]], List[Exception]]:
     """
     Infer input/output shapes for each layer in the graph.
     TensorFlow uses NHWC format (batch, height, width, channels).
+    Enhanced to handle group blocks properly.
+
+    Args:
+        nodes: List of node dictionaries
+        edges: List of edge dictionaries
+        group_definitions: Optional map of group definition IDs to definitions
 
     Returns:
-        Dictionary mapping node_id to shape info: {'in_channels', 'out_channels', 'in_units', 'out_units', etc.}
+        Tuple of (dictionary mapping node_id to shape info, list of errors)
     """
     shape_map = {}
+    errors = []
+
+    # Initialize shape computer for group blocks
+    shape_computer = None
+    if group_definitions:
+        shape_computer = GroupBlockShapeComputer(group_definitions)
 
     # Build edge map for finding inputs
     edge_map = {}
@@ -689,6 +812,52 @@ def infer_shapes(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Dict[str, An
                 prev_shape = shape_map[incoming[0]]
                 shape_info.update(prev_shape)
 
+        elif node_type == 'group':
+            # NEW: Compute group block output shape using shape computer
+            if shape_computer:
+                group_def_id = node.get('data', {}).get('groupDefinitionId')
+                
+                if group_def_id and incoming and incoming[0] in shape_map:
+                    # Get input shape from upstream node
+                    input_shape = shape_map[incoming[0]]
+                    
+                    # Compute output shape using internal structure
+                    logger.debug(f"Computing shape for group block {node_id} (def: {group_def_id})")
+                    output_shape, shape_errors = shape_computer.compute_output_shape(
+                        group_def_id,
+                        input_shape
+                    )
+                    
+                    # Collect any errors from shape computation
+                    errors.extend(shape_errors)
+                    
+                    if output_shape:
+                        shape_info = output_shape
+                        logger.debug(f"Group block {node_id} output shape: {output_shape}")
+                    else:
+                        # Fallback: copy input shape
+                        shape_info = input_shape.copy()
+                        logger.warning(f"Failed to compute shape for group block {node_id}, using input shape")
+                elif incoming and incoming[0] in shape_map:
+                    # No definition found, copy input shape
+                    shape_info = shape_map[incoming[0]].copy()
+                    logger.warning(f"Group block {node_id} has no definition ID, using input shape")
+                else:
+                    # No input, use default
+                    shape_info = {'out_channels': 3, 'out_height': 224, 'out_width': 224}
+                    logger.warning(f"Group block {node_id} has no incoming edges, using default shape")
+            else:
+                # No shape computer available, fall back to old behavior
+                if incoming and incoming[0] in shape_map:
+                    prev_shape = shape_map[incoming[0]]
+                    # Copy input shape as default
+                    shape_info.update(prev_shape)
+                else:
+                    # Default starting shape
+                    shape_info['out_channels'] = 3
+                    shape_info['out_height'] = 224
+                    shape_info['out_width'] = 224
+
         else:
             # For other layers, try to preserve shape from input
             if incoming and incoming[0] in shape_map:
@@ -697,7 +866,7 @@ def infer_shapes(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Dict[str, An
 
         shape_map[node_id] = shape_info
 
-    return shape_map
+    return shape_map, errors
 
 
 def collect_all_nodes_with_internals(
@@ -841,20 +1010,88 @@ def generate_model_file(
                 block_class_name = block_generator.get_block_class_name(group_def_id)
 
                 if block_class_name:
-                    layer_name = f"block_{node_id[:8]}"
-                    layer_instantiations.append(f"self.{layer_name} = {block_class_name}()")
+                    layer_name = f"block_{node_id.replace('-', '_')}"
+
+                    # Get upstream node's output shape from shape_map
+                    incoming = edge_map.get(node_id, [])
+                    params = []
+                    
+                    if incoming and incoming[0] in shape_map:
+                        # Get upstream node's output shape
+                        upstream_shape = shape_map[incoming[0]]
+                        
+                        # Extract in_channels or in_features from upstream shape
+                        # TensorFlow uses same parameter names as PyTorch for consistency
+                        # Pass in_channels if the upstream outputs channels (convolutional layers)
+                        if 'out_channels' in upstream_shape:
+                            in_channels = upstream_shape['out_channels']
+                            params.append(f"in_channels={in_channels}")
+                            logger.debug(f"TF Block {node_id}: passing in_channels={in_channels} from upstream node {incoming[0]}")
+                        
+                        # Pass in_features if the upstream outputs features (linear layers)
+                        # TensorFlow uses 'out_units' instead of 'out_features'
+                        elif 'out_units' in upstream_shape:
+                            in_units = upstream_shape['out_units']
+                            params.append(f"in_features={in_units}")
+                            logger.debug(f"TF Block {node_id}: passing in_features={in_units} from upstream node {incoming[0]}")
+                        elif 'out_features' in upstream_shape:
+                            in_features = upstream_shape['out_features']
+                            params.append(f"in_features={in_features}")
+                            logger.debug(f"TF Block {node_id}: passing in_features={in_features} from upstream node {incoming[0]}")
+                        
+                        # Pass num_features if the upstream outputs num_features (batch norm)
+                        elif 'num_features' in upstream_shape:
+                            num_features = upstream_shape['num_features']
+                            params.append(f"num_features={num_features}")
+                            logger.debug(f"TF Block {node_id}: passing num_features={num_features} from upstream node {incoming[0]}")
+                        else:
+                            # Upstream shape exists but doesn't have expected keys
+                            logger.warning(f"TF Block {node_id}: upstream shape {upstream_shape} doesn't contain expected keys")
+                    else:
+                        # Handle case where no upstream exists (use input node shape)
+                        # Look for input nodes in the graph
+                        input_nodes = [n for n in nodes if get_node_type(n) == 'input']
+                        if input_nodes and input_nodes[0]['id'] in shape_map:
+                            input_shape = shape_map[input_nodes[0]['id']]
+                            
+                            # Use input node's output shape
+                            if 'out_channels' in input_shape:
+                                in_channels = input_shape['out_channels']
+                                params.append(f"in_channels={in_channels}")
+                                logger.debug(f"TF Block {node_id}: no upstream, using input shape in_channels={in_channels}")
+                            elif 'out_units' in input_shape:
+                                in_units = input_shape['out_units']
+                                params.append(f"in_features={in_units}")
+                                logger.debug(f"TF Block {node_id}: no upstream, using input shape in_features={in_units}")
+                            elif 'out_features' in input_shape:
+                                in_features = input_shape['out_features']
+                                params.append(f"in_features={in_features}")
+                                logger.debug(f"TF Block {node_id}: no upstream, using input shape in_features={in_features}")
+                            else:
+                                logger.warning(f"TF Block {node_id}: input shape {input_shape} doesn't contain expected keys")
+                        else:
+                            # No upstream and no input node, use defaults
+                            logger.warning(f"TF Block {node_id}: no upstream connection and no input node found")
+
+                    # Generate instantiation with computed parameters
+                    # Each instance gets independent shape computation based on its position in the graph
+                    if params:
+                        layer_instantiations.append(f"self.{layer_name} = {block_class_name}({', '.join(params)})  # Instance at position {idx}")
+                    else:
+                        layer_instantiations.append(f"self.{layer_name} = {block_class_name}()  # Instance at position {idx}")
 
                     # Generate forward pass line
-                    incoming = edge_map.get(node_id, [])
                     input_var = get_input_variable(incoming, var_map)
                     output_var = 'x'
                     forward_pass_lines.append(f"{output_var} = self.{layer_name}({input_var}, training=training)")
                     var_map[node_id] = output_var
                 else:
                     # Block class not found, skip
+                    logger.warning(f"TF Block class not found for group definition {group_def_id}")
                     var_map[node_id] = 'x'
             else:
                 # No block generator or definition ID, skip
+                logger.warning(f"TF No block generator or definition ID for node {node_id}")
                 var_map[node_id] = 'x'
             continue
 

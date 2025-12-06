@@ -39,6 +39,7 @@ interface ModelBuilderState {
 
   validateConnection: (connection: Connection) => boolean
   validateArchitecture: () => ValidationError[]
+  setValidationErrors: (errors: ValidationError[]) => void
   inferDimensions: () => void
 
   undo: () => void
@@ -554,6 +555,10 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     
     set({ validationErrors: errors })
     return errors
+  },
+
+  setValidationErrors: (errors: ValidationError[]) => {
+    set({ validationErrors: errors })
   },
 
   inferDimensions: () => {

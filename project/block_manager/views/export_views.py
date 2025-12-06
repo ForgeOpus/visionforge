@@ -36,13 +36,48 @@ def export_model(request):
 
     try:
         # Generate code based on framework
+        shape_errors = []
         if export_format == 'pytorch':
-            generated = generate_pytorch_code(nodes, edges, project_name, group_definitions)
+            generated, shape_errors = generate_pytorch_code(nodes, edges, project_name, group_definitions)
         elif export_format == 'tensorflow':
-            generated = generate_tensorflow_code(nodes, edges, project_name, group_definitions)
+            generated, shape_errors = generate_tensorflow_code(nodes, edges, project_name, group_definitions)
         else:
             return Response(
                 {'error': f'Unsupported export format: {export_format}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if there are shape errors that should prevent export
+        if shape_errors:
+            # Format shape errors with block name, layer name, and details
+            formatted_errors = []
+            for error in shape_errors:
+                error_dict = {
+                    'type': 'error',  # Mark as error type for frontend
+                    'message': str(error)
+                }
+                
+                # Extract additional context from specific error types
+                if hasattr(error, 'block_name'):
+                    error_dict['blockName'] = error.block_name
+                if hasattr(error, 'layer_name'):
+                    error_dict['layerName'] = error.layer_name
+                if hasattr(error, 'node_id'):
+                    error_dict['nodeId'] = error.node_id
+                if hasattr(error, 'expected'):
+                    error_dict['expected'] = error.expected
+                if hasattr(error, 'actual'):
+                    error_dict['actual'] = error.actual
+                
+                formatted_errors.append(error_dict)
+            
+            # Return validation-style error response that frontend expects
+            return Response(
+                {
+                    'error': 'Shape inference errors detected',
+                    'validationErrors': formatted_errors,
+                    'details': 'Please fix the shape mismatches in your architecture before exporting.'
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 

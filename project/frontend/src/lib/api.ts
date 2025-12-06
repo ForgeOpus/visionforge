@@ -61,7 +61,7 @@ async function apiFetch<T>(
     if (!response.ok) {
       return {
         success: false,
-        error: data.error || data.message || 'An error occurred',
+        error: data,  // Pass through the entire error data object
       }
     }
 

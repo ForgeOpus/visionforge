@@ -122,6 +122,13 @@ export default function ValidationErrorsPanel() {
                             className="text-red-500 mt-0.5 flex-shrink-0"
                           />
                           <div className="flex-1 min-w-0">
+                            {(error.blockName || error.layerName) && (
+                              <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-1">
+                                {error.blockName && `Block: ${error.blockName}`}
+                                {error.blockName && error.layerName && ' • '}
+                                {error.layerName && `Layer: ${error.layerName}`}
+                              </p>
+                            )}
                             <p className="text-red-700 dark:text-red-400 break-words">
                               {error.message}
                             </p>
