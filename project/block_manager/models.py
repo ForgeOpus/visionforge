@@ -94,6 +94,7 @@ class Block(models.Model):
     )
     is_expanded = models.BooleanField(default=False)
     repetition_metadata = models.JSONField(null=True, blank=True)
+    instance_config_overrides = models.JSONField(null=True, blank=True, default=dict)
 
     created_at = models.DateTimeField(auto_now_add=True)
 

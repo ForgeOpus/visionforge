@@ -161,6 +161,7 @@ class GroupBlockDefinitionSerializer(serializers.ModelSerializer):
 class BlockSerializer(serializers.ModelSerializer):
     """Serializer for Block model"""
     group_definition = GroupBlockDefinitionSerializer(read_only=True)
+    instance_config_overrides = serializers.JSONField(required=False, allow_null=True)
 
     class Meta:
         model = Block
@@ -168,6 +169,7 @@ class BlockSerializer(serializers.ModelSerializer):
             'id', 'node_id', 'block_type', 'position_x', 'position_y',
             'config', 'input_shape', 'output_shape',
             'group_definition', 'is_expanded', 'repetition_metadata',
+            'instance_config_overrides',
             'created_at'
         ]
         read_only_fields = ['id', 'created_at']

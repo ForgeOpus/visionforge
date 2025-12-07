@@ -31,6 +31,10 @@ const GroupBlockNode = memo(({ data, selected, id }: GroupBlockNodeProps) => {
   const nodeErrors = validationErrors.filter((error) => error.nodeId === id && error.type === 'error')
   const hasErrors = nodeErrors.length > 0
 
+  // Check if this group instance has any configuration overrides
+  const hasCustomizations = data.instanceConfigOverrides && Object.keys(data.instanceConfigOverrides).length > 0
+  const customizationCount = hasCustomizations ? Object.keys(data.instanceConfigOverrides!).length : 0
+
   const isHandleConnected = (handleId: string, isTarget: boolean) => {
     return edges.some(edge => {
       if (isTarget) {
@@ -92,6 +96,31 @@ const GroupBlockNode = memo(({ data, selected, id }: GroupBlockNodeProps) => {
           >
             {data.repetitionMetadata.index + 1}/{data.repetitionMetadata.totalCount}
           </Badge>
+        </div>
+      )}
+
+      {/* Customization Badge */}
+      {hasCustomizations && !hasErrors && (
+        <div className="absolute -top-2 -left-2 z-20" style={{ left: data.repetitionMetadata ? 'auto' : '-0.5rem', right: data.repetitionMetadata ? '-0.5rem' : 'auto' }}>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] px-1.5 py-0.5 shadow-md bg-blue-500 hover:bg-blue-600 text-white cursor-help"
+                >
+                  <Icons.PencilSimple size={10} weight="fill" className="mr-0.5" />
+                  {customizationCount}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="text-xs">
+                  <div className="font-semibold">Customized Instance</div>
+                  <div>{customizationCount} internal node{customizationCount > 1 ? 's' : ''} customized</div>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       )}
 

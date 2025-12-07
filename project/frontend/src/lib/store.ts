@@ -4,6 +4,13 @@ import { BlockData, Project, ValidationError, TensorShape, BlockType, GroupBlock
 import { getNodeDefinition, BackendFramework } from './nodes/registry'
 import { arePortsCompatible } from './nodes/ports'
 import { computeGroupBlockShapes, validateGroupBlockShapes } from './groupBlockShapeInference'
+import { 
+  createIdMapping, 
+  rewireEdgesForExpansion, 
+  rewireEdgesForCollapse, 
+  createContainerNode 
+} from './groupBlockHelpers'
+import { toast } from 'sonner'
 
 interface HistoryState {
   nodes: Node<BlockData>[]
@@ -60,6 +67,8 @@ interface ModelBuilderState {
     color: string
     portMappings: PortMapping[]
   }) => string
+  expandGroupBlock: (nodeId: string) => void
+  collapseGroupBlock: (nodeId: string) => void
   toggleGroupExpansion: (nodeId: string) => void
   repeatGroupBlock: (nodeId: string, count: number, spacingX: number, spacingY?: number) => string[]
   ungroupBlock: (nodeId: string) => void
@@ -68,6 +77,12 @@ interface ModelBuilderState {
   deleteGroupDefinition: (definitionId: string, cascade: boolean) => void
   duplicateGroupDefinition: (definitionId: string) => string
 
+  // Internal node configuration for group instances
+  updateGroupInternalNodeConfig: (groupNodeId: string, internalNodeId: string, configUpdates: Partial<Record<string, any>>) => void
+  getEffectiveInternalNodeConfig: (groupNodeId: string, internalNodeId: string) => Record<string, any> | null
+  resetGroupInternalNodeConfig: (groupNodeId: string, internalNodeId: string, fieldName?: string) => void
+  hasConfigOverrides: (groupNodeId: string, internalNodeId: string) => boolean
+
   reset: () => void
 }
 
@@ -75,10 +90,16 @@ const MAX_HISTORY = 10
 
 // Helper to save current state to history
 const saveHistory = (state: ModelBuilderState) => {
+  // Deep clone group definitions to ensure complete history isolation
+  const clonedGroupDefinitions = new Map<string, GroupBlockDefinition>()
+  state.groupDefinitions.forEach((def, key) => {
+    clonedGroupDefinitions.set(key, JSON.parse(JSON.stringify(def)))
+  })
+
   const currentState: HistoryState = {
     nodes: JSON.parse(JSON.stringify(state.nodes)),
     edges: JSON.parse(JSON.stringify(state.edges)),
-    groupDefinitions: new Map(state.groupDefinitions)
+    groupDefinitions: clonedGroupDefinitions
   }
 
   const newPast = [...state.past, currentState].slice(-MAX_HISTORY)
@@ -604,8 +625,12 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
             }
           })
           
-          // Compute shapes through the internal graph
-          const result = computeGroupBlockShapes(groupDef, externalInputShapes)
+          // Compute shapes through the internal graph with instance overrides
+          const result = computeGroupBlockShapes(
+            groupDef, 
+            externalInputShapes,
+            groupData.instanceConfigOverrides
+          )
           
           // Store input shapes on the group block node
           if (result.inputShapes.size > 0) {
@@ -841,12 +866,21 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
           if (!portExists) {
             validationErrors.push(`Port mapping ${index}: Port ${mapping.internalPortId} not found on node ${internalNode.data.label}`)
           }
+        } else {
+          validationErrors.push(`Port mapping ${index}: Node definition not found for ${internalNode.data.blockType}`)
         }
       }
     })
 
     if (validationErrors.length > 0) {
-      console.error('Port mapping validation failed:', validationErrors)
+      const errorMessage = 'Port mapping validation failed:\n' + 
+        validationErrors.map(e => `  - ${e}`).join('\n')
+      console.error(errorMessage)
+      
+      toast.error('Failed to create group block', {
+        description: `${validationErrors.length} validation error(s). Check console for details.`
+      })
+      
       // Return early - don't create invalid group
       return ''
     }
@@ -947,33 +981,192 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     return groupNodeId
   },
 
-  toggleGroupExpansion: (nodeId) => {
+  expandGroupBlock: (nodeId) => {
     const state = get()
     const historyUpdate = saveHistory(state)
 
-    // First, check if we're trying to collapse (expanded nodes exist for this group)
-    const internalNodeBaseIds = new Set(
-      Array.from(state.groupDefinitions.values())
-        .flatMap(def => def.internalNodes.map(n => n.id))
-    )
+    try {
+      // Validate node is a group block
+      const groupNode = state.nodes.find(n => n.id === nodeId)
+      if (!groupNode || groupNode.data.blockType !== 'group') {
+        throw new Error('Node is not a group block')
+      }
 
-    const expandedNodes = state.nodes.filter(n => {
-      // Check if this node has expansion metadata matching our nodeId
-      const data = n.data as any
-      return data._expandedFrom === nodeId && data._isExpandedInternal === true
-    })
+      const groupData = groupNode.data as GroupBlockData
 
-    if (expandedNodes.length > 0) {
-      // COLLAPSE: Expanded nodes exist for this group, collapse them
-      const groupData = expandedNodes[0].data as any
-      const groupDef = state.groupDefinitions.get(groupData._groupDefinitionId)
-      if (!groupDef) return
+      // Validate node is not already expanded
+      if (groupData.isExpanded) {
+        throw new Error('Group block is already expanded')
+      }
+
+      // Validate group definition exists
+      const groupDef = state.groupDefinitions.get(groupData.groupDefinitionId)
+      if (!groupDef) {
+        throw new Error('Group definition not found')
+      }
+
+      // Create ID mapping for internal nodes
+      const idMapping = createIdMapping(groupDef.internalNodes, 'expanded')
+
+      // Create expanded nodes with new IDs and relative positions
+      const blockX = groupNode.position.x
+      const blockY = groupNode.position.y
+
+      const expandedNodes = groupDef.internalNodes.map(internalNode => ({
+        ...internalNode,
+        id: idMapping.getExpandedId(internalNode.id),
+        data: {
+          ...internalNode.data,
+          _expandedFrom: nodeId,
+          _isExpandedInternal: true,
+          _groupDefinitionId: groupData.groupDefinitionId
+        },
+        position: {
+          x: blockX + (internalNode.position.x - groupDef.internalNodes[0].position.x),
+          y: blockY + (internalNode.position.y - groupDef.internalNodes[0].position.y)
+        }
+      }))
+
+      // Create internal edges with mapped IDs
+      const timestamp = Date.now()
+      let edgeCounter = 0
+      const internalEdges = groupDef.internalEdges.map(edge => ({
+        ...edge,
+        id: `${edge.id}-expanded-${timestamp}-${edgeCounter++}`,
+        source: idMapping.getExpandedId(edge.source),
+        target: idMapping.getExpandedId(edge.target)
+      }))
+
+      // Rewire external edges using helper
+      const rewiringResult = rewireEdgesForExpansion(
+        state.edges,
+        nodeId,
+        groupDef,
+        idMapping
+      )
+
+      // Validate edge rewiring succeeded
+      rewiringResult.validate()
+
+      // Add internal edges to rewired edges
+      const allEdges = [...rewiringResult.rewiredEdges, ...internalEdges]
+
+      // Create container node with overrides
+      const containerNode = createContainerNode(
+        nodeId,
+        groupDef,
+        expandedNodes,
+        groupData.instanceConfigOverrides || {}
+      )
+
+      // Update state atomically in single set() call
+      const newNodes = state.nodes.filter(n => n.id !== nodeId)
+      newNodes.push(containerNode as any)
+      newNodes.push(...expandedNodes)
+
+      set({
+        nodes: newNodes,
+        edges: allEdges,
+        ...historyUpdate
+      })
+
+      // Trigger shape inference
+      get().inferDimensions()
+
+      // Show success toast
+      toast.success(`Expanded ${groupDef.name}`)
+    } catch (error) {
+      console.error('Failed to expand group block:', error)
+      toast.error('Failed to expand group block', {
+        description: (error as Error).message
+      })
+    }
+  },
+
+  collapseGroupBlock: (nodeId) => {
+    const state = get()
+    const historyUpdate = saveHistory(state)
+
+    try {
+      // Find container node by ID
+      const containerNodeId = `${nodeId}-container`
+      const containerNode = state.nodes.find(n => n.id === containerNodeId)
+
+      // Validate container exists
+      if (!containerNode) {
+        throw new Error('Container node not found - group may not be expanded')
+      }
+
+      // Extract overrides from container
+      const containerData = containerNode.data as any
+      const storedOverrides = containerData._instanceConfigOverrides || {}
+      const groupDefinitionId = containerData._groupDefinitionId
+
+      // Validate group definition exists
+      const groupDef = state.groupDefinitions.get(groupDefinitionId)
+      if (!groupDef) {
+        throw new Error('Group definition not found')
+      }
+
+      // Find all expanded nodes
+      const expandedNodes = state.nodes.filter(n => {
+        const data = n.data as any
+        return data._expandedFrom === nodeId && data._isExpandedInternal === true
+      })
+
+      // Validate expanded nodes exist
+      if (expandedNodes.length === 0) {
+        throw new Error('No expanded nodes found')
+      }
+
+      // Create reverse ID mapping
+      const idMapping = createIdMapping(groupDef.internalNodes, 'temp')
+      // Build reverse mapping from expanded IDs to original IDs
+      const reverseMapping = new Map<string, string>()
+      expandedNodes.forEach(node => {
+        // Find which internal node this corresponds to by checking the ID prefix
+        const originalNode = groupDef.internalNodes.find(internal =>
+          node.id.startsWith(internal.id)
+        )
+        if (originalNode) {
+          reverseMapping.set(node.id, originalNode.id)
+        }
+      })
+
+      // Create a temporary IdMappingResult for the reverse direction
+      const reverseIdMapping = {
+        getOriginalId: (expandedId: string) => {
+          const originalId = reverseMapping.get(expandedId)
+          if (!originalId) {
+            throw new Error(`No original ID found for expanded ID "${expandedId}"`)
+          }
+          return originalId
+        },
+        getExpandedId: (originalId: string) => {
+          throw new Error('Not implemented for collapse')
+        },
+        toExpanded: new Map(),
+        toOriginal: reverseMapping
+      }
 
       // Calculate centroid of expanded nodes
       const centroidX = expandedNodes.reduce((sum, n) => sum + n.position.x, 0) / expandedNodes.length
       const centroidY = expandedNodes.reduce((sum, n) => sum + n.position.y, 0) / expandedNodes.length
 
-      // Recreate the collapsed group block at the centroid
+      // Rewire external edges using helper
+      const expandedNodeIds = new Set(expandedNodes.map(n => n.id))
+      const rewiringResult = rewireEdgesForCollapse(
+        state.edges,
+        expandedNodeIds,
+        nodeId,
+        groupDef,
+        reverseIdMapping as any
+      )
+
+      // Validate edge rewiring succeeded
+      rewiringResult.validate()
+
+      // Create collapsed group node with isExpanded: false
       const collapsedGroupNode: Node<GroupBlockData> = {
         id: nodeId,
         type: 'group',
@@ -983,84 +1176,13 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
           label: groupDef.name,
           config: {},
           category: groupDef.category,
-          groupDefinitionId: groupData._groupDefinitionId,
-          isExpanded: false
+          groupDefinitionId: groupDefinitionId,
+          isExpanded: false,
+          instanceConfigOverrides: Object.keys(storedOverrides).length > 0 ? storedOverrides : undefined
         }
       }
 
-      // Rewire external edges back to the group block
-      const expandedNodeIds = new Set(expandedNodes.map(n => n.id))
-      const newEdges: Edge[] = []
-      const lostEdges: Edge[] = []
-
-      state.edges.forEach(edge => {
-        const sourceIsExpanded = expandedNodeIds.has(edge.source)
-        const targetIsExpanded = expandedNodeIds.has(edge.target)
-
-        // Internal edges (both nodes are expanded) - remove them
-        if (sourceIsExpanded && targetIsExpanded) {
-          return
-        }
-
-        // Incoming edge to expanded node - rewire to group block
-        if (targetIsExpanded && !sourceIsExpanded) {
-          // Find which internal node this edge connects to
-          const targetExpandedNode = expandedNodes.find(n => n.id === edge.target)
-          if (targetExpandedNode) {
-            // Find the port mapping for this internal node
-            const mapping = groupDef.portMappings.find(m =>
-              m.type === 'input' &&
-              targetExpandedNode.id.startsWith(m.internalNodeId) &&
-              (edge.targetHandle || 'default') === m.internalPortId
-            )
-            if (mapping) {
-              newEdges.push({
-                ...edge,
-                target: nodeId,
-                targetHandle: mapping.externalPortId
-              })
-            } else {
-              lostEdges.push(edge) // Track lost edge - no mapping found
-            }
-          } else {
-            lostEdges.push(edge) // Track lost edge - target node not found
-          }
-        }
-        // Outgoing edge from expanded node - rewire to group block
-        else if (sourceIsExpanded && !targetIsExpanded) {
-          const sourceExpandedNode = expandedNodes.find(n => n.id === edge.source)
-          if (sourceExpandedNode) {
-            const mapping = groupDef.portMappings.find(m =>
-              m.type === 'output' &&
-              sourceExpandedNode.id.startsWith(m.internalNodeId) &&
-              (edge.sourceHandle || 'default') === m.internalPortId
-            )
-            if (mapping) {
-              newEdges.push({
-                ...edge,
-                source: nodeId,
-                sourceHandle: mapping.externalPortId
-              })
-            } else {
-              lostEdges.push(edge) // Track lost edge - no mapping found
-            }
-          } else {
-            lostEdges.push(edge) // Track lost edge - source node not found
-          }
-        }
-        // External edge - keep it
-        else {
-          newEdges.push(edge)
-        }
-      })
-
-      // Warn about lost edges
-      if (lostEdges.length > 0) {
-        console.warn(`${lostEdges.length} connection(s) could not be rewired during collapse:`, lostEdges)
-      }
-
-      // Remove expanded nodes, container, and add collapsed group block
-      const containerNodeId = `${nodeId}-container`
+      // Update state atomically in single set() call
       const newNodes = state.nodes.filter(n =>
         !expandedNodeIds.has(n.id) && n.id !== containerNodeId
       )
@@ -1068,161 +1190,63 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
 
       set({
         nodes: newNodes,
-        edges: newEdges,
+        edges: rewiringResult.rewiredEdges,
         ...historyUpdate
       })
 
+      // Trigger shape inference
       get().inferDimensions()
-    } else {
-      // EXPAND: No expanded nodes found, so find the collapsed group node and expand it
-      const groupNode = state.nodes.find(n => n.id === nodeId)
-      if (!groupNode || groupNode.data.blockType !== 'group') return
 
-      const groupData = groupNode.data as GroupBlockData
-      const groupDef = state.groupDefinitions.get(groupData.groupDefinitionId)
-      if (!groupDef) return
-
-      const blockX = groupNode.position.x
-      const blockY = groupNode.position.y
-
-      // Restore internal nodes with positions relative to block location
-      // Add metadata to track which group they belong to
-      const restoredNodes = groupDef.internalNodes.map(internalNode => ({
-        ...internalNode,
-        id: `${internalNode.id}-expanded-${Date.now()}`,
-        data: {
-          ...internalNode.data,
-          _expandedFrom: nodeId,  // Track parent group node
-          _isExpandedInternal: true,  // Mark as internal expanded node
-          _groupDefinitionId: groupData.groupDefinitionId  // Store group definition ID
-        },
-        position: {
-          x: blockX + (internalNode.position.x - groupDef.internalNodes[0].position.x),
-          y: blockY + (internalNode.position.y - groupDef.internalNodes[0].position.y)
-        }
-      }))
-
-      // Create ID mapping
-      const idMapping = new Map<string, string>()
-      groupDef.internalNodes.forEach((oldNode, index) => {
-        idMapping.set(oldNode.id, restoredNodes[index].id)
+      // Show success toast
+      toast.success(`Collapsed ${groupDef.name}`)
+    } catch (error) {
+      console.error('Failed to collapse group block:', error)
+      toast.error('Failed to collapse group block', {
+        description: (error as Error).message
       })
-
-      // Restore internal edges with unique IDs
-      let edgeCounter = 0
-      const restoredInternalEdges = groupDef.internalEdges.map(edge => ({
-        ...edge,
-        id: `${edge.id}-expanded-${Date.now()}-${edgeCounter++}`,
-        source: idMapping.get(edge.source) || edge.source,
-        target: idMapping.get(edge.target) || edge.target
-      }))
-
-      // Rewire external edges to internal nodes
-      const newEdges: Edge[] = []
-      const lostEdges: Edge[] = []
-      // Continue counter from internal edges
-
-      state.edges.forEach(edge => {
-        if (edge.target === nodeId) {
-          const targetHandle = edge.targetHandle || 'default'
-          const mapping = groupDef.portMappings.find(m =>
-            m.type === 'input' && m.externalPortId === targetHandle
-          )
-          if (mapping) {
-            const newTargetId = idMapping.get(mapping.internalNodeId)
-            if (newTargetId) {
-              newEdges.push({
-                ...edge,
-                id: `${edge.id}-rewired-${Date.now()}-${edgeCounter++}`,
-                target: newTargetId,
-                targetHandle: mapping.internalPortId
-              })
-            } else {
-              lostEdges.push(edge) // Track lost edge - ID mapping failed
-            }
-          } else {
-            lostEdges.push(edge) // Track lost edge - no mapping found
-          }
-        } else if (edge.source === nodeId) {
-          const sourceHandle = edge.sourceHandle || 'default'
-          const mapping = groupDef.portMappings.find(m =>
-            m.type === 'output' && m.externalPortId === sourceHandle
-          )
-          if (mapping) {
-            const newSourceId = idMapping.get(mapping.internalNodeId)
-            if (newSourceId) {
-              newEdges.push({
-                ...edge,
-                id: `${edge.id}-rewired-${Date.now()}-${edgeCounter++}`,
-                source: newSourceId,
-                sourceHandle: mapping.internalPortId
-              })
-            } else {
-              lostEdges.push(edge) // Track lost edge - ID mapping failed
-            }
-          } else {
-            lostEdges.push(edge) // Track lost edge - no mapping found
-          }
-        } else {
-          newEdges.push(edge)
-        }
-      })
-
-      newEdges.push(...restoredInternalEdges)
-
-      // Warn about lost edges
-      if (lostEdges.length > 0) {
-        console.warn(`${lostEdges.length} connection(s) could not be rewired during expansion:`, lostEdges)
-      }
-
-      // Calculate bounding box for container
-      const minX = Math.min(...restoredNodes.map(n => n.position.x))
-      const minY = Math.min(...restoredNodes.map(n => n.position.y))
-      const maxX = Math.max(...restoredNodes.map(n => n.position.x + (n.width || 280)))
-      const maxY = Math.max(...restoredNodes.map(n => n.position.y + (n.height || 150)))
-
-      const padding = 30
-      const containerWidth = maxX - minX + (2 * padding)
-      const containerHeight = maxY - minY + (2 * padding)
-
-      // Create container node
-      const containerNode = {
-        id: `${nodeId}-container`,
-        type: 'expandedGroupContainer',
-        position: {
-          x: minX - padding,
-          y: minY - padding
-        },
-        data: {
-          _expandedFrom: nodeId,
-          _groupDefinitionId: groupData.groupDefinitionId,
-          groupName: groupDef.name,
-          groupColor: groupDef.color
-        },
-        style: {
-          width: containerWidth,
-          height: containerHeight,
-          zIndex: -1  // Place behind the actual nodes
-        },
-        selectable: false,
-        draggable: false
-      }
-
-      // Remove group node from canvas and add internal nodes + container
-      // Note: We don't keep the expanded group node in the nodes array
-      // The expanded internal nodes themselves represent the expanded state
-      const newNodes = state.nodes.filter(n => n.id !== nodeId)
-      newNodes.push(containerNode as any)
-      newNodes.push(...restoredNodes)
-
-      set({
-        nodes: newNodes,
-        edges: newEdges,
-        ...historyUpdate
-      })
-
-      get().inferDimensions()
     }
+  },
+
+  toggleGroupExpansion: (nodeId) => {
+    const state = get()
+
+    // Check if node is a collapsed group block
+    const groupNode = state.nodes.find(n => n.id === nodeId)
+    if (groupNode && groupNode.data.blockType === 'group') {
+      const groupData = groupNode.data as GroupBlockData
+      if (!groupData.isExpanded) {
+        // Node is collapsed, expand it
+        get().expandGroupBlock(nodeId)
+        return
+      }
+    }
+
+    // Check if container exists for the node ID (meaning it's expanded)
+    const containerNodeId = `${nodeId}-container`
+    const containerNode = state.nodes.find(n => n.id === containerNodeId)
+    if (containerNode) {
+      // Container exists, collapse it
+      get().collapseGroupBlock(nodeId)
+      return
+    }
+
+    // Neither found - check for expanded nodes (legacy check)
+    const expandedNodes = state.nodes.filter(n => {
+      const data = n.data as any
+      return data._expandedFrom === nodeId && data._isExpandedInternal === true
+    })
+
+    if (expandedNodes.length > 0) {
+      // Legacy expanded nodes found, collapse them
+      get().collapseGroupBlock(nodeId)
+      return
+    }
+
+    // If we get here, neither a collapsed group nor expanded nodes were found
+    toast.error('Cannot toggle expansion', {
+      description: 'Node not found or invalid state'
+    })
+    console.error(`toggleGroupExpansion: Node ${nodeId} not found or in invalid state`)
   },
 
   repeatGroupBlock: (nodeId, count, spacingX, spacingY = 0) => {
@@ -1420,8 +1444,13 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     })
 
     // Restore internal nodes at group's position (offset from group position)
+    // Apply instance config overrides permanently to the restored nodes
+    const instanceOverrides = groupData.instanceConfigOverrides || {}
+    
     const restoredNodes = groupDef.internalNodes.map(internalNode => {
       const newId = idMapping.get(internalNode.id)!
+      const nodeOverrides = instanceOverrides[internalNode.id] || {}
+      
       return {
         ...internalNode,
         id: newId,
@@ -1430,7 +1459,12 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
           y: groupNode.position.y + internalNode.position.y
         },
         data: {
-          ...internalNode.data
+          ...internalNode.data,
+          // Merge overrides into the node's config permanently
+          config: {
+            ...internalNode.data.config,
+            ...nodeOverrides
+          }
         }
       }
     })
@@ -1513,7 +1547,9 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     // Trigger shape inference
     get().inferDimensions()
 
-    console.log(`Ungrouped block: ${groupData.label}`)
+    // Log success with override info
+    const hasOverrides = Object.keys(instanceOverrides).length > 0
+    console.log(`Ungrouped block: ${groupData.label}${hasOverrides ? ' (customizations applied to nodes)' : ''}`)
   },
 
   loadGroupDefinitions: (definitions) => {
@@ -1692,6 +1728,209 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     })
 
     return newId
+  },
+
+  // Internal node configuration management
+  updateGroupInternalNodeConfig: (groupNodeId, internalNodeId, configUpdates) => {
+    const state = get()
+    const historyUpdate = saveHistory(state)
+
+    // Check if group is collapsed or expanded
+    const groupNode = state.nodes.find(n => n.id === groupNodeId)
+    const containerNodeId = `${groupNodeId}-container`
+    const containerNode = state.nodes.find(n => n.id === containerNodeId)
+
+    // If container exists, group is expanded - update container
+    // If group node exists, group is collapsed - update group node
+    const targetNode = containerNode || groupNode
+    
+    if (!targetNode) {
+      console.error('Neither group node nor container node found')
+      return
+    }
+
+    // Get current overrides from the appropriate node
+    const currentOverrides = containerNode 
+      ? ((containerNode.data as any)._instanceConfigOverrides || {})
+      : ((groupNode?.data as GroupBlockData)?.instanceConfigOverrides || {})
+    
+    const nodeOverrides = currentOverrides[internalNodeId] || {}
+
+    // Merge new config updates
+    const updatedNodeOverrides = {
+      ...nodeOverrides,
+      ...configUpdates
+    }
+
+    // Update the overrides
+    const updatedOverrides = {
+      ...currentOverrides,
+      [internalNodeId]: updatedNodeOverrides
+    }
+
+    // Update the appropriate node
+    set((state) => ({
+      nodes: state.nodes.map((node) => {
+        if (containerNode && node.id === containerNodeId) {
+          // Update container node
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              _instanceConfigOverrides: updatedOverrides
+            }
+          }
+        } else if (!containerNode && node.id === groupNodeId) {
+          // Update collapsed group node
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              instanceConfigOverrides: updatedOverrides
+            }
+          }
+        }
+        return node
+      }),
+      ...historyUpdate
+    }))
+
+    // Trigger shape inference to recalculate with new config
+    get().inferDimensions()
+  },
+
+  getEffectiveInternalNodeConfig: (groupNodeId, internalNodeId) => {
+    const state = get()
+
+    // Check if group is collapsed or expanded
+    const groupNode = state.nodes.find(n => n.id === groupNodeId)
+    const containerNodeId = `${groupNodeId}-container`
+    const containerNode = state.nodes.find(n => n.id === containerNodeId)
+
+    // Get group definition ID from appropriate source
+    let groupDefinitionId: string | undefined
+    if (containerNode) {
+      groupDefinitionId = (containerNode.data as any)._groupDefinitionId
+    } else if (groupNode && groupNode.data.blockType === 'group') {
+      groupDefinitionId = (groupNode.data as GroupBlockData).groupDefinitionId
+    }
+
+    if (!groupDefinitionId) {
+      return null
+    }
+
+    const groupDef = state.groupDefinitions.get(groupDefinitionId)
+    if (!groupDef) {
+      return null
+    }
+
+    // Find the internal node in the definition
+    const internalNode = groupDef.internalNodes.find(n => n.id === internalNodeId)
+    if (!internalNode) {
+      return null
+    }
+
+    // Get overrides from appropriate source
+    const overrides = containerNode
+      ? ((containerNode.data as any)._instanceConfigOverrides?.[internalNodeId] || {})
+      : ((groupNode?.data as GroupBlockData)?.instanceConfigOverrides?.[internalNodeId] || {})
+
+    // Merge definition config with instance overrides
+    const baseConfig = internalNode.data.config
+
+    return {
+      ...baseConfig,
+      ...overrides
+    }
+  },
+
+  resetGroupInternalNodeConfig: (groupNodeId, internalNodeId, fieldName) => {
+    const state = get()
+    const historyUpdate = saveHistory(state)
+
+    // Check if group is collapsed or expanded
+    const groupNode = state.nodes.find(n => n.id === groupNodeId)
+    const containerNodeId = `${groupNodeId}-container`
+    const containerNode = state.nodes.find(n => n.id === containerNodeId)
+
+    const targetNode = containerNode || groupNode
+    if (!targetNode) {
+      console.error('Neither group node nor container node found')
+      return
+    }
+
+    // Get current overrides from appropriate source
+    const currentOverrides = containerNode
+      ? ((containerNode.data as any)._instanceConfigOverrides || {})
+      : ((groupNode?.data as GroupBlockData)?.instanceConfigOverrides || {})
+    
+    const nodeOverrides = currentOverrides[internalNodeId] || {}
+
+    let updatedOverrides: Record<string, Record<string, any>>
+
+    if (fieldName) {
+      // Reset specific field
+      const { [fieldName]: _, ...remainingOverrides } = nodeOverrides
+      
+      if (Object.keys(remainingOverrides).length === 0) {
+        // No overrides left for this node, remove the node entry
+        const { [internalNodeId]: __, ...remainingNodes } = currentOverrides
+        updatedOverrides = remainingNodes
+      } else {
+        updatedOverrides = {
+          ...currentOverrides,
+          [internalNodeId]: remainingOverrides
+        }
+      }
+    } else {
+      // Reset all fields for this node
+      const { [internalNodeId]: _, ...remainingNodes } = currentOverrides
+      updatedOverrides = remainingNodes
+    }
+
+    // Update appropriate node
+    set((state) => ({
+      nodes: state.nodes.map((node) => {
+        if (containerNode && node.id === containerNodeId) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              _instanceConfigOverrides: Object.keys(updatedOverrides).length > 0 ? updatedOverrides : {}
+            }
+          }
+        } else if (!containerNode && node.id === groupNodeId) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              instanceConfigOverrides: Object.keys(updatedOverrides).length > 0 ? updatedOverrides : undefined
+            }
+          }
+        }
+        return node
+      }),
+      ...historyUpdate
+    }))
+
+    // Trigger shape inference
+    get().inferDimensions()
+  },
+
+  hasConfigOverrides: (groupNodeId, internalNodeId) => {
+    const state = get()
+
+    // Check if group is collapsed or expanded
+    const groupNode = state.nodes.find(n => n.id === groupNodeId)
+    const containerNodeId = `${groupNodeId}-container`
+    const containerNode = state.nodes.find(n => n.id === containerNodeId)
+
+    // Get overrides from appropriate source
+    const overrides = containerNode
+      ? ((containerNode.data as any)._instanceConfigOverrides?.[internalNodeId])
+      : ((groupNode?.data as GroupBlockData)?.instanceConfigOverrides?.[internalNodeId])
+
+    return overrides !== undefined && Object.keys(overrides).length > 0
   },
 
   reset: () => {

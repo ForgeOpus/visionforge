@@ -17,11 +17,13 @@ export interface ShapeInferenceResult {
  * Compute shapes for a group block given its external input connections
  * @param groupDef - The group block definition
  * @param externalInputShapes - Map of external port IDs to their input shapes
+ * @param instanceConfigOverrides - Optional configuration overrides for internal nodes
  * @returns Shape inference result with output shapes and any errors
  */
 export function computeGroupBlockShapes(
   groupDef: GroupBlockDefinition,
-  externalInputShapes: Map<string, TensorShape>
+  externalInputShapes: Map<string, TensorShape>,
+  instanceConfigOverrides?: Record<string, any>
 ): ShapeInferenceResult {
   const errors: string[] = []
   const inputShapes = new Map<string, TensorShape>()
@@ -80,18 +82,23 @@ export function computeGroupBlockShapes(
 
     // Compute output shape for this node
     try {
+      // Apply instance config overrides if they exist
+      const effectiveConfig = instanceConfigOverrides?.[nodeId]
+        ? { ...node.data.config, ...instanceConfigOverrides[nodeId] }
+        : node.data.config
+
       // Check if this node receives external input directly
       const externalInputShape = internalNodeInputShapes.get(nodeId)
       
       if (node.data.blockType === 'input') {
         // Input nodes: pass external input as inputShape parameter
-        const outputShape = nodeDef.computeOutputShape(externalInputShape, node.data.config)
+        const outputShape = nodeDef.computeOutputShape(externalInputShape, effectiveConfig)
         if (outputShape) {
           nodeOutputShapes.set(nodeId, outputShape)
         }
       } else if (externalInputShape && incomingEdges.length === 0) {
         // Non-input node receiving external input directly (no internal incoming edges)
-        const outputShape = nodeDef.computeOutputShape(externalInputShape, node.data.config)
+        const outputShape = nodeDef.computeOutputShape(externalInputShape, effectiveConfig)
         if (outputShape) {
           nodeOutputShapes.set(nodeId, outputShape)
         } else {
@@ -122,7 +129,7 @@ export function computeGroupBlockShapes(
             // Use first port's shape as primary input for computeOutputShape
             const primaryShape = portShapes.get(requiredPorts[0].id)
             if (primaryShape) {
-              const outputShape = nodeDef.computeOutputShape(primaryShape, node.data.config)
+              const outputShape = nodeDef.computeOutputShape(primaryShape, effectiveConfig)
               if (outputShape) {
                 nodeOutputShapes.set(nodeId, outputShape)
               } else {
@@ -140,7 +147,7 @@ export function computeGroupBlockShapes(
             .filter((shape): shape is TensorShape => shape !== undefined)
 
           if (inputShapesList.length > 0) {
-            const outputShape = nodeDef.computeOutputShape(inputShapesList[0], node.data.config)
+            const outputShape = nodeDef.computeOutputShape(inputShapesList[0], effectiveConfig)
             if (outputShape) {
               nodeOutputShapes.set(nodeId, outputShape)
             }
@@ -161,7 +168,7 @@ export function computeGroupBlockShapes(
           // All inputs have shapes
           const nodeDefAny = nodeDef as any
           if (typeof nodeDefAny.computeMultiInputShape === 'function') {
-            const outputShape = nodeDefAny.computeMultiInputShape(inputShapesList, node.data.config)
+            const outputShape = nodeDefAny.computeMultiInputShape(inputShapesList, effectiveConfig)
             if (outputShape) {
               nodeOutputShapes.set(nodeId, outputShape)
             } else {
@@ -169,7 +176,7 @@ export function computeGroupBlockShapes(
             }
           } else {
             // Fallback: use first input shape
-            const outputShape = nodeDef.computeOutputShape(inputShapesList[0], node.data.config)
+            const outputShape = nodeDef.computeOutputShape(inputShapesList[0], effectiveConfig)
             if (outputShape) {
               nodeOutputShapes.set(nodeId, outputShape)
             }
@@ -184,7 +191,7 @@ export function computeGroupBlockShapes(
           const sourceShape = nodeOutputShapes.get(incomingEdges[0].source)
 
           if (sourceShape) {
-            const outputShape = nodeDef.computeOutputShape(sourceShape, node.data.config)
+            const outputShape = nodeDef.computeOutputShape(sourceShape, effectiveConfig)
             if (outputShape) {
               nodeOutputShapes.set(nodeId, outputShape)
             } else {
