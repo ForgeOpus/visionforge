@@ -36,13 +36,62 @@ def export_model(request):
 
     try:
         # Generate code based on framework
+        shape_errors = []
         if export_format == 'pytorch':
-            generated = generate_pytorch_code(nodes, edges, project_name, group_definitions)
+            generated, shape_errors = generate_pytorch_code(nodes, edges, project_name, group_definitions)
         elif export_format == 'tensorflow':
-            generated = generate_tensorflow_code(nodes, edges, project_name, group_definitions)
+            generated, shape_errors = generate_tensorflow_code(nodes, edges, project_name, group_definitions)
         else:
             return Response(
                 {'error': f'Unsupported export format: {export_format}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if there are shape errors that should prevent export
+        if shape_errors:
+            # Format shape errors with comprehensive details for frontend
+            formatted_errors = []
+            for error in shape_errors:
+                error_dict = {
+                    'type': 'error',  # Mark as error type for frontend
+                    'message': str(error)
+                }
+
+                # Extract additional context from specific error types
+                # These attributes come from our custom exception classes
+                if hasattr(error, 'node_id'):
+                    error_dict['nodeId'] = error.node_id
+                if hasattr(error, 'node_type'):
+                    error_dict['nodeType'] = error.node_type
+                if hasattr(error, 'block_name'):
+                    error_dict['blockName'] = error.block_name
+                if hasattr(error, 'layer_name'):
+                    error_dict['layerName'] = error.layer_name
+                if hasattr(error, 'expected'):
+                    error_dict['expected'] = error.expected
+                if hasattr(error, 'actual'):
+                    error_dict['actual'] = error.actual
+                if hasattr(error, 'suggestion'):
+                    error_dict['suggestion'] = error.suggestion
+                if hasattr(error, 'reason'):
+                    error_dict['reason'] = error.reason
+                if hasattr(error, 'upstream_node_id'):
+                    error_dict['upstreamNodeId'] = error.upstream_node_id
+                if hasattr(error, 'missing_keys'):
+                    error_dict['missingKeys'] = error.missing_keys
+                if hasattr(error, 'framework'):
+                    error_dict['framework'] = error.framework
+
+                formatted_errors.append(error_dict)
+
+            # Return validation-style error response that frontend expects
+            return Response(
+                {
+                    'error': 'Code generation errors detected',
+                    'validationErrors': formatted_errors,
+                    'details': 'Please fix the errors in your architecture before exporting.',
+                    'errorCount': len(formatted_errors)
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
 

@@ -268,7 +268,21 @@ export default function Header() {
           targetHandle: edge.targetHandle || ''
         })),
         format: currentProject.framework as 'pytorch' | 'tensorflow',
-        projectName: currentProject.name
+        projectName: currentProject.name,
+        groupDefinitions: Array.from(groupDefinitions.values()).map(def => ({
+          id: def.id,
+          name: def.name,
+          description: def.description,
+          category: def.category,
+          color: def.color,
+          internal_structure: {
+            nodes: def.internalNodes,
+            edges: def.internalEdges,
+            portMappings: def.portMappings
+          },
+          createdAt: def.createdAt,
+          updatedAt: def.updatedAt
+        }))
       })
 
       toast.dismiss()
@@ -285,9 +299,29 @@ export default function Header() {
         setIsExportOpen(true)
         toast.success(`${result.data.framework.toUpperCase()} code generated successfully!`)
       } else {
-        toast.error('Code generation failed', {
-          description: result.error || 'Unknown error occurred'
-        })
+        // Check if the error response contains validation errors (shape inference errors)
+        const errorData = result.error as any
+        if (errorData && typeof errorData === 'object' && errorData.validationErrors) {
+          // Add shape inference errors to validation errors in the store
+          const { setValidationErrors } = useModelBuilderStore.getState()
+          const shapeErrors = errorData.validationErrors.map((err: any) => ({
+            type: 'error' as const,
+            message: err.message,
+            nodeId: err.nodeId,
+            blockName: err.blockName,
+            layerName: err.layerName
+          }))
+          setValidationErrors(shapeErrors)
+          
+          toast.error('Shape inference errors detected', {
+            description: 'Please fix the shape mismatches shown in the validation panel'
+          })
+        } else {
+          const errorMessage = errorData?.error || errorData?.message || (typeof result.error === 'string' ? result.error : 'Unknown error occurred')
+          toast.error('Code generation failed', {
+            description: errorMessage
+          })
+        }
       }
     } catch (error) {
       toast.dismiss()

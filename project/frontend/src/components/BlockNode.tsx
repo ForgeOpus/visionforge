@@ -27,6 +27,7 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
   const nodeDef = getNodeDefinition(data.blockType as BlockType, BackendFramework.PyTorch)
   const validationErrors = useModelBuilderStore((state) => state.validationErrors)
   const edges = useModelBuilderStore((state) => state.edges)
+  const hasConfigOverrides = useModelBuilderStore((state) => state.hasConfigOverrides)
 
   if (!nodeDef) return null
 
@@ -36,6 +37,14 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
   // Check if this node has any validation errors
   const nodeErrors = validationErrors.filter((error) => error.nodeId === id && error.type === 'error')
   const hasErrors = nodeErrors.length > 0
+  
+  // Check if this is an expanded internal node with overrides
+  const isExpandedInternal = (data as any)._isExpandedInternal === true
+  const parentGroupNodeId = (data as any)._expandedFrom as string | undefined
+  const internalNodeId = id.split('-expanded-')[0]
+  const hasOverrides = isExpandedInternal && parentGroupNodeId 
+    ? hasConfigOverrides(parentGroupNodeId, internalNodeId)
+    : false
   
   // Helper to check if a handle is already connected
   const isHandleConnected = (handleId: string, isTarget: boolean) => {
@@ -68,6 +77,27 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
           <div className="bg-red-500 rounded-full p-1 shadow-lg">
             <Icons.Warning size={16} weight="fill" className="text-white" />
           </div>
+        </div>
+      )}
+
+      {/* Override Badge - for expanded internal nodes with customizations */}
+      {hasOverrides && !hasErrors && (
+        <div className="absolute -top-2 -right-2 z-20">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="bg-blue-500 rounded-full p-1 shadow-lg cursor-help">
+                  <Icons.PencilSimple size={14} weight="fill" className="text-white" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="text-xs">
+                  <div className="font-semibold">Customized</div>
+                  <div>This node has custom configuration</div>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       )}
 
@@ -233,7 +263,7 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
           return shapes
         })()}
 
-        {!data.outputShape && data.blockType !== 'input' && data.blockType !== 'dataloader' && data.blockType !== 'empty' && (
+        {!data.outputShape && data.blockType !== 'input' && data.blockType !== 'dataloader' && data.blockType !== 'empty' && data.blockType !== 'output' &&  data.blockType !== 'loss' && (
           <div className="text-[10px] text-orange-600">
             Configure params
           </div>

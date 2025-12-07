@@ -82,6 +82,8 @@ export interface ValidationError {
   edgeId?: string
   message: string
   type: 'error' | 'warning'
+  blockName?: string  // For shape inference errors
+  layerName?: string  // For shape inference errors
 }
 
 // Group Block Types
@@ -114,7 +116,15 @@ export interface GroupBlockDefinition {
 export interface GroupBlockData extends BlockData {
   blockType: 'group'
   groupDefinitionId: string
+  
+  // Explicit expansion state
   isExpanded: boolean
+  
+  // Reference to container when expanded
+  expandedContainerId?: string
+
+  // Instance-specific configuration overrides for internal nodes
+  instanceConfigOverrides?: Record<string, BlockConfig>
 
   // For repeated blocks
   repetitionMetadata?: {

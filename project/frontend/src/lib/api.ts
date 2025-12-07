@@ -61,7 +61,7 @@ async function apiFetch<T>(
     if (!response.ok) {
       return {
         success: false,
-        error: data.error || data.message || 'An error occurred',
+        error: data,  // Pass through the entire error data object
       }
     }
 
@@ -168,6 +168,7 @@ export async function exportModel(modelData: {
   edges: any[]
   format: 'pytorch' | 'tensorflow'
   projectName: string
+  groupDefinitions?: any[]
 }): Promise<ApiResponse<{
   success: boolean
   framework: string
@@ -183,7 +184,10 @@ export async function exportModel(modelData: {
 }>> {
   return apiFetch('/export', {
     method: 'POST',
-    body: JSON.stringify(modelData),
+    body: JSON.stringify({
+      ...modelData,
+      groupDefinitions: modelData.groupDefinitions || []
+    }),
   })
 }
 

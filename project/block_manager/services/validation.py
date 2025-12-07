@@ -2,6 +2,7 @@
 Validation service for model architectures
 Handles shape checking, connection validation, and architecture integrity
 """
+import ast
 from typing import List, Dict, Any, Tuple, Optional
 
 
@@ -53,7 +54,8 @@ class ArchitectureValidator:
         self._validate_orphaned_blocks()
         self._validate_block_configurations()
         self._check_circular_dependencies()
-        
+        self._validate_shape_compatibility()
+
         is_valid = len(self.errors) == 0
         
         return (
@@ -172,7 +174,7 @@ class ArchitectureValidator:
         if not self.edges:
             # If there are no edges but there are nodes, all non-input nodes are orphaned
             for node in self.nodes:
-                if self._get_block_type(node) != 'input':
+                if self._get_block_type(node) != 'input' and self._get_block_type(node) != 'output' and self._get_block_type(node) != 'loss':
                     self.warnings.append(ValidationError(
                         message='Block is not connected to the graph',
                         node_id=node['id'],
@@ -233,7 +235,19 @@ class ArchitectureValidator:
                     ))
             
             elif block_type == 'input':
-                input_shape = eval(config.get('shape'))
+                # Use ast.literal_eval for safe evaluation of shape configuration
+                shape_value = config.get('shape')
+                try:
+                    input_shape = ast.literal_eval(shape_value) if shape_value else None
+                except (ValueError, SyntaxError):
+                    self.errors.append(ValidationError(
+                        message='Input block has invalid shape format',
+                        node_id=node_id,
+                        error_type='error',
+                        suggestion='Shape must be a valid Python literal (list or tuple)'
+                    ))
+                    input_shape = None
+                
                 if not input_shape:
                     self.errors.append(ValidationError(
                         message='Input block requires input shape configuration',
@@ -282,6 +296,57 @@ class ArchitectureValidator:
                         suggestion='Remove connections that create cycles - neural networks must be directed acyclic graphs'
                     ))
                     break
+
+    def _validate_shape_compatibility(self):
+        """
+        Perform basic shape compatibility checks before code generation.
+        This catches common shape mismatches early in the validation phase.
+        """
+        # Build edge map
+        edge_map = {}
+        for edge in self.edges:
+            target = edge.get('target')
+            source = edge.get('source')
+            if target not in edge_map:
+                edge_map[target] = []
+            edge_map[target].append(source)
+
+        # Check each node's connections
+        for node in self.nodes:
+            node_id = node['id']
+            node_type = self._get_block_type(node)
+            config = node.get('data', {}).get('config', {})
+
+            # Skip nodes that don't have shape requirements
+            if node_type in ('input', 'output', 'dataloader'):
+                continue
+
+            incoming = edge_map.get(node_id, [])
+
+            # Check that nodes with required inputs have connections
+            if node_type in ('conv2d', 'linear', 'maxpool2d', 'maxpool', 'batchnorm', 'batchnorm2d', 'flatten'):
+                if not incoming:
+                    self.errors.append(ValidationError(
+                        message=f'{node_type} layer requires an input connection',
+                        node_id=node_id,
+                        error_type='error',
+                        suggestion=f'Connect an upstream layer to this {node_type} layer'
+                    ))
+
+            # Validate flatten placement
+            if node_type == 'flatten':
+                if incoming and len(incoming) == 1:
+                    upstream_node = self.node_map.get(incoming[0])
+                    if upstream_node:
+                        upstream_type = self._get_block_type(upstream_node)
+                        # Warn if flatten comes after linear (unusual)
+                        if upstream_type == 'linear':
+                            self.warnings.append(ValidationError(
+                                message='Flatten layer after Linear layer may be unnecessary',
+                                node_id=node_id,
+                                error_type='warning',
+                                suggestion='Flatten is typically used before Linear layers, not after'
+                            ))
 
 
 def validate_architecture(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Any]:

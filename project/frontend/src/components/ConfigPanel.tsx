@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/card'
 import { X, Code, UploadSimple } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import CustomLayerModal from './CustomLayerModal'
+import InternalNodeConfigPanel from './InternalNodeConfigPanel'
 
 export default function ConfigPanel() {
   const { nodes, selectedNodeId, updateNode, setSelectedNodeId, removeNode, repeatGroupBlock, groupDefinitions } = useModelBuilderStore()
@@ -21,6 +22,16 @@ export default function ConfigPanel() {
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({})
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)
+
+  // Check if selected node is an expanded internal node
+  const isExpandedInternal = selectedNode?.data?._isExpandedInternal === true
+  const parentGroupNodeId = selectedNode?.data?._expandedFrom as string | undefined
+  const groupDefinitionId = selectedNode?.data?._groupDefinitionId as string | undefined
+  
+  // Extract the original internal node ID from the expanded node ID
+  // Format: originalId-expanded-timestamp
+  // We need to split and take everything before the last "-expanded-" occurrence
+  const internalNodeId = selectedNode?.id ? selectedNode.id.substring(0, selectedNode.id.lastIndexOf('-expanded-')) : undefined
 
   const handleCustomLayerSave = (config: {
     name: string
@@ -44,6 +55,28 @@ export default function ConfigPanel() {
       setIsCustomModalOpen(true)
     }
   }, [selectedNode?.id, selectedNode?.data.blockType])
+
+  // Handle expanded internal node configuration
+  if (isExpandedInternal && parentGroupNodeId && groupDefinitionId && internalNodeId) {
+    // Debug logging
+    console.log('ConfigPanel - Routing to InternalNodeConfigPanel:', {
+      selectedNodeId: selectedNode.id,
+      parentGroupNodeId,
+      groupDefinitionId,
+      internalNodeId,
+      isExpandedInternal
+    })
+
+    return (
+      <InternalNodeConfigPanel
+        selectedNodeId={selectedNode.id}
+        parentGroupNodeId={parentGroupNodeId}
+        groupDefinitionId={groupDefinitionId}
+        internalNodeId={internalNodeId}
+        onClose={() => setSelectedNodeId(null)}
+      />
+    )
+  }
 
   // For custom blocks, don't show the sidebar at all - only the modal
   if (selectedNode?.data.blockType === 'custom') {
