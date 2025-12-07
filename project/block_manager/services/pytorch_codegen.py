@@ -5,13 +5,1439 @@ Generates PyTorch nn.Module code from architecture graphs with professional clas
 
 from typing import List, Dict, Any, Optional, Tuple
 from collections import deque
+import logging
+import json
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+
+# ============================================
+# Custom Exception Classes
+# ============================================
+
+class GroupDefinitionNotFoundError(Exception):
+    """Raised when a group block references a non-existent definition."""
+    
+    def __init__(self, node_id: str, definition_id: str):
+        self.node_id = node_id
+        self.definition_id = definition_id
+        super().__init__(
+            f"Group block {node_id} references undefined definition {definition_id}"
+        )
+
+
+class ShapeMismatchError(Exception):
+    """Raised when internal layers have incompatible shapes."""
+    
+    def __init__(self, block_name: str, layer_name: str, expected: Dict, actual: Dict):
+        self.block_name = block_name
+        self.layer_name = layer_name
+        self.expected = expected
+        self.actual = actual
+        super().__init__(
+            f"Shape mismatch in block '{block_name}' at layer '{layer_name}': "
+            f"expected {expected}, got {actual}"
+        )
+
+
+class CyclicDependencyError(Exception):
+    """Raised when internal structure contains cycles."""
+
+    def __init__(self, block_name: str, cycle_nodes: List[str]):
+        self.block_name = block_name
+        self.cycle_nodes = cycle_nodes
+        super().__init__(
+            f"Cyclic dependency detected in block '{block_name}': {' -> '.join(cycle_nodes)}"
+        )
+
+
+class UnsupportedNodeTypeError(Exception):
+    """Raised when encountering an unsupported node type during code generation."""
+
+    def __init__(self, node_id: str, node_type: str, framework: str):
+        self.node_id = node_id
+        self.node_type = node_type
+        self.framework = framework
+        super().__init__(
+            f"Unsupported node type '{node_type}' for {framework} in node {node_id}. "
+            f"Please use a supported layer type or implement this layer manually."
+        )
+
+
+class ShapeInferenceError(Exception):
+    """Raised when shape inference fails for a node."""
+
+    def __init__(self, node_id: str, node_type: str, reason: str, suggestion: str = None):
+        self.node_id = node_id
+        self.node_type = node_type
+        self.reason = reason
+        self.suggestion = suggestion
+        msg = f"Shape inference failed for node {node_id} ({node_type}): {reason}"
+        if suggestion:
+            msg += f"\nSuggestion: {suggestion}"
+        super().__init__(msg)
+
+
+class MissingShapeDataError(Exception):
+    """Raised when required shape data is missing from upstream nodes."""
+
+    def __init__(self, node_id: str, upstream_node_id: str, missing_keys: List[str]):
+        self.node_id = node_id
+        self.upstream_node_id = upstream_node_id
+        self.missing_keys = missing_keys
+        super().__init__(
+            f"Node {node_id} requires shape data from upstream node {upstream_node_id}, "
+            f"but the following keys are missing: {', '.join(missing_keys)}. "
+            f"Check that the upstream node produces valid output shapes."
+        )
+
+
+# ============================================
+# Shape Data Validation Utility
+# ============================================
+
+def safe_get_shape_data(
+    shape_map: Dict[str, Dict[str, Any]],
+    node_id: str,
+    upstream_node_id: str,
+    required_keys: List[str],
+    default_values: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Safely retrieve shape data from upstream node with validation.
+
+    This function ensures that shape data access is safe by:
+    1. Checking that the upstream node exists in the shape map
+    2. Validating that shape data is not None and is a dictionary
+    3. Verifying all required keys are present
+    4. Providing clear error messages when data is missing
+
+    Args:
+        shape_map: Map of node IDs to shape information dictionaries
+        node_id: Current node ID (for error messages and tracing)
+        upstream_node_id: ID of upstream node to retrieve shape from
+        required_keys: List of required shape keys (e.g., ['out_channels', 'out_height'])
+        default_values: Optional default values to use if data is missing
+
+    Returns:
+        Dictionary containing the requested shape data
+
+    Raises:
+        MissingShapeDataError: If required data is missing and no defaults provided
+        ShapeInferenceError: If upstream shape data is invalid (None or not a dict)
+
+    Example:
+        >>> shape_data = safe_get_shape_data(
+        ...     shape_map,
+        ...     'conv2',
+        ...     'conv1',
+        ...     ['out_channels', 'out_height', 'out_width'],
+        ...     default_values={'out_channels': 64, 'out_height': 32, 'out_width': 32}
+        ... )
+        >>> print(shape_data['out_channels'])
+        64
+    """
+    result = {}
+
+    # Check if upstream node exists in shape map
+    if upstream_node_id not in shape_map:
+        if default_values:
+            return default_values.copy()
+        raise MissingShapeDataError(
+            node_id=node_id,
+            upstream_node_id=upstream_node_id,
+            missing_keys=required_keys
+        )
+
+    upstream_shape = shape_map[upstream_node_id]
+
+    # Validate upstream shape is not None and is a dict
+    if upstream_shape is None or not isinstance(upstream_shape, dict):
+        if default_values:
+            return default_values.copy()
+        raise ShapeInferenceError(
+            node_id=node_id,
+            node_type="unknown",
+            reason=f"Upstream node {upstream_node_id} has invalid shape data (None or not a dict)",
+            suggestion="Check that the upstream node is properly configured and connected"
+        )
+
+    # Extract required keys with validation
+    missing_keys = []
+    for key in required_keys:
+        if key in upstream_shape:
+            result[key] = upstream_shape[key]
+        elif default_values and key in default_values:
+            result[key] = default_values[key]
+        else:
+            missing_keys.append(key)
+
+    if missing_keys:
+        if default_values:
+            for key in missing_keys:
+                if key in default_values:
+                    result[key] = default_values[key]
+            return result
+        raise MissingShapeDataError(
+            node_id=node_id,
+            upstream_node_id=upstream_node_id,
+            missing_keys=missing_keys
+        )
+
+    return result
+
+
+class GroupBlockShapeComputer:
+    """
+    Computes output shapes for group blocks by traversing internal structure.
+    
+    This class handles shape inference for group blocks by:
+    1. Retrieving the internal structure of a group block
+    2. Topologically sorting internal nodes
+    3. Propagating shapes through the internal graph
+    4. Mapping internal output nodes to external output ports
+    
+    Performance optimizations:
+    - Shape caching to avoid redundant computations
+    - Lazy topological sorting (cached per definition)
+    - Cache invalidation on definition changes
+    """
+    
+    def __init__(self, group_definitions: Dict[str, Dict[str, Any]], cache_size: int = 1000, profiler: Optional['ShapeInferenceProfiler'] = None):
+        """
+        Initialize with group definitions.
+        
+        Args:
+            group_definitions: Map of definition ID to definition dict
+            cache_size: Maximum number of cached shape computations (default: 1000)
+            profiler: Optional profiler for performance analysis
+        """
+        self.group_definitions = group_definitions
+        self.shape_cache = {}  # Cache computed shapes: {(group_def_id, input_shape_tuple): output_shape}
+        self.cache_size = cache_size
+        self.cache_hits = 0
+        self.cache_misses = 0
+        
+        # Cache for topological sorts per definition
+        self.topo_sort_cache = {}  # {group_def_id: sorted_nodes}
+        
+        # Track definition versions for cache invalidation
+        self.definition_versions = {}  # {group_def_id: version_hash}
+        self._initialize_definition_versions()
+        
+        # Optional profiler
+        self.profiler = profiler
+    
+    def compute_output_shape(
+        self,
+        group_def_id: str,
+        input_shape: Dict[str, Any]
+    ) -> Tuple[Optional[Dict[str, Any]], List[Exception]]:
+        """
+        Compute output shape for a group block given input shape.
+        
+        Args:
+            group_def_id: ID of the group definition
+            input_shape: Input shape dict with keys like 'out_channels', 'out_height', etc.
+            
+        Returns:
+            Tuple of (output shape dict with computed dimensions or None, list of errors)
+        """
+        import time
+        start_time = time.time() if self.profiler and self.profiler.enabled else None
+        
+        errors = []
+        
+        # Check cache first
+        cache_key = (group_def_id, self._shape_to_tuple(input_shape))
+        if cache_key in self.shape_cache:
+            self.cache_hits += 1
+            logger.debug(f"Cache hit for group {group_def_id} (hit rate: {self.cache_hits}/{self.cache_hits + self.cache_misses})")
+            if start_time:
+                self.profiler.record_timing('compute_output_shape_cached', time.time() - start_time)
+            return self.shape_cache[cache_key], []
+        
+        self.cache_misses += 1
+        
+        # Get group definition
+        if group_def_id not in self.group_definitions:
+            error = GroupDefinitionNotFoundError('unknown', group_def_id)
+            logger.error(str(error))
+            errors.append(error)
+            return None, errors
+        
+        group_def = self.group_definitions[group_def_id]
+        group_name = group_def.get('name', group_def_id)
+        internal_structure = group_def.get('internal_structure', {})
+        
+        if not internal_structure:
+            logger.warning(f"Group {group_name} has no internal structure")
+            return input_shape.copy(), []
+        
+        internal_nodes = internal_structure.get('nodes', [])
+        internal_edges = internal_structure.get('edges', [])
+        port_mappings = internal_structure.get('portMappings', [])
+        
+        # Handle edge case: no internal nodes
+        if not internal_nodes:
+            logger.warning(f"Group {group_name} has no internal nodes")
+            return input_shape.copy(), []
+        
+        # Compute internal shapes
+        try:
+            internal_shape_map, shape_errors = self.compute_internal_shapes(
+                internal_nodes,
+                internal_edges,
+                port_mappings,
+                input_shape,
+                group_name
+            )
+            
+            # Collect any errors from internal shape computation
+            errors.extend(shape_errors)
+            
+            if not internal_shape_map:
+                logger.error(f"Failed to compute internal shapes for group {group_name}")
+                return None, errors
+            
+            # Find output port mappings
+            output_ports = [pm for pm in port_mappings if pm.get('type') == 'output']
+            
+            if not output_ports:
+                logger.warning(f"Group {group_name} has no output ports")
+                return input_shape.copy(), errors
+            
+            # Handle multiple output ports - return dict with shapes for each port
+            if len(output_ports) > 1:
+                logger.debug(f"Group {group_name} has {len(output_ports)} output ports")
+                output_shapes = {}
+                for idx, port in enumerate(output_ports):
+                    internal_node_id = port.get('internalNodeId')
+                    port_label = port.get('externalPortLabel', f'output_{idx}')
+                    if internal_node_id in internal_shape_map:
+                        output_shapes[port_label] = internal_shape_map[internal_node_id]
+                    else:
+                        error_msg = f"Output port '{port_label}' maps to unknown node {internal_node_id}"
+                        logger.error(error_msg)
+                        errors.append(Exception(error_msg))
+                
+                # For now, return the first output port's shape for backward compatibility
+                # In the future, we should return all output shapes
+                if output_shapes:
+                    first_output_shape = list(output_shapes.values())[0]
+                    # Cache the result only if no errors
+                    if not errors:
+                        self.shape_cache[cache_key] = first_output_shape
+                        self._evict_cache_if_needed()
+                    return first_output_shape, errors
+                else:
+                    return None, errors
+            
+            # For single output, return the shape of the mapped internal node
+            internal_node_id = output_ports[0].get('internalNodeId')
+            if internal_node_id in internal_shape_map:
+                output_shape = internal_shape_map[internal_node_id]
+                # Cache the result only if no errors
+                if not errors:
+                    self.shape_cache[cache_key] = output_shape
+                    self._evict_cache_if_needed()
+                return output_shape, errors
+            else:
+                error_msg = f"Output port maps to unknown node {internal_node_id}"
+                logger.error(error_msg)
+                errors.append(Exception(error_msg))
+                return None, errors
+            
+        except CyclicDependencyError as e:
+            logger.error(f"Cyclic dependency in group {group_name}: {e}")
+            errors.append(e)
+            if start_time:
+                self.profiler.record_timing('compute_output_shape_error', time.time() - start_time)
+            return None, errors
+        except Exception as e:
+            logger.error(f"Error computing output shape for group {group_name}: {e}")
+            errors.append(e)
+            if start_time:
+                self.profiler.record_timing('compute_output_shape_error', time.time() - start_time)
+            return None, errors
+        finally:
+            # Record timing for successful computation
+            if start_time and not errors:
+                self.profiler.record_timing('compute_output_shape_success', time.time() - start_time)
+    
+    def compute_internal_shapes(
+        self,
+        internal_nodes: List[Dict],
+        internal_edges: List[Dict],
+        port_mappings: List[Dict],
+        external_input_shape: Dict[str, Any],
+        group_name: str = "unknown"
+    ) -> Tuple[Dict[str, Dict[str, Any]], List[Exception]]:
+        """
+        Compute shapes for all internal nodes.
+        
+        Args:
+            internal_nodes: List of nodes inside the block
+            internal_edges: List of edges inside the block
+            port_mappings: Port mapping configuration
+            external_input_shape: Shape coming into the block
+            group_name: Name of the group block for error reporting
+            
+        Returns:
+            Tuple of (map of node_id to shape info, list of errors)
+        """
+        import time
+        start_time = time.time() if self.profiler and self.profiler.enabled else None
+        
+        errors = []
+        
+        # Edge case: no internal edges - validate that all nodes are input/output nodes
+        if not internal_edges:
+            logger.warning(f"Group {group_name} has no internal edges")
+            # Check if we have only input/output nodes
+            non_io_nodes = [n for n in internal_nodes if get_node_type(n) not in ('input', 'dataloader', 'output')]
+            if non_io_nodes:
+                error_msg = f"Group {group_name} has {len(non_io_nodes)} non-input/output nodes but no edges connecting them"
+                logger.error(error_msg)
+                errors.append(Exception(error_msg))
+                # Still try to process nodes with default shapes
+        
+        # Topologically sort internal nodes (with caching)
+        try:
+            sorted_nodes = self._get_cached_topological_sort(
+                group_name, internal_nodes, internal_edges
+            )
+        except Exception as e:
+            # Check if this is a cyclic dependency
+            if "cycle" in str(e).lower():
+                cycle_error = CyclicDependencyError(group_name, [])
+                logger.error(str(cycle_error))
+                errors.append(cycle_error)
+            else:
+                logger.error(f"Failed to topologically sort internal nodes: {e}")
+                errors.append(e)
+            return {}, errors
+        
+        # Build edge map for finding inputs
+        edge_map = {}
+        for edge in internal_edges:
+            target = edge.get('target')
+            source = edge.get('source')
+            if target not in edge_map:
+                edge_map[target] = []
+            edge_map[target].append(source)
+        
+        # Initialize shape map
+        internal_shape_map = {}
+        
+        # Handle multiple input ports - map each to external input shape
+        input_ports = [pm for pm in port_mappings if pm.get('type') == 'input']
+        
+        if len(input_ports) > 1:
+            logger.debug(f"Group {group_name} has {len(input_ports)} input ports")
+            # For multiple inputs, we need to handle them separately
+            # For now, we'll use the same external_input_shape for all inputs
+            # In the future, we should support different shapes for different inputs
+            for idx, input_port in enumerate(input_ports):
+                internal_node_id = input_port.get('internalNodeId')
+                port_label = input_port.get('externalPortLabel', f'input_{idx}')
+                if internal_node_id:
+                    # Use the same shape for all inputs for now
+                    internal_shape_map[internal_node_id] = external_input_shape.copy()
+                    logger.debug(f"Mapped input port '{port_label}' to node {internal_node_id}")
+        else:
+            # Single input port
+            for input_port in input_ports:
+                internal_node_id = input_port.get('internalNodeId')
+                if internal_node_id:
+                    internal_shape_map[internal_node_id] = external_input_shape.copy()
+        
+        # Detect disconnected subgraphs - nodes with no path from input ports
+        # Build a set of reachable nodes from input ports
+        reachable_nodes = set()
+        if input_ports:
+            # BFS from input nodes
+            from collections import deque
+            queue = deque()
+            for input_port in input_ports:
+                internal_node_id = input_port.get('internalNodeId')
+                if internal_node_id:
+                    queue.append(internal_node_id)
+                    reachable_nodes.add(internal_node_id)
+            
+            # Build forward edge map (source -> targets)
+            forward_edge_map = {}
+            for edge in internal_edges:
+                source = edge.get('source')
+                target = edge.get('target')
+                if source not in forward_edge_map:
+                    forward_edge_map[source] = []
+                forward_edge_map[source].append(target)
+            
+            # BFS to find all reachable nodes
+            while queue:
+                current = queue.popleft()
+                for neighbor in forward_edge_map.get(current, []):
+                    if neighbor not in reachable_nodes:
+                        reachable_nodes.add(neighbor)
+                        queue.append(neighbor)
+        
+        # Check for disconnected nodes
+        all_node_ids = {node['id'] for node in internal_nodes}
+        disconnected_nodes = all_node_ids - reachable_nodes
+        # Filter out input/output nodes from disconnected check
+        disconnected_non_io = [nid for nid in disconnected_nodes 
+                               if get_node_type(next((n for n in internal_nodes if n['id'] == nid), {})) 
+                               not in ('input', 'dataloader', 'output')]
+        
+        if disconnected_non_io:
+            logger.warning(f"Group {group_name} has {len(disconnected_non_io)} disconnected nodes: {disconnected_non_io[:3]}")
+            # This is a warning, not an error - we'll still process what we can
+        
+        # Process each internal node in topological order
+        for node in sorted_nodes:
+            node_id = node['id']
+            node_type = get_node_type(node)
+            config = node.get('data', {}).get('config', {})
+            node_label = node.get('data', {}).get('label', node_type)
+            
+            # Skip if already computed (input nodes)
+            if node_id in internal_shape_map:
+                continue
+            
+            # Get incoming edges
+            incoming = edge_map.get(node_id, [])
+            
+            # Initialize shape info for this node
+            shape_info = {}
+            
+            # Handle different node types
+            if node_type == 'input':
+                # Input nodes should already be in the map
+                if node_id not in internal_shape_map:
+                    internal_shape_map[node_id] = external_input_shape.copy()
+                continue
+            
+            # Handle nodes with multiple inputs (concat, add, etc.)
+            if node_type in ('concat', 'add') and len(incoming) > 1:
+                logger.debug(f"Processing {node_type} node {node_label} with {len(incoming)} inputs")
+                
+                # Validate that all inputs have compatible shapes
+                input_shapes = []
+                for src_id in incoming:
+                    if src_id in internal_shape_map:
+                        input_shapes.append(internal_shape_map[src_id])
+                    else:
+                        logger.warning(f"Input {src_id} for {node_type} node {node_label} has no computed shape")
+                
+                if not input_shapes:
+                    # No valid inputs, use default
+                    shape_info = {'out_channels': 64, 'out_height': 7, 'out_width': 7}
+                elif node_type == 'concat':
+                    # For concat, sum the channels
+                    total_channels = sum(s.get('out_channels', 0) for s in input_shapes)
+                    # Use spatial dimensions from first input
+                    shape_info['out_channels'] = total_channels
+                    if 'out_height' in input_shapes[0]:
+                        shape_info['out_height'] = input_shapes[0]['out_height']
+                    if 'out_width' in input_shapes[0]:
+                        shape_info['out_width'] = input_shapes[0]['out_width']
+                elif node_type == 'add':
+                    # For add, channels must match - use first input's shape
+                    shape_info = input_shapes[0].copy()
+                    # Validate that all inputs have same channels
+                    for idx, s in enumerate(input_shapes[1:], 1):
+                        if s.get('out_channels') != shape_info.get('out_channels'):
+                            error = ShapeMismatchError(
+                                group_name,
+                                node_label,
+                                {'out_channels': shape_info.get('out_channels')},
+                                {'out_channels': s.get('out_channels')}
+                            )
+                            logger.error(str(error))
+                            errors.append(error)
+                
+                internal_shape_map[node_id] = shape_info
+                continue
+            
+            elif node_type == 'conv2d':
+                # Get input channels from previous layer
+                if incoming and incoming[0] in internal_shape_map:
+                    prev_shape = internal_shape_map[incoming[0]]
+                    if 'out_channels' not in prev_shape:
+                        # Shape mismatch: expected channels but got features
+                        error = ShapeMismatchError(
+                            group_name,
+                            node_label,
+                            {'out_channels': 'required'},
+                            prev_shape
+                        )
+                        logger.error(str(error))
+                        errors.append(error)
+                        shape_info['in_channels'] = 3  # Use default
+                    else:
+                        shape_info['in_channels'] = prev_shape.get('out_channels', 3)
+                else:
+                    shape_info['in_channels'] = 3
+                
+                # Output channels from config
+                shape_info['out_channels'] = config.get('out_channels', 64)
+                
+                # Calculate output spatial dimensions
+                if incoming and incoming[0] in internal_shape_map:
+                    prev_shape = internal_shape_map[incoming[0]]
+                    kernel_size = config.get('kernel_size', 3)
+                    stride = config.get('stride', 1)
+                    padding = config.get('padding', 0)
+                    
+                    if 'out_height' in prev_shape and 'out_width' in prev_shape:
+                        shape_info['out_height'] = (prev_shape['out_height'] + 2*padding - kernel_size) // stride + 1
+                        shape_info['out_width'] = (prev_shape['out_width'] + 2*padding - kernel_size) // stride + 1
+            
+            elif node_type == 'maxpool':
+                # Preserve channels, reduce spatial dimensions
+                if incoming and incoming[0] in internal_shape_map:
+                    prev_shape = internal_shape_map[incoming[0]]
+                    if 'out_channels' not in prev_shape:
+                        # Shape mismatch: expected channels
+                        error = ShapeMismatchError(
+                            group_name,
+                            node_label,
+                            {'out_channels': 'required'},
+                            prev_shape
+                        )
+                        logger.error(str(error))
+                        errors.append(error)
+                        shape_info['in_channels'] = 64  # Use default
+                        shape_info['out_channels'] = 64
+                    else:
+                        shape_info['in_channels'] = prev_shape.get('out_channels', 64)
+                        shape_info['out_channels'] = shape_info['in_channels']
+                    
+                    kernel_size = config.get('kernel_size', 2)
+                    stride = config.get('stride', 2)
+                    padding = config.get('padding', 0)
+                    
+                    if 'out_height' in prev_shape and 'out_width' in prev_shape:
+                        shape_info['out_height'] = (prev_shape['out_height'] + 2*padding - kernel_size) // stride + 1
+                        shape_info['out_width'] = (prev_shape['out_width'] + 2*padding - kernel_size) // stride + 1
+            
+            elif node_type == 'flatten':
+                # Convert spatial dimensions to features
+                if incoming and incoming[0] in internal_shape_map:
+                    prev_shape = internal_shape_map[incoming[0]]
+                    channels = prev_shape.get('out_channels', 64)
+                    height = prev_shape.get('out_height', 7)
+                    width = prev_shape.get('out_width', 7)
+                    shape_info['out_features'] = channels * height * width
+            
+            elif node_type == 'linear':
+                # Get input features from previous layer
+                if incoming and incoming[0] in internal_shape_map:
+                    prev_shape = internal_shape_map[incoming[0]]
+                    # Accept both 'out_features' (PyTorch) and 'out_units' (TensorFlow)
+                    if 'out_features' not in prev_shape and 'out_units' not in prev_shape:
+                        # Shape mismatch: expected features but got channels
+                        error = ShapeMismatchError(
+                            group_name,
+                            node_label,
+                            {'out_features': 'required'},
+                            prev_shape
+                        )
+                        logger.error(str(error))
+                        errors.append(error)
+                        shape_info['in_features'] = 512  # Use default
+                    else:
+                        # Use out_features if available, otherwise out_units
+                        shape_info['in_features'] = prev_shape.get('out_features', prev_shape.get('out_units', 512))
+                else:
+                    shape_info['in_features'] = 512
+                
+                # Output features from config
+                shape_info['out_features'] = config.get('out_features', 128)
+            
+            elif node_type == 'batchnorm' or node_type == 'batchnorm2d':
+                # Preserve dimensions, just need num_features
+                if incoming and incoming[0] in internal_shape_map:
+                    prev_shape = internal_shape_map[incoming[0]]
+                    if 'out_channels' not in prev_shape:
+                        # Shape mismatch: expected channels but got features
+                        error = ShapeMismatchError(
+                            group_name,
+                            node_label,
+                            {'out_channels': 'required'},
+                            prev_shape
+                        )
+                        logger.error(str(error))
+                        errors.append(error)
+                        shape_info['num_features'] = 64  # Use default
+                        shape_info['out_channels'] = 64
+                    else:
+                        shape_info['num_features'] = prev_shape.get('out_channels', 64)
+                        shape_info['out_channels'] = shape_info['num_features']
+                        if 'out_height' in prev_shape:
+                            shape_info['out_height'] = prev_shape['out_height']
+                        if 'out_width' in prev_shape:
+                            shape_info['out_width'] = prev_shape['out_width']
+            
+            elif node_type == 'group':
+                # Handle nested group blocks recursively
+                nested_group_def_id = node.get('data', {}).get('groupDefinitionId')
+                
+                if not nested_group_def_id:
+                    logger.warning(f"Nested group block {node_label} has no definition ID")
+                    # Use input shape if available
+                    if incoming and incoming[0] in internal_shape_map:
+                        shape_info = internal_shape_map[incoming[0]].copy()
+                    else:
+                        shape_info = {'out_channels': 64, 'out_height': 7, 'out_width': 7}
+                elif not incoming:
+                    logger.warning(f"Nested group block {node_label} has no incoming edges")
+                    # Use default shape
+                    shape_info = {'out_channels': 64, 'out_height': 7, 'out_width': 7}
+                elif incoming[0] not in internal_shape_map:
+                    logger.warning(f"Nested group block {node_label} has incoming edge from node with no computed shape")
+                    # Use default shape
+                    shape_info = {'out_channels': 64, 'out_height': 7, 'out_width': 7}
+                else:
+                    # Recursively compute nested group block shape
+                    nested_input_shape = internal_shape_map[incoming[0]]
+                    logger.debug(f"Recursively computing shape for nested group {node_label} (def: {nested_group_def_id})")
+                    nested_output_shape, nested_errors = self.compute_output_shape(nested_group_def_id, nested_input_shape)
+                    
+                    # Collect errors from nested computation
+                    errors.extend(nested_errors)
+                    
+                    if nested_output_shape:
+                        shape_info = nested_output_shape
+                        logger.debug(f"Nested group {node_label} output shape: {nested_output_shape}")
+                    else:
+                        # Fallback: copy input shape
+                        shape_info = nested_input_shape.copy()
+                        logger.warning(f"Failed to compute shape for nested group {node_label}, using input shape")
+            
+            else:
+                # For other layers, try to preserve shape from input
+                if incoming and incoming[0] in internal_shape_map:
+                    prev_shape = internal_shape_map[incoming[0]]
+                    shape_info.update(prev_shape)
+            
+            internal_shape_map[node_id] = shape_info
+        
+        # Record timing
+        if start_time:
+            self.profiler.record_timing('compute_internal_shapes', time.time() - start_time)
+        
+        return internal_shape_map, errors
+    
+    def _get_cached_topological_sort(
+        self,
+        group_name: str,
+        internal_nodes: List[Dict],
+        internal_edges: List[Dict]
+    ) -> List[Dict]:
+        """
+        Get topologically sorted nodes with caching.
+        
+        Args:
+            group_name: Name of the group (for cache key)
+            internal_nodes: List of internal nodes
+            internal_edges: List of internal edges
+            
+        Returns:
+            List of topologically sorted nodes
+        """
+        # Use group_name as cache key (assumes nodes/edges don't change for same group)
+        if group_name in self.topo_sort_cache:
+            logger.debug(f"Using cached topological sort for {group_name}")
+            return self.topo_sort_cache[group_name]
+        
+        # Compute topological sort
+        sorted_nodes = topological_sort(internal_nodes, internal_edges)
+        
+        # Cache the result
+        self.topo_sort_cache[group_name] = sorted_nodes
+        logger.debug(f"Cached topological sort for {group_name} ({len(sorted_nodes)} nodes)")
+        
+        return sorted_nodes
+    
+    def _shape_to_tuple(self, shape: Dict[str, Any]) -> tuple:
+        """
+        Convert shape dict to tuple for use as cache key.
+        
+        Args:
+            shape: Shape dictionary
+            
+        Returns:
+            Tuple representation of shape
+        """
+        # Create a sorted tuple of key-value pairs
+        return tuple(sorted(shape.items()))
+    
+    def _initialize_definition_versions(self):
+        """Initialize version hashes for all definitions."""
+        for def_id, definition in self.group_definitions.items():
+            self.definition_versions[def_id] = self._compute_definition_hash(definition)
+    
+    def _compute_definition_hash(self, definition: Dict[str, Any]) -> int:
+        """
+        Compute a hash of the definition for cache invalidation.
+        
+        Args:
+            definition: Group block definition
+            
+        Returns:
+            Hash value representing the definition structure
+        """
+        import json
+        # Hash the internal structure to detect changes
+        internal_structure = definition.get('internal_structure', {})
+        # Convert to JSON string for consistent hashing
+        structure_str = json.dumps(internal_structure, sort_keys=True)
+        return hash(structure_str)
+    
+    def invalidate_cache_for_definition(self, group_def_id: str):
+        """
+        Invalidate all cached data for a specific definition.
+        
+        Args:
+            group_def_id: ID of the group definition that changed
+        """
+        # Remove shape cache entries for this definition
+        keys_to_remove = [key for key in self.shape_cache.keys() if key[0] == group_def_id]
+        for key in keys_to_remove:
+            del self.shape_cache[key]
+        
+        # Remove topological sort cache
+        if group_def_id in self.topo_sort_cache:
+            del self.topo_sort_cache[group_def_id]
+        
+        # Update version hash
+        if group_def_id in self.group_definitions:
+            self.definition_versions[group_def_id] = self._compute_definition_hash(
+                self.group_definitions[group_def_id]
+            )
+        
+        logger.debug(f"Cache invalidated for definition {group_def_id}")
+    
+    def update_definition(self, group_def_id: str, new_definition: Dict[str, Any]):
+        """
+        Update a group definition and invalidate related caches.
+        
+        Args:
+            group_def_id: ID of the group definition
+            new_definition: New definition data
+        """
+        # Check if definition actually changed
+        old_hash = self.definition_versions.get(group_def_id)
+        new_hash = self._compute_definition_hash(new_definition)
+        
+        if old_hash != new_hash:
+            # Definition changed, invalidate caches
+            self.group_definitions[group_def_id] = new_definition
+            self.invalidate_cache_for_definition(group_def_id)
+            logger.info(f"Definition {group_def_id} updated and cache invalidated")
+        else:
+            # No structural change, just update the definition
+            self.group_definitions[group_def_id] = new_definition
+            logger.debug(f"Definition {group_def_id} updated (no structural change)")
+    
+    def _evict_cache_if_needed(self):
+        """Evict oldest cache entries if cache size limit is exceeded."""
+        if len(self.shape_cache) > self.cache_size:
+            # Simple LRU: remove oldest 10% of entries
+            num_to_remove = max(1, len(self.shape_cache) // 10)
+            keys_to_remove = list(self.shape_cache.keys())[:num_to_remove]
+            for key in keys_to_remove:
+                del self.shape_cache[key]
+            logger.debug(f"Evicted {num_to_remove} cache entries (cache size: {len(self.shape_cache)})")
+    
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """
+        Get cache performance statistics.
+        
+        Returns:
+            Dictionary with cache statistics
+        """
+        total_requests = self.cache_hits + self.cache_misses
+        hit_rate = (self.cache_hits / total_requests * 100) if total_requests > 0 else 0
+        
+        return {
+            'cache_size': len(self.shape_cache),
+            'cache_limit': self.cache_size,
+            'cache_hits': self.cache_hits,
+            'cache_misses': self.cache_misses,
+            'hit_rate': hit_rate,
+            'topo_sort_cache_size': len(self.topo_sort_cache)
+        }
+    
+    def clear_cache(self):
+        """Clear all caches and reset statistics."""
+        self.shape_cache.clear()
+        self.topo_sort_cache.clear()
+        self.cache_hits = 0
+        self.cache_misses = 0
+        logger.debug("All caches cleared")
+
+
+class ShapeInferenceProfiler:
+    """
+    Profiler for shape inference performance analysis.
+    
+    Tracks timing and statistics for shape inference operations
+    to identify performance bottlenecks in large architectures.
+    """
+    
+    def __init__(self):
+        """Initialize the profiler."""
+        self.timings = {}  # {operation_name: [durations]}
+        self.enabled = False
+    
+    def enable(self):
+        """Enable profiling."""
+        self.enabled = True
+        logger.info("Shape inference profiling enabled")
+    
+    def disable(self):
+        """Disable profiling."""
+        self.enabled = False
+        logger.info("Shape inference profiling disabled")
+    
+    def record_timing(self, operation: str, duration: float):
+        """
+        Record timing for an operation.
+        
+        Args:
+            operation: Name of the operation
+            duration: Duration in seconds
+        """
+        if not self.enabled:
+            return
+        
+        if operation not in self.timings:
+            self.timings[operation] = []
+        self.timings[operation].append(duration)
+    
+    def get_stats(self) -> Dict[str, Dict[str, float]]:
+        """
+        Get profiling statistics.
+        
+        Returns:
+            Dictionary with statistics for each operation
+        """
+        stats = {}
+        for operation, durations in self.timings.items():
+            if durations:
+                stats[operation] = {
+                    'count': len(durations),
+                    'total': sum(durations),
+                    'mean': sum(durations) / len(durations),
+                    'min': min(durations),
+                    'max': max(durations)
+                }
+        return stats
+    
+    def print_report(self):
+        """Print a formatted profiling report."""
+        if not self.timings:
+            print("No profiling data collected")
+            return
+        
+        print("\n" + "=" * 80)
+        print("Shape Inference Performance Report")
+        print("=" * 80)
+        
+        stats = self.get_stats()
+        for operation, data in sorted(stats.items(), key=lambda x: x[1]['total'], reverse=True):
+            print(f"\n{operation}:")
+            print(f"  Count: {data['count']}")
+            print(f"  Total: {data['total']:.4f}s")
+            print(f"  Mean:  {data['mean']:.4f}s")
+            print(f"  Min:   {data['min']:.4f}s")
+            print(f"  Max:   {data['max']:.4f}s")
+        
+        print("\n" + "=" * 80)
+    
+    def reset(self):
+        """Reset all profiling data."""
+        self.timings.clear()
+
+
+class PyTorchBlockGenerator:
+    """
+    Generator for PyTorch nn.Module code for group blocks.
+    
+    Converts GroupBlockDefinition into reusable nn.Module subclasses
+    with proper initialization and forward pass logic.
+    """
+    
+    def __init__(
+        self,
+        group_definitions: List[Dict[str, Any]],
+        shape_computer: Optional[GroupBlockShapeComputer] = None
+    ):
+        """
+        Initialize the block generator.
+        
+        Args:
+            group_definitions: List of GroupBlockDefinition dictionaries
+            shape_computer: Optional shape computer for internal shape inference
+        """
+        self.group_definitions = {defn['id']: defn for defn in group_definitions}
+        self.generated_classes = {}  # Cache generated class code
+        self.shape_computer = shape_computer or GroupBlockShapeComputer(self.group_definitions)
+        
+    def generate_all_block_classes(self) -> str:
+        """
+        Generate all block class definitions.
+        
+        Returns:
+            String containing all block class definitions
+        """
+        if not self.group_definitions:
+            return ""
+            
+        code_parts = []
+        code_parts.append("# ============================================")
+        code_parts.append("# Custom Block Definitions")
+        code_parts.append("# ============================================\n")
+        
+        for defn_id, definition in self.group_definitions.items():
+            block_class = self.generate_block_class(definition)
+            code_parts.append(block_class)
+            code_parts.append("\n")
+            
+        return "\n".join(code_parts)
+    
+    def generate_block_class(
+        self,
+        definition: Dict[str, Any],
+        example_input_shape: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Generate nn.Module subclass for a single block definition.
+        
+        Args:
+            definition: GroupBlockDefinition dictionary
+            example_input_shape: Optional example input shape for computing internal shapes
+            
+        Returns:
+            String containing the complete block class definition
+        """
+        block_name = definition['name']
+        class_name = self._to_class_name(block_name)
+        description = definition.get('description', '')
+        
+        # Get internal structure
+        internal_structure = definition.get('internal_structure', {})
+        internal_nodes = internal_structure.get('nodes', [])
+        internal_edges = internal_structure.get('edges', [])
+        port_mappings = internal_structure.get('portMappings', [])
+        
+        # Sort internal nodes topologically
+        sorted_nodes = topological_sort(internal_nodes, internal_edges)
+        
+        # Compute internal shapes if example provided
+        internal_shape_map = {}
+        if example_input_shape:
+            internal_shape_map, _ = self.shape_computer.compute_internal_shapes(
+                internal_nodes,
+                internal_edges,
+                port_mappings,
+                example_input_shape,
+                block_name
+            )
+        else:
+            # Fallback to old behavior without shape computer
+            internal_shape_map, _ = infer_shapes(sorted_nodes, internal_edges)
+        
+        # Generate __init__ method
+        init_method = self._generate_init_method(sorted_nodes, internal_shape_map, port_mappings)
+        
+        # Generate forward method
+        forward_method = self._generate_forward_method(
+            sorted_nodes, internal_edges, internal_shape_map, port_mappings
+        )
+        
+        # Build class docstring
+        docstring = self._generate_block_docstring(
+            block_name, description, port_mappings, sorted_nodes
+        )
+        
+        # Assemble the complete class
+        class_code = f'''class {class_name}(nn.Module):
+    """{docstring}"""
+
+{init_method}
+
+{forward_method}'''
+        
+        # Cache the generated class
+        self.generated_classes[definition['id']] = class_name
+        
+        return class_code
+    
+    def _generate_init_method(
+        self,
+        nodes: List[Dict[str, Any]],
+        shape_map: Dict[str, Dict[str, Any]],
+        port_mappings: List[Dict[str, Any]]
+    ) -> str:
+        """Generate __init__ method with layer instantiation."""
+        lines = []
+
+        # Detect which shape parameters are needed by scanning nodes
+        needs_in_channels = False
+        needs_in_features = False
+        needs_num_features = False
+
+        for node in nodes:
+            node_type = get_node_type(node)
+            if node_type in ('input', 'dataloader', 'output'):
+                continue
+            if node_type == 'conv2d':
+                needs_in_channels = True
+            elif node_type == 'linear':
+                needs_in_features = True
+            elif node_type in ('batchnorm', 'batchnorm2d'):
+                needs_num_features = True
+
+        # Generate __init__ signature with detected parameters
+        params = []
+        if needs_in_channels:
+            params.append("in_channels=None")
+        if needs_in_features:
+            params.append("in_features=None")
+        if needs_num_features:
+            params.append("num_features=None")
+
+        if params:
+            lines.append(f"    def __init__(self, {', '.join(params)}):")
+        else:
+            lines.append("    def __init__(self):")
+
+        lines.append('        """Initialize all internal layers."""')
+        lines.append(f"        super().__init__()")
+        lines.append("")
+
+        # Track which nodes need to be instantiated and which is first of each type
+        layer_count = {}
+        first_layer_of_type = {}
+
+        for idx, node in enumerate(nodes):
+            node_id = node['id']
+            node_type = get_node_type(node)
+            config = node.get('data', {}).get('config', {})
+            shape_info = shape_map.get(node_id, {})
+
+            # Skip input/output nodes
+            if node_type in ('input', 'dataloader', 'output'):
+                continue
+
+            # Track if this is the first layer of its type
+            is_first = node_type not in first_layer_of_type
+            if is_first:
+                first_layer_of_type[node_type] = node_id
+
+            # Generate layer instantiation
+            layer_name = self._get_internal_layer_name(node_type, node_id, layer_count)
+            layer_class_name = self._get_layer_class_name_for_node(node_type, config)
+
+            # Generate instantiation with proper arguments
+            instantiation = self._generate_layer_instantiation_line(
+                layer_name, layer_class_name, node_type, shape_info, config, is_first
+            )
+
+            if instantiation:
+                lines.append(f"        {instantiation}")
+
+        return "\n".join(lines)
+    
+    def _generate_forward_method(
+        self,
+        nodes: List[Dict[str, Any]],
+        edges: List[Dict[str, Any]],
+        shape_map: Dict[str, Dict[str, Any]],
+        port_mappings: List[Dict[str, Any]]
+    ) -> str:
+        """Generate forward method with internal connection logic."""
+        lines = []
+        
+        # Determine input parameters from port mappings
+        input_ports = [pm for pm in port_mappings if pm['type'] == 'input']
+        output_ports = [pm for pm in port_mappings if pm['type'] == 'output']
+        
+        # Generate method signature
+        if len(input_ports) == 1:
+            lines.append("    def forward(self, x: torch.Tensor) -> torch.Tensor:")
+        else:
+            param_names = [f"input_{i}" for i in range(len(input_ports))]
+            params = ", ".join([f"{name}: torch.Tensor" for name in param_names])
+            lines.append(f"    def forward(self, {params}) -> torch.Tensor:")
+        
+        lines.append('        """')
+        lines.append('        Forward pass through the block.')
+        lines.append('')
+        lines.append('        Args:')
+        if len(input_ports) == 1:
+            lines.append('            x: Input tensor')
+        else:
+            for i, port in enumerate(input_ports):
+                label = port.get('externalPortLabel', f'input_{i}')
+                lines.append(f'            input_{i}: {label}')
+        lines.append('')
+        lines.append('        Returns:')
+        if len(output_ports) == 1:
+            lines.append('            Output tensor')
+        else:
+            lines.append('            Tuple of output tensors')
+        lines.append('        """')
+        
+        # Build edge map for finding inputs
+        edge_map = {}
+        for edge in edges:
+            target = edge.get('target')
+            source = edge.get('source')
+            if target not in edge_map:
+                edge_map[target] = []
+            edge_map[target].append(source)
+        
+        # Map internal node IDs to variable names
+        var_map = {}
+        layer_count = {}
+        
+        # Map input ports to initial variables
+        for i, port in enumerate(input_ports):
+            internal_node_id = port['internalNodeId']
+            if len(input_ports) == 1:
+                var_map[internal_node_id] = 'x'
+            else:
+                var_map[internal_node_id] = f'input_{i}'
+        
+        # Generate forward pass for each internal node
+        for node in nodes:
+            node_id = node['id']
+            node_type = get_node_type(node)
+            config = node.get('data', {}).get('config', {})
+            
+            # Skip input/output nodes
+            if node_type in ('input', 'dataloader', 'output'):
+                # Input nodes are already mapped
+                if node_id not in var_map:
+                    var_map[node_id] = 'x'
+                continue
+            
+            # Get layer name
+            layer_name = self._get_internal_layer_name(node_type, node_id, layer_count)
+            
+            # Get input variable(s)
+            incoming = edge_map.get(node_id, [])
+            if not incoming:
+                # No incoming edges, might be an input node we missed
+                input_var = 'x'
+            elif len(incoming) == 1:
+                input_var = var_map.get(incoming[0], 'x')
+            else:
+                # Multiple inputs (for concat, add, etc.)
+                input_vars = [var_map.get(src, 'x') for src in incoming]
+                input_var = f"[{', '.join(input_vars)}]"
+            
+            # Generate output variable name (sanitize node_id to avoid hyphens)
+            output_var = f"x_{node_id[:8].replace('-', '_')}"
+            var_map[node_id] = output_var
+            
+            # Generate forward line
+            if node_type in ('concat', 'add'):
+                lines.append(f"        {output_var} = self.{layer_name}({input_var})")
+            else:
+                lines.append(f"        {output_var} = self.{layer_name}({input_var})")
+        
+        # Map output ports to return values
+        if len(output_ports) == 1:
+            output_node_id = output_ports[0]['internalNodeId']
+            output_var = var_map.get(output_node_id, 'x')
+            lines.append(f"        return {output_var}")
+        else:
+            output_vars = []
+            for port in output_ports:
+                output_node_id = port['internalNodeId']
+                output_vars.append(var_map.get(output_node_id, 'x'))
+            lines.append(f"        return ({', '.join(output_vars)})")
+        
+        return "\n".join(lines)
+    
+    def _generate_block_docstring(
+        self,
+        block_name: str,
+        description: str,
+        port_mappings: List[Dict[str, Any]],
+        nodes: List[Dict[str, Any]]
+    ) -> str:
+        """Generate comprehensive docstring for block class."""
+        lines = []
+        lines.append(f"Custom Block: {block_name}")
+        lines.append("")
+        
+        if description:
+            lines.append(description)
+            lines.append("")
+        
+        lines.append("This block encapsulates a reusable subgraph of layers.")
+        lines.append("")
+        
+        # Document ports
+        input_ports = [pm for pm in port_mappings if pm['type'] == 'input']
+        output_ports = [pm for pm in port_mappings if pm['type'] == 'output']
+        
+        if input_ports:
+            lines.append("Input Ports:")
+            for port in input_ports:
+                label = port.get('externalPortLabel', 'input')
+                lines.append(f"    - {label}")
+        
+        if output_ports:
+            lines.append("")
+            lines.append("Output Ports:")
+            for port in output_ports:
+                label = port.get('externalPortLabel', 'output')
+                lines.append(f"    - {label}")
+        
+        lines.append("")
+        lines.append(f"Internal Layers: {len([n for n in nodes if get_node_type(n) not in ('input', 'dataloader', 'output')])}")
+        
+        return "\n    ".join(lines)
+    
+    def _generate_layer_instantiation_line(
+        self,
+        layer_name: str,
+        layer_class_name: str,
+        node_type: str,
+        shape_info: Dict[str, Any],
+        config: Dict[str, Any],
+        is_first: bool = False
+    ) -> str:
+        """Generate layer instantiation line with proper arguments using shape_map values."""
+        # Determine if layer needs shape arguments
+        if node_type == 'conv2d':
+            if is_first:
+                # Use parameter for first conv2d layer
+                return f"self.{layer_name} = {layer_class_name}(in_channels=in_channels)"
+            else:
+                # Use computed value from shape map (no hardcoded defaults)
+                in_channels = shape_info.get('in_channels')
+                if in_channels is not None:
+                    return f"self.{layer_name} = {layer_class_name}(in_channels={in_channels})"
+                else:
+                    # If shape inference failed, use parameter
+                    logger.warning(f"No in_channels in shape_map for {layer_name}, using parameter")
+                    return f"self.{layer_name} = {layer_class_name}(in_channels=in_channels)"
+        elif node_type == 'linear':
+            if is_first:
+                # Use parameter for first linear layer
+                return f"self.{layer_name} = {layer_class_name}(in_features=in_features)"
+            else:
+                # Use computed value from shape map (no hardcoded defaults)
+                in_features = shape_info.get('in_features')
+                if in_features is not None:
+                    return f"self.{layer_name} = {layer_class_name}(in_features={in_features})"
+                else:
+                    # If shape inference failed, use parameter
+                    logger.warning(f"No in_features in shape_map for {layer_name}, using parameter")
+                    return f"self.{layer_name} = {layer_class_name}(in_features=in_features)"
+        elif node_type in ('batchnorm', 'batchnorm2d'):
+            if is_first:
+                # Use parameter for first batchnorm layer
+                return f"self.{layer_name} = {layer_class_name}(num_features=num_features)"
+            else:
+                # Use computed value from shape map (no hardcoded defaults)
+                num_features = shape_info.get('num_features')
+                if num_features is not None:
+                    return f"self.{layer_name} = {layer_class_name}(num_features={num_features})"
+                else:
+                    # If shape inference failed, use parameter
+                    logger.warning(f"No num_features in shape_map for {layer_name}, using parameter")
+                    return f"self.{layer_name} = {layer_class_name}(num_features=num_features)"
+        else:
+            return f"self.{layer_name} = {layer_class_name}()"
+    
+    def _get_internal_layer_name(
+        self,
+        node_type: str,
+        node_id: str,
+        layer_count: Dict[str, int]
+    ) -> str:
+        """Generate unique layer variable name for internal node."""
+        # Use node_id suffix for uniqueness (sanitize to avoid hyphens)
+        suffix = node_id[:8].replace('-', '_')
+        base_name = node_type.replace('_', '')
+
+        # Track count for this type
+        if node_type not in layer_count:
+            layer_count[node_type] = 0
+        layer_count[node_type] += 1
+
+        return f"{base_name}_{suffix}"
+    
+    def _get_layer_class_name_for_node(
+        self,
+        node_type: str,
+        config: Dict[str, Any]
+    ) -> str:
+        """Get the layer class name that will be used in the main model."""
+        # These should match the class names generated by generate_layer_class
+        type_name = node_type.replace('_', '').title()
+        
+        if node_type == 'conv2d':
+            channels = config.get('out_channels', 64)
+            kernel = config.get('kernel_size', 3)
+            return f"{type_name}Layer_{channels}ch_{kernel}x{kernel}"
+        elif node_type == 'linear':
+            features = config.get('out_features', 128)
+            return f"{type_name}Layer_{features}units"
+        elif node_type == 'maxpool':
+            kernel = config.get('kernel_size', 2)
+            return f"{type_name}Layer_{kernel}x{kernel}"
+        elif node_type == 'custom':
+            name = config.get('name', 'CustomLayer')
+            safe_name = name.replace(' ', '_').replace('-', '_')
+            return f"CustomLayer_{safe_name}"
+        else:
+            # For other types, we'll need to generate a generic name
+            # This will be handled by the main code generation
+            return f"{type_name}Layer"
+    
+    def _to_class_name(self, name: str) -> str:
+        """Convert block name to valid Python class name."""
+        import re
+        # Remove special characters and convert to PascalCase
+        name = re.sub(r'[^a-zA-Z0-9]', ' ', name)
+        name = ''.join(word.capitalize() for word in name.split())
+        if not name:
+            return 'CustomBlock'
+        if name[0].isdigit():
+            name = 'Block' + name
+        return name + 'Block'
+    
+    def get_block_class_name(self, definition_id: str) -> Optional[str]:
+        """
+        Get the generated class name for a block definition.
+        
+        Args:
+            definition_id: ID of the GroupBlockDefinition
+            
+        Returns:
+            Class name if generated, None otherwise
+        """
+        return self.generated_classes.get(definition_id)
 
 
 def generate_pytorch_code(
     nodes: List[Dict[str, Any]],
     edges: List[Dict[str, Any]],
-    project_name: str = "GeneratedModel"
-) -> Dict[str, str]:
+    project_name: str = "GeneratedModel",
+    group_definitions: Optional[List[Dict[str, Any]]] = None
+) -> Tuple[Dict[str, str], List[Exception]]:
     """
     Generate complete PyTorch code including model, training, and data loading.
     Each layer gets its own reusable class, all combined in a main model class.
@@ -20,18 +1446,37 @@ def generate_pytorch_code(
         nodes: List of node dictionaries from architecture
         edges: List of edge dictionaries defining connections
         project_name: Name for the generated model class
+        group_definitions: Optional list of GroupBlockDefinition dictionaries
 
     Returns:
-        Dictionary with keys: 'model', 'train', 'dataset', 'config'
+        Tuple of (dictionary with keys: 'model', 'train', 'dataset', 'config', list of errors)
     """
     # Topologically sort nodes
     sorted_nodes = topological_sort(nodes, edges)
 
-    # Infer shapes through the graph
-    shape_map = infer_shapes(sorted_nodes, edges)
+    # Initialize block generator if we have group definitions
+    block_generator = None
+    group_def_dict = None
+    shape_computer = None
+    if group_definitions:
+        # Convert list to dict for shape inference
+        group_def_dict = {defn['id']: defn for defn in group_definitions}
+        # Create shape computer for reuse
+        shape_computer = GroupBlockShapeComputer(group_def_dict)
+        # Create block generator with shape computer
+        block_generator = PyTorchBlockGenerator(group_definitions, shape_computer)
+
+    # Infer shapes through the graph (now with group definitions)
+    shape_map, shape_errors = infer_shapes(sorted_nodes, edges, group_def_dict)
+
+    # Validate computed shapes for critical issues
+    validation_errors = validate_shape_map(sorted_nodes, shape_map)
+    if validation_errors:
+        logger.warning(f"Shape validation found {len(validation_errors)} potential issues")
+        shape_errors.extend(validation_errors)
 
     # Generate different components
-    model_code = generate_model_file(sorted_nodes, edges, project_name, shape_map)
+    model_code = generate_model_file(sorted_nodes, edges, project_name, shape_map, block_generator, shape_errors)
     train_code = generate_training_script(project_name)
     dataset_code = generate_dataset_class(nodes)
     config_code = generate_config_file(nodes)
@@ -41,7 +1486,7 @@ def generate_pytorch_code(
         'train': train_code,
         'dataset': dataset_code,
         'config': config_code
-    }
+    }, shape_errors
 
 
 def generate_single_layer_class(
@@ -190,14 +1635,70 @@ def topological_sort(nodes: List[Dict], edges: List[Dict]) -> List[Dict]:
     return [node_map[node_id] for node_id in sorted_ids if node_id in node_map]
 
 
-def infer_shapes(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Dict[str, Any]]:
+def extract_output_shape_from_metadata(node: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
-    Infer input/output shapes for each layer in the graph.
+    Extract output shape from node's frontend-provided metadata.
+
+    The frontend computes output shapes accurately during the visual design phase
+    and stores them in node.data.outputShape. This function extracts those
+    pre-computed shapes, which are considered authoritative.
+
+    Args:
+        node: Node dictionary with potential data.outputShape metadata
 
     Returns:
-        Dictionary mapping node_id to shape info: {'in_channels', 'out_channels', 'in_features', 'out_features', etc.}
+        Dictionary with shape keys (out_channels, out_features, etc.) or None if
+        metadata is incomplete/missing
+    """
+    output_shape = node.get('data', {}).get('outputShape', {})
+    if not output_shape or not isinstance(output_shape, dict):
+        return None
+
+    dims = output_shape.get('dims', [])
+    if not dims:
+        return None
+
+    shape_info = {}
+
+    # PyTorch uses NCHW format: [batch, channels, height, width]
+    if len(dims) == 4:
+        shape_info['out_channels'] = dims[1]
+        shape_info['out_height'] = dims[2]
+        shape_info['out_width'] = dims[3]
+    elif len(dims) == 2:  # [batch, features] - for Linear/Flatten output
+        shape_info['out_features'] = dims[1]
+    else:
+        # Unusual shape format - log for debugging but don't fail
+        logger.debug(f"Unusual output shape dims: {dims}")
+        return None
+
+    return shape_info
+
+
+def infer_shapes(
+    nodes: List[Dict],
+    edges: List[Dict],
+    group_definitions: Optional[Dict[str, Any]] = None
+) -> Tuple[Dict[str, Dict[str, Any]], List[Exception]]:
+    """
+    Infer input/output shapes for each layer in the graph.
+    Enhanced to handle group blocks properly.
+
+    Args:
+        nodes: List of node dictionaries
+        edges: List of edge dictionaries
+        group_definitions: Optional map of group definition IDs to definitions
+
+    Returns:
+        Tuple of (dictionary mapping node_id to shape info, list of errors encountered)
     """
     shape_map = {}
+    errors = []
+
+    # Initialize shape computer for group blocks
+    shape_computer = None
+    if group_definitions:
+        shape_computer = GroupBlockShapeComputer(group_definitions)
 
     # Build edge map for finding inputs
     edge_map = {}
@@ -208,8 +1709,12 @@ def infer_shapes(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Dict[str, An
             edge_map[target] = []
         edge_map[target].append(source)
 
-    # Process nodes in order
-    for node in nodes:
+    # Topologically sort nodes to ensure we process layers in dependency order
+    # This is CRITICAL: we must compute upstream layer shapes before downstream layers
+    sorted_nodes = topological_sort(nodes, edges)
+
+    # Process nodes in topological order
+    for node in sorted_nodes:
         node_id = node['id']
         node_type = get_node_type(node)
         config = node.get('data', {}).get('config', {})
@@ -217,116 +1722,474 @@ def infer_shapes(nodes: List[Dict], edges: List[Dict]) -> Dict[str, Dict[str, An
         # Get incoming edges
         incoming = edge_map.get(node_id, [])
 
-        # Initialize shape info for this node
-        shape_info = {}
+        # ========== PHASE 1: Extract output metadata (if available) ==========
+        # Frontend provides accurate output shapes in metadata
+        metadata_shape = extract_output_shape_from_metadata(node)
+        shape_info = metadata_shape if metadata_shape else {}
+
+        # ========== PHASE 2: Compute input dimensions from upstream nodes ==========
+        # Input dimensions ALWAYS come from upstream, regardless of metadata
+        # This is critical for layers like Conv2d, Linear, BatchNorm
 
         if node_type == 'input':
-            # Parse input shape
-            shape_str = config.get('shape', '[1, 3, 224, 224]')
-            try:
-                # Try to parse shape
-                import json
-                shape = json.loads(shape_str)
-                if len(shape) >= 4:
-                    shape_info['out_channels'] = shape[1]  # NCHW format
-                    shape_info['out_height'] = shape[2]
-                    shape_info['out_width'] = shape[3]
-                elif len(shape) >= 2:
-                    shape_info['out_features'] = shape[1]
-            except:
-                shape_info['out_channels'] = 3
-                shape_info['out_height'] = 224
-                shape_info['out_width'] = 224
+            # Input nodes have no upstream - parse from config if metadata doesn't exist
+            if not metadata_shape:
+                shape_str = config.get('shape', '[1, 3, 224, 224]')
+                try:
+                    # Try to parse shape
+                    shape = json.loads(shape_str)
+                    if len(shape) >= 4:
+                        shape_info['out_channels'] = shape[1]  # NCHW format
+                        shape_info['out_height'] = shape[2]
+                        shape_info['out_width'] = shape[3]
+                    elif len(shape) >= 2:
+                        shape_info['out_features'] = shape[1]
+                except (json.JSONDecodeError, ValueError, KeyError, IndexError, TypeError) as e:
+                    logger.warning(
+                        f"Failed to parse input shape for node {node_id}: {e}. "
+                        f"Using default shape [1, 3, 224, 224] (NCHW)"
+                    )
+                    errors.append(ShapeInferenceError(
+                        node_id=node_id,
+                        node_type=node_type,
+                        reason=f"Failed to parse shape configuration: {str(e)}",
+                        suggestion="Check that the input shape is a valid JSON array like [1, 3, 224, 224]"
+                    ))
+                    shape_info['out_channels'] = 3
+                    shape_info['out_height'] = 224
+                    shape_info['out_width'] = 224
 
         elif node_type == 'conv2d':
-            # Get input channels from previous layer
+            # Get input channels from upstream layer (ALWAYS required)
             if incoming and incoming[0] in shape_map:
-                shape_info['in_channels'] = shape_map[incoming[0]].get('out_channels', 3)
+                try:
+                    upstream_shape = safe_get_shape_data(
+                        shape_map=shape_map,
+                        node_id=node_id,
+                        upstream_node_id=incoming[0],
+                        required_keys=['out_channels'],
+                        default_values={'out_channels': 3}
+                    )
+                    shape_info['in_channels'] = upstream_shape['out_channels']
+                except (MissingShapeDataError, ShapeInferenceError) as e:
+                    logger.warning(f"Shape inference warning for node {node_id}: {e}. Using default.")
+                    errors.append(e)
+                    shape_info['in_channels'] = 3
             else:
                 shape_info['in_channels'] = 3
 
-            # Output channels from config
-            shape_info['out_channels'] = config.get('out_channels', 64)
+            # Output channels: use metadata if available, otherwise config
+            if 'out_channels' not in shape_info:
+                shape_info['out_channels'] = config.get('out_channels', 64)
 
-            # Calculate output spatial dimensions
-            if incoming and incoming[0] in shape_map:
-                prev_shape = shape_map[incoming[0]]
-                kernel_size = config.get('kernel_size', 3)
-                stride = config.get('stride', 1)
-                padding = config.get('padding', 0)
+            # Spatial dimensions: use metadata if available, otherwise calculate
+            if 'out_height' not in shape_info or 'out_width' not in shape_info:
+                if incoming and incoming[0] in shape_map:
+                    try:
+                        prev_shape = safe_get_shape_data(
+                            shape_map=shape_map,
+                            node_id=node_id,
+                            upstream_node_id=incoming[0],
+                            required_keys=['out_height', 'out_width'],
+                            default_values=None
+                        )
+                        kernel_size = config.get('kernel_size', 3)
+                        stride = config.get('stride', 1)
+                        padding = config.get('padding', 0)
 
-                if 'out_height' in prev_shape and 'out_width' in prev_shape:
-                    shape_info['out_height'] = (prev_shape['out_height'] + 2*padding - kernel_size) // stride + 1
-                    shape_info['out_width'] = (prev_shape['out_width'] + 2*padding - kernel_size) // stride + 1
+                        shape_info['out_height'] = (prev_shape['out_height'] + 2*padding - kernel_size) // stride + 1
+                        shape_info['out_width'] = (prev_shape['out_width'] + 2*padding - kernel_size) // stride + 1
+                    except (MissingShapeDataError, ShapeInferenceError) as e:
+                        logger.warning(f"Could not compute spatial dimensions for conv2d {node_id}: {e}")
+                        errors.append(e)
 
         elif node_type == 'maxpool':
-            # Preserve channels, reduce spatial dimensions
+            # MaxPool preserves channels from upstream
             if incoming and incoming[0] in shape_map:
-                prev_shape = shape_map[incoming[0]]
-                shape_info['in_channels'] = prev_shape.get('out_channels', 64)
-                shape_info['out_channels'] = shape_info['in_channels']
+                try:
+                    prev_shape = safe_get_shape_data(
+                        shape_map=shape_map,
+                        node_id=node_id,
+                        upstream_node_id=incoming[0],
+                        required_keys=['out_channels'],
+                        default_values={'out_channels': 64}
+                    )
+                    shape_info['out_channels'] = prev_shape['out_channels']
+                except (MissingShapeDataError, ShapeInferenceError) as e:
+                    logger.warning(f"Shape inference warning for maxpool {node_id}: {e}")
+                    errors.append(e)
+                    shape_info['out_channels'] = 64
+            else:
+                shape_info['out_channels'] = 64
 
-                kernel_size = config.get('kernel_size', 2)
-                stride = config.get('stride', 2)
-                padding = config.get('padding', 0)
+            # Spatial dimensions: use metadata if available, otherwise calculate
+            if 'out_height' not in shape_info or 'out_width' not in shape_info:
+                if incoming and incoming[0] in shape_map:
+                    try:
+                        prev_shape = safe_get_shape_data(
+                            shape_map=shape_map,
+                            node_id=node_id,
+                            upstream_node_id=incoming[0],
+                            required_keys=['out_height', 'out_width'],
+                            default_values={'out_height': 7, 'out_width': 7}
+                        )
+                        kernel_size = config.get('kernel_size', 2)
+                        stride = config.get('stride', 2)
+                        padding = config.get('padding', 0)
 
-                if 'out_height' in prev_shape and 'out_width' in prev_shape:
-                    shape_info['out_height'] = (prev_shape['out_height'] + 2*padding - kernel_size) // stride + 1
-                    shape_info['out_width'] = (prev_shape['out_width'] + 2*padding - kernel_size) // stride + 1
+                        shape_info['out_height'] = (prev_shape['out_height'] + 2*padding - kernel_size) // stride + 1
+                        shape_info['out_width'] = (prev_shape['out_width'] + 2*padding - kernel_size) // stride + 1
+                    except (MissingShapeDataError, ShapeInferenceError) as e:
+                        logger.warning(f"Could not compute spatial dimensions for maxpool {node_id}: {e}")
+                        errors.append(e)
 
         elif node_type == 'flatten':
-            # Convert spatial dimensions to features
-            if incoming and incoming[0] in shape_map:
-                prev_shape = shape_map[incoming[0]]
-                channels = prev_shape.get('out_channels', 64)
-                height = prev_shape.get('out_height', 7)
-                width = prev_shape.get('out_width', 7)
-                shape_info['out_features'] = channels * height * width
+            # Flatten converts spatial dimensions to features
+            # Use metadata if available, otherwise calculate from upstream
+            if 'out_features' not in shape_info:
+                if incoming and incoming[0] in shape_map:
+                    try:
+                        prev_shape = safe_get_shape_data(
+                            shape_map=shape_map,
+                            node_id=node_id,
+                            upstream_node_id=incoming[0],
+                            required_keys=['out_channels', 'out_height', 'out_width'],
+                            default_values={'out_channels': 64, 'out_height': 7, 'out_width': 7}
+                        )
+                        channels = prev_shape['out_channels']
+                        height = prev_shape['out_height']
+                        width = prev_shape['out_width']
+                        shape_info['out_features'] = channels * height * width
+                    except (MissingShapeDataError, ShapeInferenceError) as e:
+                        logger.warning(f"Shape inference warning for flatten {node_id}: {e}")
+                        errors.append(e)
+                        shape_info['out_features'] = 3136  # 64 * 7 * 7
+                else:
+                    shape_info['out_features'] = 3136  # Default
 
         elif node_type == 'linear':
-            # Get input features from previous layer
+            # Get input features from upstream layer (ALWAYS required)
             if incoming and incoming[0] in shape_map:
-                shape_info['in_features'] = shape_map[incoming[0]].get('out_features', 512)
+                try:
+                    upstream_shape = safe_get_shape_data(
+                        shape_map=shape_map,
+                        node_id=node_id,
+                        upstream_node_id=incoming[0],
+                        required_keys=['out_features'],
+                        default_values={'out_features': 512}
+                    )
+                    shape_info['in_features'] = upstream_shape['out_features']
+                except (MissingShapeDataError, ShapeInferenceError) as e:
+                    logger.warning(f"Shape inference warning for linear {node_id}: {e}")
+                    errors.append(e)
+                    shape_info['in_features'] = 512
             else:
                 shape_info['in_features'] = 512
 
-            # Output features from config
-            shape_info['out_features'] = config.get('out_features', 128)
+            # Output features: use metadata if available, otherwise config
+            if 'out_features' not in shape_info:
+                shape_info['out_features'] = config.get('out_features', 128)
 
         elif node_type == 'batchnorm':
-            # Preserve dimensions, just need num_features
+            # BatchNorm preserves all dimensions from upstream
             if incoming and incoming[0] in shape_map:
-                prev_shape = shape_map[incoming[0]]
-                shape_info['num_features'] = prev_shape.get('out_channels', 64)
-                shape_info['out_channels'] = shape_info['num_features']
-                if 'out_height' in prev_shape:
-                    shape_info['out_height'] = prev_shape['out_height']
-                if 'out_width' in prev_shape:
-                    shape_info['out_width'] = prev_shape['out_width']
+                try:
+                    prev_shape = safe_get_shape_data(
+                        shape_map=shape_map,
+                        node_id=node_id,
+                        upstream_node_id=incoming[0],
+                        required_keys=['out_channels'],
+                        default_values={'out_channels': 64}
+                    )
+                    shape_info['num_features'] = prev_shape['out_channels']
+                    shape_info['out_channels'] = shape_info['num_features']
+                    # Copy spatial dimensions if they exist and not in metadata
+                    if 'out_height' not in shape_info and 'out_height' in prev_shape:
+                        shape_info['out_height'] = prev_shape['out_height']
+                    if 'out_width' not in shape_info and 'out_width' in prev_shape:
+                        shape_info['out_width'] = prev_shape['out_width']
+                except (MissingShapeDataError, ShapeInferenceError) as e:
+                    logger.warning(f"Shape inference warning for batchnorm {node_id}: {e}")
+                    errors.append(e)
+                    shape_info['num_features'] = 64
+                    shape_info['out_channels'] = 64
+            else:
+                shape_info['num_features'] = 64
+                shape_info['out_channels'] = 64
+
+        elif node_type == 'group':
+            # Group blocks: Use metadata if available, otherwise compute from internal structure
+            if not metadata_shape:
+                # No metadata - compute output shape using GroupBlockShapeComputer
+                if shape_computer:
+                    group_def_id = node.get('data', {}).get('groupDefinitionId')
+
+                    if group_def_id and incoming and incoming[0] in shape_map:
+                        # Get input shape from upstream node
+                        input_shape = shape_map[incoming[0]]
+
+                        # Compute output shape using internal structure
+                        output_shape, shape_errors = shape_computer.compute_output_shape(
+                            group_def_id,
+                            input_shape
+                        )
+
+                        # Collect errors from shape computation
+                        errors.extend(shape_errors)
+
+                        if output_shape:
+                            shape_info = output_shape
+                            logger.debug(f"Computed shape for group block {node_id}: {output_shape}")
+                        else:
+                            # Fallback: copy input shape
+                            shape_info = input_shape.copy()
+                            logger.warning(f"Failed to compute shape for group block {node_id}, using input shape")
+                    elif group_def_id and not (incoming and incoming[0] in shape_map):
+                        # Group definition exists but no valid input
+                        shape_info = {'out_channels': 3, 'out_height': 224, 'out_width': 224}
+                        logger.warning(f"Group block {node_id} has no valid input, using default shape")
+                    elif not group_def_id and incoming and incoming[0] in shape_map:
+                        # No definition found, copy input shape
+                        shape_info = shape_map[incoming[0]].copy()
+                        logger.warning(f"No group definition ID found for node {node_id}, using input shape")
+                    else:
+                        # No definition and no input, use default
+                        shape_info = {'out_channels': 3, 'out_height': 224, 'out_width': 224}
+                        logger.warning(f"Group block {node_id} has no definition ID and no input, using default shape")
+                else:
+                    # No shape computer available, fallback to old behavior
+                    if incoming and incoming[0] in shape_map:
+                        prev_shape = shape_map[incoming[0]]
+                        shape_info.update(prev_shape)
+                    else:
+                        shape_info['out_channels'] = 3
+                        shape_info['out_height'] = 224
+                        shape_info['out_width'] = 224
+                    logger.warning(f"No shape computer available for group block {node_id}, using fallback behavior")
 
         else:
-            # For other layers, try to preserve shape from input
-            if incoming and incoming[0] in shape_map:
+            # For other layers: Use metadata if available, otherwise preserve upstream shape
+            if not metadata_shape and incoming and incoming[0] in shape_map:
                 prev_shape = shape_map[incoming[0]]
                 shape_info.update(prev_shape)
-
+    
         shape_map[node_id] = shape_info
 
-    return shape_map
+    return shape_map, errors
+
+
+def validate_shape_map(
+    nodes: List[Dict],
+    shape_map: Dict[str, Dict[str, Any]]
+) -> List[Exception]:
+    """
+    Validate computed shape map for common critical issues.
+
+    This catches problems that would cause runtime errors in generated code:
+    - Missing shape information
+    - Invalid dimensions (zero or negative)
+    - Type-specific requirements not met
+
+    Args:
+        nodes: List of all nodes
+        shape_map: Computed shape mapping
+
+    Returns:
+        List of validation errors (as exceptions for consistency with shape_errors)
+    """
+    errors = []
+
+    for node in nodes:
+        node_id = node['id']
+        node_type = get_node_type(node)
+
+        # Skip non-layer nodes
+        if node_type in ('input', 'output', 'dataloader', 'group'):
+            continue
+
+        shape_info = shape_map.get(node_id)
+
+        # Critical: Shape info must exist
+        if not shape_info:
+            errors.append(ShapeInferenceError(
+                node_id=node_id,
+                node_type=node_type,
+                reason="No shape information computed for node",
+                suggestion="Check that node has valid upstream connections and metadata"
+            ))
+            continue
+
+        # Type-specific validation
+        if node_type == 'linear':
+            # Linear MUST have in_features
+            if 'in_features' not in shape_info:
+                errors.append(ShapeInferenceError(
+                    node_id=node_id,
+                    node_type=node_type,
+                    reason="Missing required in_features for Linear layer",
+                    suggestion="Check upstream Flatten or Linear layer output shape"
+                ))
+            # in_features must be positive
+            elif shape_info.get('in_features', 0) <= 0:
+                errors.append(ShapeInferenceError(
+                    node_id=node_id,
+                    node_type=node_type,
+                    reason=f"Invalid in_features={shape_info.get('in_features')} (must be > 0)",
+                    suggestion="Check upstream layer produces valid output shape"
+                ))
+
+        elif node_type == 'conv2d':
+            # Conv2d MUST have in_channels
+            if 'in_channels' not in shape_info:
+                errors.append(ShapeInferenceError(
+                    node_id=node_id,
+                    node_type=node_type,
+                    reason="Missing required in_channels for Conv2d layer",
+                    suggestion="Check upstream Conv2d or Input layer provides channels"
+                ))
+
+        elif node_type == 'flatten':
+            # Flatten MUST produce out_features
+            if 'out_features' not in shape_info:
+                errors.append(ShapeInferenceError(
+                    node_id=node_id,
+                    node_type=node_type,
+                    reason="Flatten layer must produce out_features",
+                    suggestion="Check upstream layer has spatial dimensions (NCHW format)"
+                ))
+            elif shape_info.get('out_features', 0) <= 0:
+                errors.append(ShapeInferenceError(
+                    node_id=node_id,
+                    node_type=node_type,
+                    reason=f"Invalid out_features={shape_info.get('out_features')} (must be > 0)",
+                    suggestion="Check upstream layer output dimensions are valid"
+                ))
+
+    return errors
+
+
+def collect_all_nodes_with_internals(
+    main_nodes: List[Dict],
+    block_generator: Optional[PyTorchBlockGenerator] = None
+) -> List[Tuple[Dict, int, str]]:
+    """
+    Collect all nodes including internal nodes from group blocks.
+    Returns list of tuples: (node, index, source_context)
+    source_context is either 'main' or 'group_{group_def_id}'
+
+    This ensures we generate layer classes for ALL nodes, not just main model nodes.
+    """
+    all_nodes = []
+    node_index = 0
+
+    # Add main model nodes
+    for node in main_nodes:
+        all_nodes.append((node, node_index, 'main'))
+        node_index += 1
+
+    # Add internal nodes from group definitions
+    if block_generator:
+        for group_def_id, group_def in block_generator.group_definitions.items():
+            internal_structure = group_def.get('internal_structure', {})
+            internal_nodes = internal_structure.get('nodes', [])
+
+            for internal_node in internal_nodes:
+                node_type = get_node_type(internal_node)
+                # Skip input/output nodes
+                if node_type not in ('input', 'dataloader', 'output'):
+                    all_nodes.append((internal_node, node_index, f'group_{group_def_id}'))
+                    node_index += 1
+
+    return all_nodes
+
+
+def get_layer_signature(node: Dict, config: Dict[str, Any], node_type: str) -> str:
+    """
+    Generate a unique signature for a layer based on its type and config.
+    Used for deduplication - layers with same signature can share the same class.
+    """
+    if node_type == 'conv2d':
+        return f"conv2d_{config.get('out_channels', 64)}_{config.get('kernel_size', 3)}_{config.get('stride', 1)}_{config.get('padding', 0)}_{config.get('dilation', 1)}"
+    elif node_type == 'linear':
+        return f"linear_{config.get('out_features', 128)}_{config.get('bias', True)}"
+    elif node_type == 'maxpool':
+        return f"maxpool_{config.get('kernel_size', 2)}_{config.get('stride', 2)}_{config.get('padding', 0)}"
+    elif node_type == 'dropout':
+        return f"dropout_{config.get('p', 0.5)}"
+    elif node_type == 'batchnorm':
+        return f"batchnorm_{config.get('eps', 1e-5)}_{config.get('momentum', 0.1)}_{config.get('affine', True)}"
+    elif node_type == 'softmax':
+        return f"softmax_{config.get('dim', 1)}"
+    elif node_type == 'attention':
+        return f"attention_{config.get('embed_dim', 512)}_{config.get('num_heads', 8)}_{config.get('dropout', 0.0)}"
+    elif node_type == 'custom':
+        return f"custom_{config.get('name', 'CustomLayer')}"
+    else:
+        # For layers without config (relu, flatten, etc.)
+        return node_type
 
 
 def generate_model_file(
     nodes: List[Dict],
     edges: List[Dict],
     project_name: str,
-    shape_map: Dict[str, Dict[str, Any]]
+    shape_map: Dict[str, Dict[str, Any]],
+    block_generator: Optional[PyTorchBlockGenerator] = None,
+    shape_errors: Optional[List[Exception]] = None
 ) -> str:
-    """Generate complete model.py file with layer classes and main model class"""
+    """
+    Generate complete model.py file with layer classes and main model class.
+    
+    Args:
+        nodes: List of node dictionaries
+        edges: List of edge dictionaries
+        project_name: Name for the generated model class
+        shape_map: Dictionary mapping node_id to shape info
+        block_generator: Optional block generator for group blocks
+        shape_errors: Optional list of errors encountered during shape inference
+        
+    Returns:
+        String containing the complete model.py file
+    """
+    if shape_errors is None:
+        shape_errors = []
 
     class_name = to_class_name(project_name)
 
-    # Generate individual layer classes
+    # Generate block class definitions FIRST (if any) - this populates the cache
+    block_classes_code = ""
+    if block_generator:
+        block_classes_code = block_generator.generate_all_block_classes()
+
+    # COLLECT ALL NODES (main + internal from groups) and generate layer classes
+    all_nodes_to_generate = collect_all_nodes_with_internals(nodes, block_generator)
+
+    # DEDUPLICATE by signature and generate layer classes
+    seen_signatures = set()
     layer_classes = []
+
+    for node, idx, source_context in all_nodes_to_generate:
+        node_type = get_node_type(node)
+        config = node.get('data', {}).get('config', {})
+        node_id = node['id']
+
+        # Get shape info (use shape_map for main nodes, extract for internal)
+        if source_context == 'main':
+            shape_info = shape_map.get(node_id, {})
+        else:
+            shape_info = extract_shape_info_from_node(node)
+
+        # Generate signature for deduplication
+        signature = get_layer_signature(node, config, node_type)
+
+        # Only generate if we haven't seen this signature before
+        if signature not in seen_signatures:
+            seen_signatures.add(signature)
+            layer_class_code = generate_layer_class(node, idx, config, node_type, shape_info)
+            if layer_class_code:
+                layer_classes.append(layer_class_code)
+
+    # Now generate layer instantiations and forward pass for MAIN MODEL ONLY
     layer_instantiations = []
     forward_pass_lines = []
 
@@ -352,15 +2215,97 @@ def generate_model_file(
             var_map[node_id] = 'x' if not var_map else 'x'
             continue
 
-        # Generate layer class
-        layer_class_code = generate_layer_class(node, idx, config, node_type, shape_info)
-        if layer_class_code:
-            layer_classes.append(layer_class_code)
+        # Handle group blocks differently
+        if node_type == 'group':
+            # Get the group definition ID
+            group_def_id = node.get('data', {}).get('groupDefinitionId')
+
+            if block_generator and group_def_id:
+                # Use the block class name from the generator
+                block_class_name = block_generator.get_block_class_name(group_def_id)
+
+                if block_class_name:
+                    layer_name = f"block_{node_id.replace('-', '_')}"
+
+                    # Get upstream node's output shape from shape_map
+                    incoming = edge_map.get(node_id, [])
+                    params = []
+                    
+                    if incoming and incoming[0] in shape_map:
+                        # Get upstream node's output shape
+                        upstream_shape = shape_map[incoming[0]]
+                        
+                        # Extract in_channels or in_features from upstream shape
+                        # Pass in_channels if the upstream outputs channels (convolutional layers)
+                        if 'out_channels' in upstream_shape:
+                            in_channels = upstream_shape['out_channels']
+                            params.append(f"in_channels={in_channels}")
+                            logger.debug(f"Block {node_id}: passing in_channels={in_channels} from upstream node {incoming[0]}")
+                        
+                        # Pass in_features if the upstream outputs features (linear layers)
+                        elif 'out_features' in upstream_shape:
+                            in_features = upstream_shape['out_features']
+                            params.append(f"in_features={in_features}")
+                            logger.debug(f"Block {node_id}: passing in_features={in_features} from upstream node {incoming[0]}")
+                        
+                        # Pass num_features if the upstream outputs num_features (batch norm)
+                        elif 'num_features' in upstream_shape:
+                            num_features = upstream_shape['num_features']
+                            params.append(f"num_features={num_features}")
+                            logger.debug(f"Block {node_id}: passing num_features={num_features} from upstream node {incoming[0]}")
+                        else:
+                            # Upstream shape exists but doesn't have expected keys
+                            logger.warning(f"Block {node_id}: upstream shape {upstream_shape} doesn't contain expected keys")
+                    else:
+                        # Handle case where no upstream exists (use input node shape)
+                        # Look for input nodes in the graph
+                        input_nodes = [n for n in nodes if get_node_type(n) == 'input']
+                        if input_nodes and input_nodes[0]['id'] in shape_map:
+                            input_shape = shape_map[input_nodes[0]['id']]
+                            
+                            # Use input node's output shape
+                            if 'out_channels' in input_shape:
+                                in_channels = input_shape['out_channels']
+                                params.append(f"in_channels={in_channels}")
+                                logger.debug(f"Block {node_id}: no upstream, using input shape in_channels={in_channels}")
+                            elif 'out_features' in input_shape:
+                                in_features = input_shape['out_features']
+                                params.append(f"in_features={in_features}")
+                                logger.debug(f"Block {node_id}: no upstream, using input shape in_features={in_features}")
+                            else:
+                                logger.warning(f"Block {node_id}: input shape {input_shape} doesn't contain expected keys")
+                        else:
+                            # No upstream and no input node, use defaults
+                            logger.warning(f"Block {node_id}: no upstream connection and no input node found")
+
+                    # Generate instantiation with computed parameters
+                    # Each instance gets independent shape computation based on its position in the graph
+                    if params:
+                        layer_instantiations.append(f"self.{layer_name} = {block_class_name}({', '.join(params)})  # Instance at position {idx}")
+                    else:
+                        layer_instantiations.append(f"self.{layer_name} = {block_class_name}()  # Instance at position {idx}")
+
+                    # Generate forward pass line
+                    input_var = get_input_variable(incoming, var_map)
+                    output_var = 'x'
+                    forward_pass_lines.append(f"{output_var} = self.{layer_name}({input_var})")
+                    var_map[node_id] = output_var
+                else:
+                    # Block class not found, skip
+                    logger.warning(f"Block class not found for group definition {group_def_id}")
+                    var_map[node_id] = 'x'
+            else:
+                # No block generator or definition ID, skip
+                logger.warning(f"No block generator or definition ID for node {node_id}")
+                var_map[node_id] = 'x'
+            continue
+
+        # For regular nodes, we already generated the layer class above (no need to generate again)
 
         # Generate layer instantiation for __init__
         layer_name = get_layer_variable_name(node_type, idx, config)
         layer_class_name = get_layer_class_name(node_type, idx, config)
-        layer_init = generate_layer_instantiation(layer_class_name, layer_name, shape_info)
+        layer_init = generate_layer_instantiation(layer_class_name, layer_name, shape_info, node_type)
         if layer_init:
             layer_instantiations.append(layer_init)
 
@@ -389,6 +2334,10 @@ from typing import Tuple, Optional
 
 
 '''
+
+    # Add block class definitions (already generated at the start)
+    if block_classes_code:
+        code += block_classes_code + '\n\n'
 
     # Add all layer class definitions
     for layer_class in layer_classes:
@@ -471,6 +2420,12 @@ def generate_layer_class(
     shape_info: Dict[str, Any]
 ) -> Optional[str]:
     """Generate a complete layer class definition with documentation"""
+
+    # Special node types that don't generate individual layer classes:
+    # - input/output/dataloader: Architectural markers for graph structure
+    # - group: Reusable components generated separately by BlockGenerator
+    if node_type in ('input', 'output', 'dataloader', 'group'):
+        return None
 
     class_name = get_layer_class_name(node_type, idx, config)
 
@@ -906,26 +2861,44 @@ def generate_layer_class(
         # Replace this with your custom logic
         return x'''
 
-    return None
+    # If we reach here, the node type is not supported
+    raise UnsupportedNodeTypeError(
+        node_id=node.get('id', 'unknown'),
+        node_type=node_type,
+        framework='PyTorch'
+    )
 
 
 def generate_layer_instantiation(
     class_name: str,
     layer_name: str,
-    shape_info: Dict[str, Any]
+    shape_info: Dict[str, Any],
+    node_type: str = None
 ) -> str:
-    """Generate layer instantiation line for __init__ method"""
-    # Determine if layer needs arguments
-    if 'in_channels' in shape_info:
+    """
+    Generate layer instantiation line for __init__ method.
+
+    Only certain layer types need shape parameters:
+    - Conv2d: needs in_channels
+    - Linear: needs in_features
+    - BatchNorm: needs num_features
+
+    Other layers (Dropout, ReLU, Flatten, etc.) are instantiated with no parameters
+    or only their specific configuration parameters (handled in layer class __init__).
+    """
+    # Only add shape parameters for layers that actually need them
+    if node_type == 'conv2d' and 'in_channels' in shape_info:
         in_ch = shape_info['in_channels']
         return f"self.{layer_name} = {class_name}(in_channels={in_ch})  # Input: {in_ch} channels"
-    elif 'in_features' in shape_info:
+    elif node_type == 'linear' and 'in_features' in shape_info:
         in_feat = shape_info['in_features']
         return f"self.{layer_name} = {class_name}(in_features={in_feat})  # Input: {in_feat} features"
-    elif 'num_features' in shape_info:
+    elif node_type in ('batchnorm', 'batchnorm2d') and 'num_features' in shape_info:
         num_feat = shape_info['num_features']
         return f"self.{layer_name} = {class_name}(num_features={num_feat})  # {num_feat} features"
     else:
+        # For all other layers (Dropout, ReLU, Flatten, MaxPool, etc.):
+        # Instantiate with no parameters - their config is baked into the class definition
         return f"self.{layer_name} = {class_name}()"
 
 

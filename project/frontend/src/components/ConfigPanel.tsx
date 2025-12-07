@@ -11,13 +11,27 @@ import { Card } from '@/components/ui/card'
 import { X, Code, UploadSimple } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import CustomLayerModal from './CustomLayerModal'
+import InternalNodeConfigPanel from './InternalNodeConfigPanel'
 
 export default function ConfigPanel() {
-  const { nodes, selectedNodeId, updateNode, setSelectedNodeId, removeNode } = useModelBuilderStore()
+  const { nodes, selectedNodeId, updateNode, setSelectedNodeId, removeNode, repeatGroupBlock, groupDefinitions } = useModelBuilderStore()
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false)
+  const [repeatCount, setRepeatCount] = useState(2)
+  const [repeatSpacingX, setRepeatSpacingX] = useState(300)
+  const [repeatSpacingY, setRepeatSpacingY] = useState(0)
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({})
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId)
+
+  // Check if selected node is an expanded internal node
+  const isExpandedInternal = selectedNode?.data?._isExpandedInternal === true
+  const parentGroupNodeId = selectedNode?.data?._expandedFrom as string | undefined
+  const groupDefinitionId = selectedNode?.data?._groupDefinitionId as string | undefined
+  
+  // Extract the original internal node ID from the expanded node ID
+  // Format: originalId-expanded-timestamp
+  // We need to split and take everything before the last "-expanded-" occurrence
+  const internalNodeId = selectedNode?.id ? selectedNode.id.substring(0, selectedNode.id.lastIndexOf('-expanded-')) : undefined
 
   const handleCustomLayerSave = (config: {
     name: string
@@ -42,6 +56,28 @@ export default function ConfigPanel() {
     }
   }, [selectedNode?.id, selectedNode?.data.blockType])
 
+  // Handle expanded internal node configuration
+  if (isExpandedInternal && parentGroupNodeId && groupDefinitionId && internalNodeId) {
+    // Debug logging
+    console.log('ConfigPanel - Routing to InternalNodeConfigPanel:', {
+      selectedNodeId: selectedNode.id,
+      parentGroupNodeId,
+      groupDefinitionId,
+      internalNodeId,
+      isExpandedInternal
+    })
+
+    return (
+      <InternalNodeConfigPanel
+        selectedNodeId={selectedNode.id}
+        parentGroupNodeId={parentGroupNodeId}
+        groupDefinitionId={groupDefinitionId}
+        internalNodeId={internalNodeId}
+        onClose={() => setSelectedNodeId(null)}
+      />
+    )
+  }
+
   // For custom blocks, don't show the sidebar at all - only the modal
   if (selectedNode?.data.blockType === 'custom') {
     return (
@@ -62,11 +98,145 @@ export default function ConfigPanel() {
     )
   }
 
+  // Define handleDelete early so it can be used in all sections
+  const handleDelete = () => {
+    if (selectedNode) {
+      removeNode(selectedNode.id)
+    }
+  }
+
   if (!selectedNode) {
     return (
       <div className="w-80 bg-card border-l border-border h-full flex items-center justify-center">
         <div className="text-center text-muted-foreground p-6">
           <p className="text-sm">Select a block to configure its parameters</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Handle group blocks separately
+  if (selectedNode.data.blockType === 'group') {
+    const groupData = selectedNode.data as any
+    const groupDef = groupDefinitions.get(groupData.groupDefinitionId)
+
+    const handleRepeat = () => {
+      if (repeatCount < 1 || repeatCount > 10) {
+        toast.error('Repeat count must be between 1 and 10')
+        return
+      }
+      const newNodeIds = repeatGroupBlock(selectedNode.id, repeatCount, repeatSpacingX, repeatSpacingY)
+      toast.success(`Created ${repeatCount} copies`, {
+        description: `${repeatCount} instances added to canvas`
+      })
+    }
+
+    return (
+      <div className="w-80 bg-card border-l border-border h-full flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
+          <div>
+            <h2 className="font-semibold text-lg">{groupDef?.name || 'Group Block'}</h2>
+            <p className="text-xs text-muted-foreground">Group block configuration</p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSelectedNodeId(null)}
+          >
+            <X size={18} />
+          </Button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-4 space-y-6">
+            {groupDef && (
+              <>
+                <Card className="p-3 bg-muted/50">
+                  <div className="text-xs font-medium mb-2">Group Information</div>
+                  <div className="space-y-1 text-sm">
+                    <div><span className="text-muted-foreground">Category:</span> {groupDef.category}</div>
+                    <div><span className="text-muted-foreground">Internal Nodes:</span> {groupDef.internalNodes.length}</div>
+                    <div><span className="text-muted-foreground">Inputs:</span> {groupDef.portMappings.filter(p => p.type === 'input').length}</div>
+                    <div><span className="text-muted-foreground">Outputs:</span> {groupDef.portMappings.filter(p => p.type === 'output').length}</div>
+                  </div>
+                  {groupDef.description && (
+                    <div className="mt-2 text-xs text-muted-foreground">{groupDef.description}</div>
+                  )}
+                </Card>
+
+                <div className="space-y-4">
+                  <div className="text-sm font-semibold">Repeat Block</div>
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-sm">Number of Copies</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={10}
+                        value={repeatCount}
+                        onChange={(e) => setRepeatCount(parseInt(e.target.value) || 1)}
+                        placeholder="Enter count"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Create 1-10 copies</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm">Horizontal Spacing (px)</Label>
+                      <Input
+                        type="number"
+                        value={repeatSpacingX}
+                        onChange={(e) => setRepeatSpacingX(parseInt(e.target.value) || 0)}
+                        placeholder="Enter spacing"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm">Vertical Spacing (px)</Label>
+                      <Input
+                        type="number"
+                        value={repeatSpacingY}
+                        onChange={(e) => setRepeatSpacingY(parseInt(e.target.value) || 0)}
+                        placeholder="Enter spacing"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleRepeat}
+                      className="w-full"
+                    >
+                      Create {repeatCount} {repeatCount === 1 ? 'Copy' : 'Copies'}
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {selectedNode.data.inputShape && (
+              <Card className="p-3 bg-muted/50">
+                <div className="text-xs font-medium mb-1">Input Shape</div>
+                <div className="font-mono text-sm">
+                  [{selectedNode.data.inputShape.dims.join(', ')}]
+                </div>
+              </Card>
+            )}
+
+            {selectedNode.data.outputShape && (
+              <Card className="p-3 bg-accent/10 border-accent/30">
+                <div className="text-xs font-medium mb-1">Output Shape</div>
+                <div className="font-mono text-sm font-semibold">
+                  [{selectedNode.data.outputShape.dims.join(', ')}]
+                </div>
+              </Card>
+            )}
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-border shrink-0">
+          <Button
+            variant="destructive"
+            className="w-full"
+            onClick={handleDelete}
+          >
+            <X size={16} className="mr-2" />
+            Delete Block
+          </Button>
         </div>
       </div>
     )
@@ -97,10 +267,6 @@ export default function ConfigPanel() {
     } catch {
       return false
     }
-  }
-
-  const handleDelete = () => {
-    removeNode(selectedNode.id)
   }
 
   const handleFileUpload = async (fieldName: string, file: File) => {

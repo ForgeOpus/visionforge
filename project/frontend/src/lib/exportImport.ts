@@ -1,5 +1,5 @@
 import { Node, Edge } from '@xyflow/react'
-import { BlockData, Project } from './types'
+import { BlockData, Project, GroupBlockDefinition } from './types'
 
 /**
  * Complete project export format
@@ -22,6 +22,13 @@ export interface ExportData {
         config: Record<string, any>
         inputShape?: { dims: (number | string)[]; description?: string }
         outputShape?: { dims: (number | string)[]; description?: string }
+        groupDefinitionId?: string
+        isExpanded?: boolean
+        repetitionMetadata?: {
+          sequenceId: string
+          index: number
+          totalCount: number
+        }
       }
     }>
     connections: Array<{
@@ -31,23 +38,42 @@ export interface ExportData {
       sourceHandle?: string | null
       targetHandle?: string | null
     }>
+    groupDefinitions?: Array<{
+      id: string
+      name: string
+      description: string
+      category: string
+      color: string
+      internalNodes: any[]
+      internalEdges: any[]
+      portMappings: any[]
+      createdAt: number
+      updatedAt: number
+    }>
   }
   metadata: {
     exportedAt: number
     nodeCount: number
     edgeCount: number
+    groupDefinitionCount?: number
   }
 }
 
 /**
- * Export nodes and edges to complete JSON format
+ * Export nodes, edges, and group definitions to complete JSON format
  * Includes ALL data for perfect restoration
  */
 export function exportToJSON(
   nodes: Node<BlockData>[],
   edges: Edge[],
-  project?: Project | null
+  project?: Project | null,
+  groupDefinitions?: Map<string, GroupBlockDefinition>
 ): ExportData {
+  // Convert group definitions Map to array
+  const groupDefinitionsArray = groupDefinitions 
+    ? Array.from(groupDefinitions.values())
+    : []
+
   return {
     version: '1.0.0',
     projectName: project?.name || 'Untitled Project',
@@ -64,7 +90,12 @@ export function exportToJSON(
           category: node.data.category,
           config: node.data.config,
           inputShape: node.data.inputShape,
-          outputShape: node.data.outputShape
+          outputShape: node.data.outputShape,
+          ...(node.data.blockType === 'group' && {
+            groupDefinitionId: (node.data as any).groupDefinitionId,
+            isExpanded: (node.data as any).isExpanded,
+            repetitionMetadata: (node.data as any).repetitionMetadata
+          })
         }
       })),
       connections: edges.map((edge) => ({
@@ -73,24 +104,26 @@ export function exportToJSON(
         target: edge.target,
         sourceHandle: edge.sourceHandle,
         targetHandle: edge.targetHandle
-      }))
+      })),
+      groupDefinitions: groupDefinitionsArray.length > 0 ? groupDefinitionsArray : undefined
     },
     metadata: {
       exportedAt: Date.now(),
       nodeCount: nodes.length,
-      edgeCount: edges.length
+      edgeCount: edges.length,
+      groupDefinitionCount: groupDefinitionsArray.length
     }
   }
 }
 
 /**
- * Import from complete JSON format and reconstruct nodes and edges
+ * Import from complete JSON format and reconstruct nodes, edges, and group definitions
  * Validates the data structure before importing
  *
  * @param jsonData - The exported JSON data
  * @param existingNodes - Optional array of existing nodes to check for ID conflicts
  * @param existingEdges - Optional array of existing edges
- * @returns Reconstructed nodes, edges, and project metadata
+ * @returns Reconstructed nodes, edges, group definitions, and project metadata
  */
 export function importFromJSON(
   jsonData: ExportData,
@@ -99,6 +132,7 @@ export function importFromJSON(
 ): {
   nodes: Node<BlockData>[]
   edges: Edge[]
+  groupDefinitions?: GroupBlockDefinition[]
   project: Partial<Project>
 } {
   // Validate JSON structure
@@ -133,18 +167,29 @@ export function importFromJSON(
       existingNodeIds.add(nodeId)
     }
 
+    const baseData: any = {
+      blockType: nodeData.data?.blockType || (nodeData as any).type,
+      label: nodeData.data?.label || (nodeData as any).label || 'Node',
+      category: nodeData.data?.category || (nodeData as any).category || 'basic',
+      config: nodeData.data?.config || (nodeData as any).config || {},
+      inputShape: nodeData.data?.inputShape || (nodeData as any).inputShape,
+      outputShape: nodeData.data?.outputShape || (nodeData as any).outputShape
+    }
+
+    // Add group block specific data if present
+    if (nodeData.data?.groupDefinitionId) {
+      baseData.groupDefinitionId = nodeData.data.groupDefinitionId
+      baseData.isExpanded = nodeData.data.isExpanded || false
+      if (nodeData.data.repetitionMetadata) {
+        baseData.repetitionMetadata = nodeData.data.repetitionMetadata
+      }
+    }
+
     return {
       id: nodeId,
       type: nodeData.type || 'block',
       position: nodeData.position || { x: 0, y: 0 },
-      data: {
-        blockType: nodeData.data?.blockType || (nodeData as any).type,
-        label: nodeData.data?.label || (nodeData as any).label || 'Node',
-        category: nodeData.data?.category || (nodeData as any).category || 'basic',
-        config: nodeData.data?.config || (nodeData as any).config || {},
-        inputShape: nodeData.data?.inputShape || (nodeData as any).inputShape,
-        outputShape: nodeData.data?.outputShape || (nodeData as any).outputShape
-      }
+      data: baseData
     }
   })
 
@@ -163,6 +208,9 @@ export function importFromJSON(
     }
   })
 
+  // Reconstruct group definitions if present
+  const groupDefinitions = jsonData.architecture.groupDefinitions || []
+
   // Create project metadata
   const project: Partial<Project> = {
     name: jsonData.projectName,
@@ -172,7 +220,7 @@ export function importFromJSON(
     edges
   }
 
-  return { nodes, edges, project }
+  return { nodes, edges, groupDefinitions, project }
 }
 
 /**

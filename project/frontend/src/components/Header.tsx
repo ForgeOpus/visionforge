@@ -35,7 +35,7 @@ import ApiKeyModal from './ApiKeyModal'
 export default function Header() {
   const navigate = useNavigate()
   const { projectId } = useParams<{ projectId: string }>()
-  const { currentProject, nodes, edges, createProject: createProjectInStore, saveProject, loadProject, validateArchitecture, setNodes, setEdges } = useModelBuilderStore()
+  const { currentProject, nodes, edges, groupDefinitions, createProject: createProjectInStore, saveProject, loadProject, validateArchitecture, setNodes, setEdges } = useModelBuilderStore()
 
   // API Key management for demo banner
   const { requiresApiKey, provider, environment } = useApiKeys()
@@ -135,7 +135,7 @@ export default function Header() {
       })
 
       // Save architecture immediately to the newly created project
-      await projectApi.saveArchitecture(backendProject.id, nodes, edges)
+      await projectApi.saveArchitecture(backendProject.id, nodes, edges, groupDefinitions)
 
       // Fetch the saved project with architecture
       const { nodes: savedNodes, edges: savedEdges } = await projectApi.loadArchitecture(backendProject.id)
@@ -195,7 +195,7 @@ export default function Header() {
       }
 
       // Save to backend for existing project
-      await projectApi.saveArchitecture(projectIdToSave, nodes, edges)
+      await projectApi.saveArchitecture(projectIdToSave, nodes, edges, groupDefinitions)
 
       // Save to local store
       saveProject()
@@ -268,7 +268,21 @@ export default function Header() {
           targetHandle: edge.targetHandle || ''
         })),
         format: currentProject.framework as 'pytorch' | 'tensorflow',
-        projectName: currentProject.name
+        projectName: currentProject.name,
+        groupDefinitions: Array.from(groupDefinitions.values()).map(def => ({
+          id: def.id,
+          name: def.name,
+          description: def.description,
+          category: def.category,
+          color: def.color,
+          internal_structure: {
+            nodes: def.internalNodes,
+            edges: def.internalEdges,
+            portMappings: def.portMappings
+          },
+          createdAt: def.createdAt,
+          updatedAt: def.updatedAt
+        }))
       })
 
       toast.dismiss()
@@ -285,9 +299,29 @@ export default function Header() {
         setIsExportOpen(true)
         toast.success(`${result.data.framework.toUpperCase()} code generated successfully!`)
       } else {
-        toast.error('Code generation failed', {
-          description: result.error || 'Unknown error occurred'
-        })
+        // Check if the error response contains validation errors (shape inference errors)
+        const errorData = result.error as any
+        if (errorData && typeof errorData === 'object' && errorData.validationErrors) {
+          // Add shape inference errors to validation errors in the store
+          const { setValidationErrors } = useModelBuilderStore.getState()
+          const shapeErrors = errorData.validationErrors.map((err: any) => ({
+            type: 'error' as const,
+            message: err.message,
+            nodeId: err.nodeId,
+            blockName: err.blockName,
+            layerName: err.layerName
+          }))
+          setValidationErrors(shapeErrors)
+          
+          toast.error('Shape inference errors detected', {
+            description: 'Please fix the shape mismatches shown in the validation panel'
+          })
+        } else {
+          const errorMessage = errorData?.error || errorData?.message || (typeof result.error === 'string' ? result.error : 'Unknown error occurred')
+          toast.error('Code generation failed', {
+            description: errorMessage
+          })
+        }
       }
     } catch (error) {
       toast.dismiss()
@@ -304,7 +338,7 @@ export default function Header() {
     }
 
     try {
-      const exportData = exportToJSON(nodes, edges, currentProject)
+      const exportData = exportToJSON(nodes, edges, currentProject, groupDefinitions)
       downloadJSON(exportData)
       toast.success('JSON exported successfully!')
     } catch (error) {
@@ -326,7 +360,7 @@ export default function Header() {
         // CASE 1: Importing into an existing project
         // Only import nodes/edges, preserve project metadata
         // Pass existing nodes to handle ID conflicts
-        const { nodes: importedNodes, edges: importedEdges } = importFromJSON(
+        const { nodes: importedNodes, edges: importedEdges, groupDefinitions: importedGroupDefs } = importFromJSON(
           jsonData,
           nodes,
           edges
@@ -336,19 +370,28 @@ export default function Header() {
         const mergedNodes = [...nodes, ...importedNodes]
         const mergedEdges = [...edges, ...importedEdges]
 
+        // Merge group definitions (imported definitions take precedence)
+        const { loadGroupDefinitions } = useModelBuilderStore.getState()
+        if (importedGroupDefs && importedGroupDefs.length > 0) {
+          loadGroupDefinitions(importedGroupDefs)
+        }
+
         // Update the canvas
         setNodes(mergedNodes)
         setEdges(mergedEdges)
 
+        // Get updated group definitions from store
+        const updatedGroupDefs = useModelBuilderStore.getState().groupDefinitions
+
         // Save to backend
-        await projectApi.saveArchitecture(projectId, mergedNodes, mergedEdges)
+        await projectApi.saveArchitecture(projectId, mergedNodes, mergedEdges, updatedGroupDefs)
 
         toast.success('Architecture imported into current project!', {
           description: `Added ${importedNodes.length} blocks to "${currentProject.name}"`
         })
       } else {
         // CASE 2: No active project - create a new one from import
-        const { nodes: importedNodes, edges: importedEdges, project } = importFromJSON(jsonData)
+        const { nodes: importedNodes, edges: importedEdges, groupDefinitions: importedGroupDefs, project } = importFromJSON(jsonData)
 
         if (project.name && project.description !== undefined) {
           const backendProject = await projectApi.createProject({
@@ -357,8 +400,14 @@ export default function Header() {
             framework: project.framework || 'pytorch'
           })
 
-          // Save the architecture
-          await projectApi.saveArchitecture(backendProject.id, importedNodes, importedEdges)
+          // Convert group definitions array to Map for saving
+          const groupDefsMap = new Map()
+          if (importedGroupDefs && importedGroupDefs.length > 0) {
+            importedGroupDefs.forEach(def => groupDefsMap.set(def.id, def))
+          }
+
+          // Save the architecture with group definitions
+          await projectApi.saveArchitecture(backendProject.id, importedNodes, importedEdges, groupDefsMap)
 
           // Navigate to new project
           navigate(`/project/${backendProject.id}`)
@@ -392,78 +441,30 @@ export default function Header() {
     fileInputRef.current?.click()
   }
 
-  const handleValidate = async () => {
+  const handleValidate = () => {
     if (nodes.length === 0) {
       toast.error('Cannot validate: No architecture to validate')
       return
     }
 
-    try {
-      toast.loading('Validating architecture...')
-
-      const result = await validateModel({
-        nodes: nodes.map(node => ({
-          id: node.id,
-          type: node.data.blockType,
-          data: node.data,
-          position: node.position
-        })),
-        edges: edges.map(edge => ({
-          id: edge.id,
-          source: edge.source,
-          target: edge.target,
-          sourceHandle: edge.sourceHandle || '',
-          targetHandle: edge.targetHandle || ''
-        }))
+    // Run local validation (populates ValidationErrorsPanel)
+    const errors = validateArchitecture()
+    
+    // Show a simple toast to confirm validation ran
+    const errorCount = errors.filter(e => e.type === 'error').length
+    const warningCount = errors.filter(e => e.type === 'warning').length
+    
+    if (errorCount === 0 && warningCount === 0) {
+      toast.success('Architecture is valid!', {
+        description: 'No issues detected'
       })
-
-      toast.dismiss()
-
-      if (result.success && result.data) {
-        if (result.data.isValid) {
-          toast.success('Architecture is valid!', {
-            description: result.data.warnings && result.data.warnings.length > 0
-              ? `${result.data.warnings.length} warning(s) found`
-              : 'No issues detected'
-          })
-
-          // Show warnings if any
-          if (result.data.warnings && result.data.warnings.length > 0) {
-            result.data.warnings.forEach((warning: any, index: number) => {
-              setTimeout(() => {
-                toast.warning(warning.message || `Warning ${index + 1}`, {
-                  description: warning.suggestion || warning.nodeId ? `Node: ${warning.nodeId}` : undefined
-                })
-              }, index * 100)
-            })
-          }
-        } else {
-          toast.error('Architecture validation failed', {
-            description: result.data.errors && result.data.errors.length > 0
-              ? `${result.data.errors.length} error(s) found`
-              : 'Invalid architecture'
-          })
-
-          // Show errors
-          if (result.data.errors && result.data.errors.length > 0) {
-            result.data.errors.forEach((error: any, index: number) => {
-              setTimeout(() => {
-                toast.error(error.message || `Error ${index + 1}`, {
-                  description: error.suggestion || error.nodeId ? `Node: ${error.nodeId}` : undefined
-                })
-              }, index * 100)
-            })
-          }
-        }
-      } else {
-        toast.error('Validation request failed', {
-          description: result.error || 'Could not connect to validation service'
-        })
-      }
-    } catch (error) {
-      toast.dismiss()
-      toast.error('Validation error', {
-        description: error instanceof Error ? error.message : 'Unknown error occurred'
+    } else if (errorCount > 0) {
+      toast.info('Validation complete', {
+        description: `Found ${errorCount} error(s) and ${warningCount} warning(s). Check the panel for details.`
+      })
+    } else {
+      toast.info('Validation complete', {
+        description: `Found ${warningCount} warning(s). Check the panel for details.`
       })
     }
   }

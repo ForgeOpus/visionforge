@@ -133,19 +133,29 @@ export async function deleteProject(projectId: string): Promise<void> {
 }
 
 /**
- * Save architecture (nodes and edges) for a project
+ * Save architecture (nodes, edges, and group definitions) for a project
  */
 export async function saveArchitecture(
   projectId: string,
   nodes: Node<BlockData>[],
-  edges: Edge[]
+  edges: Edge[],
+  groupDefinitions?: Map<string, any>
 ): Promise<{ success: boolean; architecture_id: string }> {
+  // Convert groupDefinitions Map to array for serialization
+  const groupDefinitionsArray = groupDefinitions 
+    ? Array.from(groupDefinitions.values())
+    : []
+
   const response = await fetch(`${API_BASE_URL}/projects/${projectId}/save-architecture`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ nodes, edges }),
+    body: JSON.stringify({ 
+      nodes, 
+      edges,
+      groupDefinitions: groupDefinitionsArray
+    }),
   })
 
   if (!response.ok) {
@@ -156,11 +166,12 @@ export async function saveArchitecture(
 }
 
 /**
- * Load architecture (nodes and edges) for a project
+ * Load architecture (nodes, edges, and group definitions) for a project
  */
 export async function loadArchitecture(projectId: string): Promise<{
   nodes: Node<BlockData>[]
   edges: Edge[]
+  groupDefinitions?: any[]
 }> {
   const response = await fetch(`${API_BASE_URL}/projects/${projectId}/load-architecture`, {
     method: 'GET',

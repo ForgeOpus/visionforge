@@ -40,6 +40,33 @@ class ModelArchitecture(models.Model):
         return f"Architecture for {self.project.name}"
 
 
+class GroupBlockDefinition(models.Model):
+    """Project-specific block template for group blocks"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='group_definitions'
+    )
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default='')
+    category = models.CharField(max_length=50, default='utility')
+    color = models.CharField(max_length=50, default='#9333ea')
+
+    # Serialized structure: {nodes, edges, portMappings}
+    internal_structure = models.JSONField(default=dict, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        unique_together = ['project', 'name']
+
+    def __str__(self):
+        return f"{self.name} ({self.project.name})"
+
+
 class Block(models.Model):
     """Represents a single block/layer in the architecture"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -56,6 +83,19 @@ class Block(models.Model):
     config = models.JSONField(default=dict, blank=True)
     input_shape = models.JSONField(null=True, blank=True)
     output_shape = models.JSONField(null=True, blank=True)
+
+    # Group block fields
+    group_definition = models.ForeignKey(
+        GroupBlockDefinition,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='instances'
+    )
+    is_expanded = models.BooleanField(default=False)
+    repetition_metadata = models.JSONField(null=True, blank=True)
+    instance_config_overrides = models.JSONField(null=True, blank=True, default=dict)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

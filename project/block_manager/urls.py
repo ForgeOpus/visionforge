@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from block_manager.views.project_views import ProjectViewSet
 from block_manager.views.architecture_views import (
-    save_architecture, 
+    save_architecture,
     load_architecture,
     get_node_definitions,
     get_node_definition,
@@ -12,6 +12,7 @@ from block_manager.views.architecture_views import (
 from block_manager.views.validation_views import validate_model
 from block_manager.views.export_views import export_model
 from block_manager.views.chat_views import chat_message, get_suggestions, get_environment_info
+from block_manager.views.group_views import group_definition_list, group_definition_detail
 
 # Create router for viewsets
 router = DefaultRouter()
@@ -24,7 +25,11 @@ urlpatterns = [
     # Architecture endpoints
     path('projects/<uuid:project_id>/save-architecture', save_architecture, name='save-architecture'),
     path('projects/<uuid:project_id>/load-architecture', load_architecture, name='load-architecture'),
-    
+
+    # Group definition endpoints
+    path('projects/<uuid:project_id>/groups', group_definition_list, name='group-definition-list'),
+    path('projects/<uuid:project_id>/groups/<uuid:definition_id>', group_definition_detail, name='group-definition-detail'),
+
     # Node definition endpoints
     path('node-definitions', get_node_definitions, name='node-definitions'),
     path('node-definitions/<str:node_type>', get_node_definition, name='node-definition'),
