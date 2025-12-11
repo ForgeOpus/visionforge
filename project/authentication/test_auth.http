@@ -1,0 +1,229 @@
+###
+# VisionForge Authentication API Testing
+#
+# This file contains HTTP requests for testing the authentication endpoints.
+# You can use this with VS Code REST Client extension or similar tools.
+#
+# Before testing:
+# 1. Start the Django server: python manage.py runserver
+# 2. Replace {{firebase_token}} with actual Firebase ID token from frontend
+###
+
+@baseUrl = http://localhost:8000
+@firebase_token = YOUR_FIREBASE_ID_TOKEN_HERE
+
+### ===================================================================
+### 1. Verify Firebase Token (Creates or Updates User)
+### ===================================================================
+# POST /api/auth/verify-token
+# Body: { "token": "firebase_id_token" }
+###
+POST {{baseUrl}}/api/auth/verify-token
+Content-Type: application/json
+
+{
+  "token": "{{firebase_token}}"
+}
+
+###
+# Expected Response (200 OK):
+# {
+#   "success": true,
+#   "user": {
+#     "firebase_uid": "...",
+#     "email": "user@example.com",
+#     "display_name": "User Name",
+#     "avatar_url": "https://...",
+#     "auth_provider": "google",
+#     "tier": "free",
+#     "project_count": 0,
+#     "created_at": "2024-01-01T00:00:00Z",
+#     "last_login_at": "2024-01-01T00:00:00Z"
+#   },
+#   "is_new_user": true
+# }
+
+### ===================================================================
+### 2. Get Current User Information
+### ===================================================================
+# GET /api/auth/me
+# Headers: Authorization: Bearer <firebase_token>
+###
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{firebase_token}}
+
+###
+# Expected Response (200 OK):
+# {
+#   "success": true,
+#   "user": {
+#     "firebase_uid": "...",
+#     "email": "user@example.com",
+#     "display_name": "User Name",
+#     "avatar_url": "https://...",
+#     "auth_provider": "google",
+#     "tier": "free",
+#     "project_count": 0,
+#     "total_sessions": 5,
+#     "total_time_spent_minutes": 120,
+#     "created_at": "2024-01-01T00:00:00Z",
+#     "last_login_at": "2024-01-01T00:00:00Z",
+#     "first_model_created_at": null,
+#     "first_export_at": null,
+#     "days_to_first_export": null
+#   }
+# }
+
+### ===================================================================
+### 3. Update Session Information
+### ===================================================================
+# POST /api/auth/update-session
+# Body: { "minutes": 5 }
+# Headers: Authorization: Bearer <firebase_token>
+###
+POST {{baseUrl}}/api/auth/update-session
+Authorization: Bearer {{firebase_token}}
+Content-Type: application/json
+
+{
+  "minutes": 5
+}
+
+###
+# Expected Response (200 OK):
+# {
+#   "success": true,
+#   "total_sessions": 6,
+#   "total_time_spent_minutes": 125,
+#   "last_login_at": "2024-01-01T00:00:00Z"
+# }
+
+### ===================================================================
+### 4. Mark User Milestone - First Model Created
+### ===================================================================
+# POST /api/auth/milestone
+# Body: { "type": "first_model" }
+# Headers: Authorization: Bearer <firebase_token>
+###
+POST {{baseUrl}}/api/auth/milestone
+Authorization: Bearer {{firebase_token}}
+Content-Type: application/json
+
+{
+  "type": "first_model"
+}
+
+###
+# Expected Response (200 OK):
+# {
+#   "success": true,
+#   "message": "Milestone first_model marked"
+# }
+
+### ===================================================================
+### 5. Mark User Milestone - First Export
+### ===================================================================
+# POST /api/auth/milestone
+# Body: { "type": "first_export" }
+# Headers: Authorization: Bearer <firebase_token>
+###
+POST {{baseUrl}}/api/auth/milestone
+Authorization: Bearer {{firebase_token}}
+Content-Type: application/json
+
+{
+  "type": "first_export"
+}
+
+###
+# Expected Response (200 OK):
+# {
+#   "success": true,
+#   "message": "Milestone first_export marked"
+# }
+
+### ===================================================================
+### 6. Logout User
+### ===================================================================
+# POST /api/auth/logout
+# Headers: Authorization: Bearer <firebase_token>
+###
+POST {{baseUrl}}/api/auth/logout
+Authorization: Bearer {{firebase_token}}
+
+###
+# Expected Response (200 OK):
+# {
+#   "success": true,
+#   "message": "Logged out successfully"
+# }
+
+### ===================================================================
+### ERROR CASES
+### ===================================================================
+
+### Test 1: Missing Token (Verify Token)
+POST {{baseUrl}}/api/auth/verify-token
+Content-Type: application/json
+
+{
+  "token": ""
+}
+###
+# Expected Response (400 Bad Request):
+# {
+#   "error": "Token required",
+#   "message": "Firebase ID token is required"
+# }
+
+### Test 2: Invalid Token (Verify Token)
+POST {{baseUrl}}/api/auth/verify-token
+Content-Type: application/json
+
+{
+  "token": "invalid_token_here"
+}
+###
+# Expected Response (401 Unauthorized):
+# {
+#   "error": "Invalid token",
+#   "message": "Failed to verify Firebase token"
+# }
+
+### Test 3: No Authentication (Get Current User)
+GET {{baseUrl}}/api/auth/me
+###
+# Expected Response (401 Unauthorized):
+# {
+#   "error": "Authentication required",
+#   "message": "You must be logged in to access this endpoint"
+# }
+
+### ===================================================================
+### CURL COMMAND EXAMPLES
+### ===================================================================
+
+### Verify Token (bash/terminal)
+# curl -X POST http://localhost:8000/api/auth/verify-token \
+#   -H "Content-Type: application/json" \
+#   -d '{"token": "YOUR_FIREBASE_TOKEN"}'
+
+### Get Current User (bash/terminal)
+# curl -X GET http://localhost:8000/api/auth/me \
+#   -H "Authorization: Bearer YOUR_FIREBASE_TOKEN"
+
+### Update Session (bash/terminal)
+# curl -X POST http://localhost:8000/api/auth/update-session \
+#   -H "Authorization: Bearer YOUR_FIREBASE_TOKEN" \
+#   -H "Content-Type: application/json" \
+#   -d '{"minutes": 5}'
+
+### Mark Milestone (bash/terminal)
+# curl -X POST http://localhost:8000/api/auth/milestone \
+#   -H "Authorization: Bearer YOUR_FIREBASE_TOKEN" \
+#   -H "Content-Type: application/json" \
+#   -d '{"type": "first_model"}'
+
+### Logout (bash/terminal)
+# curl -X POST http://localhost:8000/api/auth/logout \
+#   -H "Authorization: Bearer YOUR_FIREBASE_TOKEN"
