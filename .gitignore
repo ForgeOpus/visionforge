@@ -56,3 +56,16 @@ __pycache__
 *.sqlite3
 *.db
 .claude/
+
+# Oracle Wallet (contains sensitive database credentials)
+**/Wallet*/
+**/wallet*/
+*.wallet
+*.sso
+*.p12
+*.jks
+*.pem
+ewallet.p12
+cwallet.sso
+tnsnames.ora
+sqlnet.ora

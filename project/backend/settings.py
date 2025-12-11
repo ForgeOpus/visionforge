@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'block_manager',
+    'authentication',
 ]
 
 MIDDLEWARE = [
@@ -96,6 +97,7 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
     'x-gemini-api-key',
     'x-anthropic-api-key',
+    'x-firebase-token',
 ]
 
 # Environment mode configuration
@@ -121,8 +123,34 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+    },
+    'oracle': {
+        'ENGINE': 'django.db.backends.oracle',
+        'NAME': os.getenv('ORACLE_DSN', ''),
+        'USER': os.getenv('ORACLE_USER', ''),
+        'PASSWORD': os.getenv('ORACLE_PASSWORD', ''),
+        'OPTIONS': {
+            'threaded': True,
+        },
     }
 }
+
+# Database Router
+DATABASE_ROUTERS = ['backend.db_router.AuthenticationRouter']
+
+# Firebase Configuration
+FIREBASE_CONFIG = {
+    'apiKey': os.getenv('FIREBASE_API_KEY', ''),
+    'authDomain': os.getenv('FIREBASE_AUTH_DOMAIN', ''),
+    'projectId': os.getenv('FIREBASE_PROJECT_ID', ''),
+    'storageBucket': os.getenv('FIREBASE_STORAGE_BUCKET', ''),
+    'messagingSenderId': os.getenv('FIREBASE_MESSAGING_SENDER_ID', ''),
+    'appId': os.getenv('FIREBASE_APP_ID', ''),
+    'measurementId': os.getenv('FIREBASE_MEASUREMENT_ID', ''),
+}
+
+# Oracle Wallet Location (for cloud database connection)
+ORACLE_WALLET_LOCATION = os.getenv('ORACLE_WALLET_LOCATION', '')
 
 
 # Password validation
