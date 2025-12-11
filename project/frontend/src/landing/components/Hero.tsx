@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { TextGenerateEffect } from "./aceternity/TextGenerateEffect";
 import { FlipWords } from "./aceternity/FlipWords";
@@ -7,10 +8,12 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, Play } from "@phosphor-icons/react";
 import { useNavigate } from "react-router-dom";
 import DemoVideo from "./DemoVideo";
+import LoginModal from "@/components/LoginModal";
 
 export default function Hero() {
   const navigate = useNavigate();
   const words = ["PyTorch", "TensorFlow"];
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   return (
     <div className="min-h-screen w-full bg-slate-950 relative flex flex-col items-center justify-center overflow-hidden">
@@ -88,7 +91,7 @@ export default function Hero() {
             <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-300"></div>
             <Button
               size="lg"
-              onClick={() => navigate("/project")}
+              onClick={() => setShowLoginModal(true)}
               className="relative bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-blue-600 text-white border-0 px-10 py-7 text-lg font-bold shadow-2xl transition-all duration-300 transform hover:scale-105"
             >
               Start Building Free
@@ -168,6 +171,13 @@ export default function Hero() {
           ></motion.div>
         </motion.div>
       </motion.div>
+
+      {/* Login Modal */}
+      <LoginModal
+        open={showLoginModal}
+        onOpenChange={setShowLoginModal}
+        onGuestContinue={() => navigate("/project")}
+      />
     </div>
   );
 }
