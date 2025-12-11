@@ -19,7 +19,7 @@ class AuthenticationRouter:
         Route read operations for authentication models to Oracle.
         """
         if model._meta.app_label == self.auth_app_label:
-            return 'oracle'
+            return 'default'  # Temporarily using SQLite
         return 'default'
 
     def db_for_write(self, model, **hints):
@@ -27,7 +27,7 @@ class AuthenticationRouter:
         Route write operations for authentication models to Oracle.
         """
         if model._meta.app_label == self.auth_app_label:
-            return 'oracle'
+            return 'default'  # Temporarily using SQLite
         return 'default'
 
     def allow_relation(self, obj1, obj2, **hints):

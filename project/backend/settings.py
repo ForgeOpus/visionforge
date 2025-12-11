@@ -130,7 +130,7 @@ DATABASES = {
         'USER': os.getenv('ORACLE_USER', ''),
         'PASSWORD': os.getenv('ORACLE_PASSWORD', ''),
         'OPTIONS': {
-            'threaded': True,
+            'config_dir': os.getenv('ORACLE_WALLET_LOCATION', ''),
         },
     }
 }
