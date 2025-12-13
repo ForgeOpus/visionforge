@@ -2,6 +2,7 @@
  * Login modal component for Firebase authentication
  */
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,7 @@ export default function LoginModal({
   onGuestContinue
 }: LoginModalProps) {
   const { signInWithGoogle, signInWithGithub, continueAsGuest } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,6 +39,8 @@ export default function LoginModal({
       setError(null);
       await signInWithGoogle();
       onOpenChange(false);
+      // Redirect to canvas after successful login
+      navigate('/project');
     } catch (err) {
       console.error('Google sign in error:', err);
       setError('Failed to sign in with Google. Please try again.');
@@ -51,6 +55,8 @@ export default function LoginModal({
       setError(null);
       await signInWithGithub();
       onOpenChange(false);
+      // Redirect to canvas after successful login
+      navigate('/project');
     } catch (err) {
       console.error('GitHub sign in error:', err);
       setError('Failed to sign in with GitHub. Please try again.');

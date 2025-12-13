@@ -23,19 +23,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Download, FloppyDisk, CaretDown, Code, CheckCircle, GitBranch, Upload, FileCode, FilePy, GearSix, Trash, Info, PencilSimple, Warning, Key } from '@phosphor-icons/react'
+import { Plus, Download, FloppyDisk, CaretDown, Code, CheckCircle, GitBranch, Upload, FileCode, FilePy, GearSix, Trash, Info, PencilSimple, Warning, Key, User, SignOut } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { validateModel, exportModel as apiExportModel } from '@/lib/api'
 import { exportToJSON, importFromJSON, downloadJSON, readJSONFile } from '@/lib/exportImport'
 import * as projectApi from '@/lib/projectApi'
 import { useApiKeys } from '@/contexts/ApiKeyContext'
+import { useAuth } from '@/contexts/AuthContext'
 import ApiKeyModal from './ApiKeyModal'
 
 export default function Header() {
   const navigate = useNavigate()
   const { projectId } = useParams<{ projectId: string }>()
   const { currentProject, nodes, edges, groupDefinitions, createProject: createProjectInStore, saveProject, loadProject, validateArchitecture, setNodes, setEdges } = useModelBuilderStore()
+
+  // Authentication
+  const { user, signOut: authSignOut } = useAuth()
 
   // API Key management for demo banner
   const { requiresApiKey, provider, environment } = useApiKeys()
@@ -548,6 +552,18 @@ export default function Header() {
     }
   }
 
+  const handleLogout = async () => {
+    try {
+      await authSignOut()
+      toast.success('Logged out successfully!')
+      navigate('/')
+    } catch (error) {
+      toast.error('Failed to logout', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
+  }
+
   return (
     <>
       {/* Demo Mode Banner */}
@@ -662,7 +678,44 @@ export default function Header() {
 
       <div className="flex items-center gap-2">
         <ThemeToggle />
-        
+
+        {/* User Menu */}
+        {user && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="gap-2">
+                {user.avatar_url ? (
+                  <img src={user.avatar_url} alt={user.display_name || user.email} className="w-6 h-6 rounded-full" />
+                ) : (
+                  <User size={20} />
+                )}
+                <span className="hidden md:inline">{user.display_name || user.email}</span>
+                <CaretDown size={14} className="text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium">{user.display_name || 'User'}</p>
+                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-xs text-muted-foreground" disabled>
+                Tier: {user.tier.toUpperCase()} • Projects: {user.project_count}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="gap-2 cursor-pointer text-destructive focus:text-destructive"
+                onClick={handleLogout}
+              >
+                <SignOut size={16} />
+                <span>Logout</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
         {/* Hidden file input for JSON import */}
         <input
           ref={fileInputRef}

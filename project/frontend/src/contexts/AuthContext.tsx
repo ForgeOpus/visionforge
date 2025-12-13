@@ -122,6 +122,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, [isGuest]);
 
+  // Session management - update session every 5 minutes when user is active
+  useEffect(() => {
+    if (!firebaseUser || isGuest) return;
+
+    const updateSession = async () => {
+      try {
+        const token = await firebaseUser.getIdToken();
+        await fetch(`${API_BASE_URL}/api/auth/update-session`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ minutes: 5 }), // Track 5 minutes of activity
+        });
+      } catch (error) {
+        console.error('Error updating session:', error);
+      }
+    };
+
+    // Update session immediately on mount
+    updateSession();
+
+    // Then update every 5 minutes
+    const intervalId = setInterval(updateSession, 5 * 60 * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [firebaseUser, isGuest]);
+
   // Sign in with Google
   const signInWithGoogle = async () => {
     try {
