@@ -5,6 +5,10 @@ import os
 import firebase_admin
 from firebase_admin import credentials, auth
 from django.conf import settings
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 
 # Initialize Firebase Admin SDK

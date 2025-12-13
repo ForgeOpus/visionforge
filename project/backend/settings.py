@@ -131,6 +131,8 @@ DATABASES = {
         'PASSWORD': os.getenv('ORACLE_PASSWORD', ''),
         'OPTIONS': {
             'config_dir': os.getenv('ORACLE_WALLET_LOCATION', ''),
+            'wallet_location': os.getenv('ORACLE_WALLET_LOCATION', ''),
+            'wallet_password': os.getenv('ORACLE_WALLET_PASSWORD', ''),
         },
     }
 }

@@ -65,21 +65,29 @@ def verify_token(request):
             user_info.get('auth_provider', 'unknown')
         )
 
-        # Create or update user
-        user, created = User.objects.update_or_create(
-            firebase_uid=user_info['firebase_uid'],
-            defaults={
-                'email': user_info.get('email', ''),
-                'display_name': user_info.get('display_name', ''),
-                'avatar_url': user_info.get('avatar_url', ''),
-                'auth_provider': auth_provider,
-                'last_login_at': timezone.now(),
-            }
-        )
-
-        # Increment session count on login
-        if not created:
+        # Create or update user (using try/except to avoid Oracle ORA-12839 error)
+        try:
+            user = User.objects.get(firebase_uid=user_info['firebase_uid'])
+            # Update existing user
+            user.email = user_info.get('email', '')
+            user.display_name = user_info.get('display_name', '')
+            user.avatar_url = user_info.get('avatar_url', '')
+            user.auth_provider = auth_provider
+            user.last_login_at = timezone.now()
+            user.save()
             user.increment_session()
+            created = False
+        except User.DoesNotExist:
+            # Create new user
+            user = User.objects.create(
+                firebase_uid=user_info['firebase_uid'],
+                email=user_info.get('email', ''),
+                display_name=user_info.get('display_name', ''),
+                avatar_url=user_info.get('avatar_url', ''),
+                auth_provider=auth_provider,
+                last_login_at=timezone.now(),
+            )
+            created = True
 
         return JsonResponse({
             'success': True,
@@ -103,6 +111,8 @@ def verify_token(request):
             'message': 'Request body must be valid JSON'
         }, status=400)
     except Exception as e:
+        import traceback
+        traceback.print_exc()  # Print full traceback to console
         return JsonResponse({
             'error': 'Server error',
             'message': str(e)
