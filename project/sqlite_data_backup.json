@@ -1,0 +1,1145 @@
+[
+{
+  "model": "block_manager.project",
+  "pk": "26e9ccc5-faf0-4159-bf35-89fac1b45106",
+  "fields": {
+    "user": null,
+    "name": "dsadknsd",
+    "description": "",
+    "framework": "pytorch",
+    "created_at": "2025-12-13T22:40:07.094Z",
+    "updated_at": "2025-12-13T22:40:07.094Z"
+  }
+},
+{
+  "model": "block_manager.project",
+  "pk": "4287a64c-53ff-4b5e-b970-dfc41c93b596",
+  "fields": {
+    "user": null,
+    "name": "Untitled Project - Nov 12, 7:06 PM",
+    "description": "",
+    "framework": "pytorch",
+    "created_at": "2025-11-13T02:06:30.726Z",
+    "updated_at": "2025-12-13T22:40:00.482Z"
+  }
+},
+{
+  "model": "block_manager.project",
+  "pk": "e4191fd1-aa3e-4305-b4bf-0411f43c809d",
+  "fields": {
+    "user": null,
+    "name": "Untitled Project - Dec 13, 3:33 PM",
+    "description": "",
+    "framework": "pytorch",
+    "created_at": "2025-12-13T22:33:15.644Z",
+    "updated_at": "2025-12-13T22:39:42.423Z"
+  }
+},
+{
+  "model": "block_manager.modelarchitecture",
+  "pk": "71086021-dd76-465f-a9f4-470a7eefacd3",
+  "fields": {
+    "project": "4287a64c-53ff-4b5e-b970-dfc41c93b596",
+    "canvas_state": {
+      "nodes": [
+        {
+          "id": "input-1762999532884",
+          "type": "custom",
+          "position": {
+            "x": 50,
+            "y": 50
+          },
+          "data": {
+            "blockType": "input",
+            "label": "Input",
+            "category": "input",
+            "config": {
+              "shape": "[1, 3, 224, 224]",
+              "label": "Input"
+            },
+            "outputShape": {
+              "dims": [
+                1,
+                3,
+                224,
+                224
+              ]
+            }
+          },
+          "measured": {
+            "width": 220,
+            "height": 117
+          }
+        },
+        {
+          "id": "conv2d-1762999532995",
+          "type": "custom",
+          "position": {
+            "x": 200,
+            "y": 50
+          },
+          "data": {
+            "blockType": "conv2d",
+            "label": "Conv2D",
+            "category": "basic",
+            "config": {
+              "out_channels": 32,
+              "kernel_size": 3,
+              "stride": 1,
+              "padding": 1,
+              "dilation": 1
+            },
+            "inputShape": {
+              "dims": [
+                1,
+                3,
+                224,
+                224
+              ]
+            },
+            "outputShape": {
+              "dims": [
+                1,
+                32,
+                224,
+                224
+              ],
+              "description": "Convolved feature map"
+            }
+          },
+          "measured": {
+            "width": 220,
+            "height": 135
+          }
+        },
+        {
+          "id": "conv2d-1762999533098",
+          "type": "custom",
+          "position": {
+            "x": 200,
+            "y": 150
+          },
+          "data": {
+            "blockType": "conv2d",
+            "label": "Conv2D",
+            "category": "basic",
+            "config": {
+              "out_channels": 64,
+              "kernel_size": 3,
+              "stride": 1,
+              "padding": 1,
+              "dilation": 1
+            },
+            "inputShape": {
+              "dims": [
+                1,
+                32,
+                224,
+                224
+              ],
+              "description": "Convolved feature map"
+            },
+            "outputShape": {
+              "dims": [
+                1,
+                64,
+                224,
+                224
+              ],
+              "description": "Convolved feature map"
+            }
+          },
+          "measured": {
+            "width": 220,
+            "height": 135
+          }
+        },
+        {
+          "id": "relu-1762999533149",
+          "type": "custom",
+          "position": {
+            "x": 350,
+            "y": 150
+          },
+          "data": {
+            "blockType": "relu",
+            "label": "ReLU",
+            "category": "activation",
+            "config": {
+              "inplace": false
+            },
+            "inputShape": {
+              "dims": [
+                1,
+                64,
+                224,
+                224
+              ],
+              "description": "Convolved feature map"
+            },
+            "outputShape": {
+              "dims": [
+                1,
+                64,
+                224,
+                224
+              ],
+              "description": "Convolved feature map"
+            }
+          },
+          "measured": {
+            "width": 220,
+            "height": 135
+          }
+        },
+        {
+          "id": "conv2d-1762999533200",
+          "type": "custom",
+          "position": {
+            "x": 200,
+            "y": 250
+          },
+          "data": {
+            "blockType": "conv2d",
+            "label": "Conv2D",
+            "category": "basic",
+            "config": {
+              "out_channels": 128,
+              "kernel_size": 3,
+              "stride": 1,
+              "padding": 1,
+              "dilation": 1
+            },
+            "inputShape": {
+              "dims": [
+                1,
+                64,
+                224,
+                224
+              ],
+              "description": "Convolved feature map"
+            },
+            "outputShape": {
+              "dims": [
+                1,
+                128,
+                224,
+                224
+              ],
+              "description": "Convolved feature map"
+            }
+          },
+          "measured": {
+            "width": 220,
+            "height": 135
+          }
+        },
+        {
+          "id": "relu-1762999533251",
+          "type": "custom",
+          "position": {
+            "x": 350,
+            "y": 250
+          },
+          "data": {
+            "blockType": "relu",
+            "label": "ReLU",
+            "category": "activation",
+            "config": {
+              "inplace": false
+            },
+            "inputShape": {
+              "dims": [
+                1,
+                128,
+                224,
+                224
+              ],
+              "description": "Convolved feature map"
+            },
+            "outputShape": {
+              "dims": [
+                1,
+                128,
+                224,
+                224
+              ],
+              "description": "Convolved feature map"
+            }
+          },
+          "measured": {
+            "width": 220,
+            "height": 135
+          }
+        },
+        {
+          "id": "conv2d-1762999533301",
+          "type": "custom",
+          "position": {
+            "x": 200,
+            "y": 350
+          },
+          "data": {
+            "blockType": "conv2d",
+            "label": "Conv2D",
+            "category": "basic",
+            "config": {
+              "out_channels": 256,
+              "kernel_size": 3,
+              "stride": 1,
+              "padding": 1,
+              "dilation": 1
+            },
+            "inputShape": {
+              "dims": [
+                1,
+                128,
+                224,
+                224
+              ],
+              "description": "Convolved feature map"
+            },
+            "outputShape": {
+              "dims": [
+                1,
+                256,
+                224,
+                224
+              ],
+              "description": "Convolved feature map"
+            }
+          },
+          "measured": {
+            "width": 220,
+            "height": 135
+          }
+        },
+        {
+          "id": "relu-1762999533353",
+          "type": "custom",
+          "position": {
+            "x": 350,
+            "y": 350
+          },
+          "data": {
+            "blockType": "relu",
+            "label": "ReLU",
+            "category": "activation",
+            "config": {
+              "inplace": false
+            },
+            "inputShape": {
+              "dims": [
+                1,
+                256,
+                224,
+                224
+              ],
+              "description": "Convolved feature map"
+            },
+            "outputShape": {
+              "dims": [
+                1,
+                256,
+                224,
+                224
+              ],
+              "description": "Convolved feature map"
+            }
+          },
+          "measured": {
+            "width": 220,
+            "height": 135
+          }
+        },
+        {
+          "id": "flatten-1762999533456",
+          "type": "custom",
+          "position": {
+            "x": 650,
+            "y": 200
+          },
+          "data": {
+            "blockType": "flatten",
+            "label": "Flatten",
+            "category": "basic",
+            "config": {
+              "start_dim": 1
+            },
+            "inputShape": {
+              "dims": [
+                1,
+                256,
+                224,
+                224
+              ],
+              "description": "Convolved feature map"
+            },
+            "outputShape": {
+              "dims": [
+                1,
+                12845056
+              ],
+              "description": "Flattened tensor"
+            }
+          },
+          "measured": {
+            "width": 220,
+            "height": 135
+          }
+        },
+        {
+          "id": "linear-1762999533506",
+          "type": "custom",
+          "position": {
+            "x": 800,
+            "y": 200
+          },
+          "data": {
+            "blockType": "linear",
+            "label": "Linear",
+            "category": "basic",
+            "config": {
+              "out_features": 10,
+              "bias": true
+            },
+            "inputShape": {
+              "dims": [
+                1,
+                12845056
+              ],
+              "description": "Flattened tensor"
+            },
+            "outputShape": {
+              "dims": [
+                1,
+                10
+              ],
+              "description": "Fully connected output"
+            }
+          },
+          "measured": {
+            "width": 220,
+            "height": 135
+          }
+        },
+        {
+          "id": "softmax-1762999533557",
+          "type": "custom",
+          "position": {
+            "x": 950,
+            "y": 200
+          },
+          "data": {
+            "blockType": "softmax",
+            "label": "Softmax",
+            "category": "activation",
+            "config": {
+              "dim": -1
+            },
+            "inputShape": {
+              "dims": [
+                1,
+                10
+              ],
+              "description": "Fully connected output"
+            },
+            "outputShape": {
+              "dims": [
+                1,
+                10
+              ],
+              "description": "Fully connected output"
+            }
+          },
+          "measured": {
+            "width": 220,
+            "height": 135
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge-1762999567516",
+          "source": "input-1762999532884",
+          "target": "conv2d-1762999532995",
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "edge-1762999567726",
+          "source": "conv2d-1762999533098",
+          "target": "relu-1762999533149",
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "edge-1762999567777",
+          "source": "relu-1762999533149",
+          "target": "conv2d-1762999533200",
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "edge-1762999567828",
+          "source": "conv2d-1762999533200",
+          "target": "relu-1762999533251",
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "edge-1762999567879",
+          "source": "relu-1762999533251",
+          "target": "conv2d-1762999533301",
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "edge-1762999567930",
+          "source": "conv2d-1762999533301",
+          "target": "relu-1762999533353",
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "edge-1762999567982",
+          "source": "relu-1762999533353",
+          "target": "flatten-1762999533456",
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "edge-1762999568034",
+          "source": "flatten-1762999533456",
+          "target": "linear-1762999533506",
+          "sourceHandle": null,
+          "targetHandle": null
+        },
+        {
+          "id": "edge-1762999568086",
+          "source": "linear-1762999533506",
+          "target": "softmax-1762999533557",
+          "sourceHandle": null,
+          "targetHandle": null
+        }
+      ],
+      "groupDefinitions": []
+    },
+    "is_valid": false,
+    "validation_errors": [],
+    "created_at": "2025-11-13T02:06:30.729Z",
+    "updated_at": "2025-12-13T22:40:00.481Z"
+  }
+},
+{
+  "model": "block_manager.modelarchitecture",
+  "pk": "9ea214b1-ce28-4a80-a35b-a3c3a90fac09",
+  "fields": {
+    "project": "26e9ccc5-faf0-4159-bf35-89fac1b45106",
+    "canvas_state": {},
+    "is_valid": false,
+    "validation_errors": [],
+    "created_at": "2025-12-13T22:40:07.096Z",
+    "updated_at": "2025-12-13T22:40:07.096Z"
+  }
+},
+{
+  "model": "block_manager.modelarchitecture",
+  "pk": "b0e153e6-9620-4828-be4a-3140100536a8",
+  "fields": {
+    "project": "e4191fd1-aa3e-4305-b4bf-0411f43c809d",
+    "canvas_state": {
+      "nodes": [
+        {
+          "id": "dataloader-1765665581338",
+          "type": "custom",
+          "position": {
+            "x": 216,
+            "y": 227
+          },
+          "data": {
+            "blockType": "dataloader",
+            "label": "Data Loader",
+            "config": {
+              "shape": "[1, 3, 224, 224]",
+              "num_input_outlets": 1,
+              "input_shapes": "",
+              "has_ground_truth": false,
+              "ground_truth_shape": "[1, 10]",
+              "randomize": false
+            },
+            "category": "input"
+          },
+          "measured": {
+            "width": 220,
+            "height": 98
+          }
+        }
+      ],
+      "edges": [],
+      "groupDefinitions": []
+    },
+    "is_valid": false,
+    "validation_errors": [],
+    "created_at": "2025-12-13T22:33:15.647Z",
+    "updated_at": "2025-12-13T22:39:42.422Z"
+  }
+},
+{
+  "model": "block_manager.block",
+  "pk": "172308ac-ab45-412c-8be4-0e8dc863e21b",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "node_id": "input-1762999532884",
+    "block_type": "input",
+    "position_x": 50.0,
+    "position_y": 50.0,
+    "config": {
+      "shape": "[1, 3, 224, 224]",
+      "label": "Input"
+    },
+    "input_shape": null,
+    "output_shape": {
+      "dims": [
+        1,
+        3,
+        224,
+        224
+      ]
+    },
+    "group_definition": null,
+    "is_expanded": false,
+    "repetition_metadata": null,
+    "instance_config_overrides": {},
+    "created_at": "2025-12-13T22:40:00.474Z"
+  }
+},
+{
+  "model": "block_manager.block",
+  "pk": "230509f9-771d-42a8-9ae0-79c8feba3499",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "node_id": "relu-1762999533251",
+    "block_type": "relu",
+    "position_x": 350.0,
+    "position_y": 250.0,
+    "config": {
+      "inplace": false
+    },
+    "input_shape": {
+      "dims": [
+        1,
+        128,
+        224,
+        224
+      ],
+      "description": "Convolved feature map"
+    },
+    "output_shape": {
+      "dims": [
+        1,
+        128,
+        224,
+        224
+      ],
+      "description": "Convolved feature map"
+    },
+    "group_definition": null,
+    "is_expanded": false,
+    "repetition_metadata": null,
+    "instance_config_overrides": {},
+    "created_at": "2025-12-13T22:40:00.476Z"
+  }
+},
+{
+  "model": "block_manager.block",
+  "pk": "2e2b7b19-0307-443e-a8aa-9dd1b2d6a697",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "node_id": "conv2d-1762999532995",
+    "block_type": "conv2d",
+    "position_x": 200.0,
+    "position_y": 50.0,
+    "config": {
+      "out_channels": 32,
+      "kernel_size": 3,
+      "stride": 1,
+      "padding": 1,
+      "dilation": 1
+    },
+    "input_shape": {
+      "dims": [
+        1,
+        3,
+        224,
+        224
+      ]
+    },
+    "output_shape": {
+      "dims": [
+        1,
+        32,
+        224,
+        224
+      ],
+      "description": "Convolved feature map"
+    },
+    "group_definition": null,
+    "is_expanded": false,
+    "repetition_metadata": null,
+    "instance_config_overrides": {},
+    "created_at": "2025-12-13T22:40:00.475Z"
+  }
+},
+{
+  "model": "block_manager.block",
+  "pk": "343f6c9b-8505-4492-8dcf-9be59768ca3a",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "node_id": "relu-1762999533353",
+    "block_type": "relu",
+    "position_x": 350.0,
+    "position_y": 350.0,
+    "config": {
+      "inplace": false
+    },
+    "input_shape": {
+      "dims": [
+        1,
+        256,
+        224,
+        224
+      ],
+      "description": "Convolved feature map"
+    },
+    "output_shape": {
+      "dims": [
+        1,
+        256,
+        224,
+        224
+      ],
+      "description": "Convolved feature map"
+    },
+    "group_definition": null,
+    "is_expanded": false,
+    "repetition_metadata": null,
+    "instance_config_overrides": {},
+    "created_at": "2025-12-13T22:40:00.476Z"
+  }
+},
+{
+  "model": "block_manager.block",
+  "pk": "41001d1a-4348-42d0-921f-d73c0b67c586",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "node_id": "conv2d-1762999533098",
+    "block_type": "conv2d",
+    "position_x": 200.0,
+    "position_y": 150.0,
+    "config": {
+      "out_channels": 64,
+      "kernel_size": 3,
+      "stride": 1,
+      "padding": 1,
+      "dilation": 1
+    },
+    "input_shape": {
+      "dims": [
+        1,
+        32,
+        224,
+        224
+      ],
+      "description": "Convolved feature map"
+    },
+    "output_shape": {
+      "dims": [
+        1,
+        64,
+        224,
+        224
+      ],
+      "description": "Convolved feature map"
+    },
+    "group_definition": null,
+    "is_expanded": false,
+    "repetition_metadata": null,
+    "instance_config_overrides": {},
+    "created_at": "2025-12-13T22:40:00.475Z"
+  }
+},
+{
+  "model": "block_manager.block",
+  "pk": "4bc593c8-6068-47ef-9892-2a7e6b308833",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "node_id": "relu-1762999533149",
+    "block_type": "relu",
+    "position_x": 350.0,
+    "position_y": 150.0,
+    "config": {
+      "inplace": false
+    },
+    "input_shape": {
+      "dims": [
+        1,
+        64,
+        224,
+        224
+      ],
+      "description": "Convolved feature map"
+    },
+    "output_shape": {
+      "dims": [
+        1,
+        64,
+        224,
+        224
+      ],
+      "description": "Convolved feature map"
+    },
+    "group_definition": null,
+    "is_expanded": false,
+    "repetition_metadata": null,
+    "instance_config_overrides": {},
+    "created_at": "2025-12-13T22:40:00.475Z"
+  }
+},
+{
+  "model": "block_manager.block",
+  "pk": "63644c39-71e6-49a7-9b39-ca4f8b07d073",
+  "fields": {
+    "architecture": "b0e153e6-9620-4828-be4a-3140100536a8",
+    "node_id": "dataloader-1765665581338",
+    "block_type": "dataloader",
+    "position_x": 216.0,
+    "position_y": 227.0,
+    "config": {
+      "shape": "[1, 3, 224, 224]",
+      "num_input_outlets": 1,
+      "input_shapes": "",
+      "has_ground_truth": false,
+      "ground_truth_shape": "[1, 10]",
+      "randomize": false
+    },
+    "input_shape": null,
+    "output_shape": null,
+    "group_definition": null,
+    "is_expanded": false,
+    "repetition_metadata": null,
+    "instance_config_overrides": {},
+    "created_at": "2025-12-13T22:39:42.421Z"
+  }
+},
+{
+  "model": "block_manager.block",
+  "pk": "cd68a2ab-dc28-45ac-b455-ee6ad0b86db9",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "node_id": "conv2d-1762999533200",
+    "block_type": "conv2d",
+    "position_x": 200.0,
+    "position_y": 250.0,
+    "config": {
+      "out_channels": 128,
+      "kernel_size": 3,
+      "stride": 1,
+      "padding": 1,
+      "dilation": 1
+    },
+    "input_shape": {
+      "dims": [
+        1,
+        64,
+        224,
+        224
+      ],
+      "description": "Convolved feature map"
+    },
+    "output_shape": {
+      "dims": [
+        1,
+        128,
+        224,
+        224
+      ],
+      "description": "Convolved feature map"
+    },
+    "group_definition": null,
+    "is_expanded": false,
+    "repetition_metadata": null,
+    "instance_config_overrides": {},
+    "created_at": "2025-12-13T22:40:00.476Z"
+  }
+},
+{
+  "model": "block_manager.block",
+  "pk": "d304aed2-adbf-4765-950a-4e02cf18c9ed",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "node_id": "conv2d-1762999533301",
+    "block_type": "conv2d",
+    "position_x": 200.0,
+    "position_y": 350.0,
+    "config": {
+      "out_channels": 256,
+      "kernel_size": 3,
+      "stride": 1,
+      "padding": 1,
+      "dilation": 1
+    },
+    "input_shape": {
+      "dims": [
+        1,
+        128,
+        224,
+        224
+      ],
+      "description": "Convolved feature map"
+    },
+    "output_shape": {
+      "dims": [
+        1,
+        256,
+        224,
+        224
+      ],
+      "description": "Convolved feature map"
+    },
+    "group_definition": null,
+    "is_expanded": false,
+    "repetition_metadata": null,
+    "instance_config_overrides": {},
+    "created_at": "2025-12-13T22:40:00.476Z"
+  }
+},
+{
+  "model": "block_manager.block",
+  "pk": "d9e51db2-d12d-40db-8255-bd420de58cad",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "node_id": "softmax-1762999533557",
+    "block_type": "softmax",
+    "position_x": 950.0,
+    "position_y": 200.0,
+    "config": {
+      "dim": -1
+    },
+    "input_shape": {
+      "dims": [
+        1,
+        10
+      ],
+      "description": "Fully connected output"
+    },
+    "output_shape": {
+      "dims": [
+        1,
+        10
+      ],
+      "description": "Fully connected output"
+    },
+    "group_definition": null,
+    "is_expanded": false,
+    "repetition_metadata": null,
+    "instance_config_overrides": {},
+    "created_at": "2025-12-13T22:40:00.477Z"
+  }
+},
+{
+  "model": "block_manager.block",
+  "pk": "e0223849-a69e-42ac-8f50-4ba3594375e2",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "node_id": "linear-1762999533506",
+    "block_type": "linear",
+    "position_x": 800.0,
+    "position_y": 200.0,
+    "config": {
+      "out_features": 10,
+      "bias": true
+    },
+    "input_shape": {
+      "dims": [
+        1,
+        12845056
+      ],
+      "description": "Flattened tensor"
+    },
+    "output_shape": {
+      "dims": [
+        1,
+        10
+      ],
+      "description": "Fully connected output"
+    },
+    "group_definition": null,
+    "is_expanded": false,
+    "repetition_metadata": null,
+    "instance_config_overrides": {},
+    "created_at": "2025-12-13T22:40:00.477Z"
+  }
+},
+{
+  "model": "block_manager.block",
+  "pk": "eec3190e-98a6-4a34-b8ef-102b6f2a16c8",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "node_id": "flatten-1762999533456",
+    "block_type": "flatten",
+    "position_x": 650.0,
+    "position_y": 200.0,
+    "config": {
+      "start_dim": 1
+    },
+    "input_shape": {
+      "dims": [
+        1,
+        256,
+        224,
+        224
+      ],
+      "description": "Convolved feature map"
+    },
+    "output_shape": {
+      "dims": [
+        1,
+        12845056
+      ],
+      "description": "Flattened tensor"
+    },
+    "group_definition": null,
+    "is_expanded": false,
+    "repetition_metadata": null,
+    "instance_config_overrides": {},
+    "created_at": "2025-12-13T22:40:00.477Z"
+  }
+},
+{
+  "model": "block_manager.connection",
+  "pk": "09d81feb-77f8-407c-ac89-150707a760c8",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "edge_id": "edge-1762999567726",
+    "source_block": "41001d1a-4348-42d0-921f-d73c0b67c586",
+    "target_block": "4bc593c8-6068-47ef-9892-2a7e6b308833",
+    "source_handle": "",
+    "target_handle": "",
+    "is_valid": true,
+    "created_at": "2025-12-13T22:40:00.477Z"
+  }
+},
+{
+  "model": "block_manager.connection",
+  "pk": "10672fbc-3b8e-48ae-a947-98a5673c0004",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "edge_id": "edge-1762999567982",
+    "source_block": "343f6c9b-8505-4492-8dcf-9be59768ca3a",
+    "target_block": "eec3190e-98a6-4a34-b8ef-102b6f2a16c8",
+    "source_handle": "",
+    "target_handle": "",
+    "is_valid": true,
+    "created_at": "2025-12-13T22:40:00.480Z"
+  }
+},
+{
+  "model": "block_manager.connection",
+  "pk": "2af41ccb-4d2a-45eb-9559-f14fdcf888a3",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "edge_id": "edge-1762999567828",
+    "source_block": "cd68a2ab-dc28-45ac-b455-ee6ad0b86db9",
+    "target_block": "230509f9-771d-42a8-9ae0-79c8feba3499",
+    "source_handle": "",
+    "target_handle": "",
+    "is_valid": true,
+    "created_at": "2025-12-13T22:40:00.480Z"
+  }
+},
+{
+  "model": "block_manager.connection",
+  "pk": "2b83e713-236d-4e20-a1b2-76e5a1be586d",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "edge_id": "edge-1762999568034",
+    "source_block": "eec3190e-98a6-4a34-b8ef-102b6f2a16c8",
+    "target_block": "e0223849-a69e-42ac-8f50-4ba3594375e2",
+    "source_handle": "",
+    "target_handle": "",
+    "is_valid": true,
+    "created_at": "2025-12-13T22:40:00.480Z"
+  }
+},
+{
+  "model": "block_manager.connection",
+  "pk": "3925bf2f-e73c-4200-ac86-6047ad15c295",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "edge_id": "edge-1762999568086",
+    "source_block": "e0223849-a69e-42ac-8f50-4ba3594375e2",
+    "target_block": "d9e51db2-d12d-40db-8255-bd420de58cad",
+    "source_handle": "",
+    "target_handle": "",
+    "is_valid": true,
+    "created_at": "2025-12-13T22:40:00.480Z"
+  }
+},
+{
+  "model": "block_manager.connection",
+  "pk": "4f5c95c9-d2c9-42c2-b560-b3382125c65f",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "edge_id": "edge-1762999567777",
+    "source_block": "4bc593c8-6068-47ef-9892-2a7e6b308833",
+    "target_block": "cd68a2ab-dc28-45ac-b455-ee6ad0b86db9",
+    "source_handle": "",
+    "target_handle": "",
+    "is_valid": true,
+    "created_at": "2025-12-13T22:40:00.480Z"
+  }
+},
+{
+  "model": "block_manager.connection",
+  "pk": "50474947-fab5-4c0c-91a0-a83df94dd407",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "edge_id": "edge-1762999567516",
+    "source_block": "172308ac-ab45-412c-8be4-0e8dc863e21b",
+    "target_block": "2e2b7b19-0307-443e-a8aa-9dd1b2d6a697",
+    "source_handle": "",
+    "target_handle": "",
+    "is_valid": true,
+    "created_at": "2025-12-13T22:40:00.477Z"
+  }
+},
+{
+  "model": "block_manager.connection",
+  "pk": "8bebbf3c-22be-4b71-ad6b-d77d80abfdee",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "edge_id": "edge-1762999567879",
+    "source_block": "230509f9-771d-42a8-9ae0-79c8feba3499",
+    "target_block": "d304aed2-adbf-4765-950a-4e02cf18c9ed",
+    "source_handle": "",
+    "target_handle": "",
+    "is_valid": true,
+    "created_at": "2025-12-13T22:40:00.480Z"
+  }
+},
+{
+  "model": "block_manager.connection",
+  "pk": "ec5f5f6a-0bdc-4dce-bee6-3dbbd50ea04f",
+  "fields": {
+    "architecture": "71086021-dd76-465f-a9f4-470a7eefacd3",
+    "edge_id": "edge-1762999567930",
+    "source_block": "d304aed2-adbf-4765-950a-4e02cf18c9ed",
+    "target_block": "343f6c9b-8505-4492-8dcf-9be59768ca3a",
+    "source_handle": "",
+    "target_handle": "",
+    "is_valid": true,
+    "created_at": "2025-12-13T22:40:00.480Z"
+  }
+}
+]

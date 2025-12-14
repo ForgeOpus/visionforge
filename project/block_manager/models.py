@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 import uuid
 import json
 
@@ -6,6 +7,15 @@ import json
 class Project(models.Model):
     """Represents a model building project"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        'authentication.User',
+        on_delete=models.CASCADE,
+        related_name='projects',
+        null=True,  # Allow null for existing projects during migration
+        blank=True,
+        db_index=True,  # Index for faster queries
+        help_text='User who owns this project'
+    )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, default='')
     framework = models.CharField(

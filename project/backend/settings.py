@@ -121,11 +121,8 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
+    # Oracle Autonomous Database - now default for all data
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    },
-    'oracle': {
         'ENGINE': 'django.db.backends.oracle',
         'NAME': os.getenv('ORACLE_DSN', ''),
         'USER': os.getenv('ORACLE_USER', ''),
@@ -135,11 +132,15 @@ DATABASES = {
             'wallet_location': os.getenv('ORACLE_WALLET_LOCATION', ''),
             'wallet_password': os.getenv('ORACLE_WALLET_PASSWORD', ''),
         },
-    }
+    },
+    # SQLite kept as backup/reference only
+    'sqlite_backup': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    },
 }
 
-# Database Router
-DATABASE_ROUTERS = ['backend.db_router.AuthenticationRouter']
+# Database Router - REMOVED (all data now in Oracle)
 
 # Firebase Configuration
 FIREBASE_CONFIG = {
