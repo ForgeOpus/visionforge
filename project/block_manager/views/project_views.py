@@ -30,8 +30,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
             # Show only user's own projects
             return queryset.filter(user=self.request.firebase_user)
 
-        # For guests/anonymous users, show all projects
-        return queryset
+        # For guests/anonymous users, show empty list (they must login to see projects)
+        return queryset.none()
 
     def get_serializer_class(self):
         """Use detailed serializer for retrieve action"""
@@ -95,5 +95,10 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         """Delete a project and all associated data"""
         instance = self.get_object()
+
+        # Decrement user's project count if project has an owner
+        if instance.user:
+            instance.user.decrement_project_count()
+
         self.perform_destroy(instance)
         return Response(status=status.HTTP_204_NO_CONTENT)

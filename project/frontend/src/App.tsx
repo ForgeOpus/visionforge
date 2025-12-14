@@ -10,10 +10,14 @@ import ChatBot from './components/ChatBot'
 import { useModelBuilderStore } from './lib/store'
 import { fetchProject, loadArchitecture, convertToFrontendProject } from './lib/projectApi'
 import { LandingPage } from './landing'
+import { Dashboard } from './pages/Dashboard'
+import { ProtectedRoute } from './components/ProtectedRoute'
+import { useAuth } from './contexts/AuthContext'
 
 function ProjectCanvas() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
+  const { isGuest } = useAuth()
   const { setNodes, setEdges, loadProject, loadGroupDefinitions, currentProject, reset } = useModelBuilderStore()
   const [isLoading, setIsLoading] = useState(false)
   const [draggedType, setDraggedType] = useState<string | null>(null)
@@ -22,6 +26,12 @@ function ProjectCanvas() {
 
   // Load project from URL parameter
   useEffect(() => {
+    // Clear canvas if in guest mode
+    if (isGuest) {
+      reset()
+      return
+    }
+
     if (projectId && (!currentProject || currentProject.id !== projectId)) {
       setIsLoading(true)
       fetchProject(projectId)
@@ -31,7 +41,7 @@ function ProjectCanvas() {
             const { nodes, edges, groupDefinitions } = await loadArchitecture(projectId)
             const project = convertToFrontendProject(backendProject, nodes, edges)
             loadProject(project)
-            
+
             // Load group definitions if they exist
             if (groupDefinitions && groupDefinitions.length > 0) {
               loadGroupDefinitions(groupDefinitions)
@@ -44,16 +54,23 @@ function ProjectCanvas() {
         })
         .catch((error) => {
           console.error('Failed to load project:', error)
-          toast.error('Failed to load project', {
-            description: error instanceof Error ? error.message : 'Unknown error'
+
+          // Clear the invalid project state
+          reset()
+
+          // Show error message
+          toast.error('Project not found', {
+            description: 'This project may have been deleted or you may not have access to it.'
           })
-          // Don't navigate away, just show error
+
+          // Navigate to clean canvas
+          navigate('/project', { replace: true })
         })
         .finally(() => {
           setIsLoading(false)
         })
     }
-  }, [projectId, currentProject, setNodes, setEdges, loadProject, loadGroupDefinitions, navigate])
+  }, [projectId, currentProject, isGuest, setNodes, setEdges, loadProject, loadGroupDefinitions, navigate, reset])
 
   const handleDragStart = (type: string) => {
     setDraggedType(type)
@@ -106,6 +123,14 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
       <Route path="/project" element={<ProjectCanvas />} />
       <Route path="/project/:projectId" element={<ProjectCanvas />} />
     </Routes>

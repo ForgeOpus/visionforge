@@ -89,3 +89,9 @@ class User(models.Model):
         """Increment project count"""
         self.project_count += 1
         self.save(update_fields=['project_count'])
+
+    def decrement_project_count(self):
+        """Decrement project count (never goes below 0)"""
+        if self.project_count > 0:
+            self.project_count -= 1
+            self.save(update_fields=['project_count'])

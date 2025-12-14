@@ -1,0 +1,235 @@
+/**
+ * Dashboard Page
+ * Displays user projects with stats, search, and filtering
+ */
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, MagnifyingGlass, SquaresFour, Funnel, Fire, Lightning, Rocket } from '@phosphor-icons/react';
+import { useAuth } from '../contexts/AuthContext';
+import { fetchProjects, ProjectResponse } from '../lib/projectApi';
+import { ProjectCard } from '../components/ProjectCard';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+export const Dashboard = () => {
+  const navigate = useNavigate();
+  const { user, refreshUser } = useAuth();
+  const [projects, setProjects] = useState<ProjectResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [frameworkFilter, setFrameworkFilter] = useState<'all' | 'pytorch' | 'tensorflow'>('all');
+
+  // Load projects on mount
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  const loadProjects = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchProjects();
+      setProjects(data);
+    } catch (error) {
+      console.error('Failed to load projects:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Filter and search projects
+  const filteredProjects = useMemo(() => {
+    let filtered = projects;
+
+    // Apply framework filter
+    if (frameworkFilter !== 'all') {
+      filtered = filtered.filter((p) => p.framework === frameworkFilter);
+    }
+
+    // Apply search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (p) =>
+          p.name.toLowerCase().includes(query) ||
+          p.description.toLowerCase().includes(query)
+      );
+    }
+
+    return filtered;
+  }, [projects, frameworkFilter, searchQuery]);
+
+  // Calculate stats
+  const stats = useMemo(() => {
+    const total = projects.length;
+    const pytorch = projects.filter((p) => p.framework === 'pytorch').length;
+    const tensorflow = projects.filter((p) => p.framework === 'tensorflow').length;
+
+    return { total, pytorch, tensorflow };
+  }, [projects]);
+
+  const handleCreateProject = () => {
+    navigate('/project');
+  };
+
+  const handleProjectDeleted = async () => {
+    // Reload projects after deletion
+    await loadProjects();
+    // Refresh user data to update project count
+    await refreshUser();
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header Section */}
+      <div className="bg-card border-b border-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Welcome Message */}
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold text-foreground">
+              Welcome back, {user?.display_name || user?.email?.split('@')[0] || 'there'}!
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              Manage your neural network projects and continue where you left off
+            </p>
+          </div>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <Card className="p-4 bg-primary/5 border-primary/20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Total Projects</p>
+                  <p className="text-3xl font-bold text-foreground">{stats.total}</p>
+                </div>
+                <SquaresFour className="text-primary" size={32} weight="duotone" />
+              </div>
+            </Card>
+
+            <Card className="p-4 bg-orange-500/10 border-orange-500/20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">PyTorch</p>
+                  <p className="text-3xl font-bold text-foreground">{stats.pytorch}</p>
+                </div>
+                <Fire className="text-orange-500" size={32} weight="duotone" />
+              </div>
+            </Card>
+
+            <Card className="p-4 bg-amber-500/10 border-amber-500/20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">TensorFlow</p>
+                  <p className="text-3xl font-bold text-foreground">{stats.tensorflow}</p>
+                </div>
+                <Lightning className="text-amber-500" size={32} weight="duotone" />
+              </div>
+            </Card>
+          </div>
+
+          {/* Search and Filters */}
+          <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
+            {/* Search Bar */}
+            <div className="flex-1 relative">
+              <MagnifyingGlass className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={20} />
+              <Input
+                type="text"
+                placeholder="Search projects by name or description..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            {/* Framework Filter */}
+            <Select value={frameworkFilter} onValueChange={(value) => setFrameworkFilter(value as 'all' | 'pytorch' | 'tensorflow')}>
+              <SelectTrigger className="w-[180px]">
+                <div className="flex items-center gap-2">
+                  <Funnel size={16} />
+                  <SelectValue placeholder="All Frameworks" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Frameworks</SelectItem>
+                <SelectItem value="pytorch">PyTorch</SelectItem>
+                <SelectItem value="tensorflow">TensorFlow</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Create Button */}
+            <Button onClick={handleCreateProject} className="whitespace-nowrap">
+              <Plus size={20} />
+              New Project
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Projects Section */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {loading ? (
+          // Loading State
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+            <p className="text-muted-foreground">Loading your projects...</p>
+          </div>
+        ) : filteredProjects.length === 0 ? (
+          // Empty State
+          <div className="flex flex-col items-center justify-center py-12">
+            {searchQuery || frameworkFilter !== 'all' ? (
+              // No search results
+              <>
+                <MagnifyingGlass size={64} className="text-muted-foreground mb-4" weight="duotone" />
+                <h3 className="text-xl font-semibold text-foreground mb-2">No projects found</h3>
+                <p className="text-muted-foreground mb-6">
+                  Try adjusting your search or filter criteria
+                </p>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setFrameworkFilter('all');
+                  }}
+                >
+                  Clear filters
+                </Button>
+              </>
+            ) : (
+              // No projects at all
+              <>
+                <Rocket size={64} className="text-muted-foreground mb-4" weight="duotone" />
+                <h3 className="text-xl font-semibold text-foreground mb-2">No projects yet</h3>
+                <p className="text-muted-foreground mb-6">
+                  Create your first neural network project to get started
+                </p>
+                <Button onClick={handleCreateProject} size="lg">
+                  <Plus size={20} />
+                  Create Your First Project
+                </Button>
+              </>
+            )}
+          </div>
+        ) : (
+          // Projects Grid
+          <>
+            <div className="mb-4">
+              <p className="text-muted-foreground">
+                Showing {filteredProjects.length} of {projects.length} project{projects.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredProjects.map((project) => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  onDeleted={handleProjectDeleted}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};

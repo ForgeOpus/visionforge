@@ -9,6 +9,7 @@ import {
   onAuthStateChanged,
 } from 'firebase/auth';
 import { auth, googleProvider, githubProvider } from '../lib/firebase';
+import { useModelBuilderStore } from '../lib/store';
 
 // User type from our backend
 interface VisionForgeUser {
@@ -200,6 +201,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await firebaseSignOut(auth);
       setUser(null);
       setIsGuest(false);
+
+      // Clear canvas state
+      const { reset } = useModelBuilderStore.getState();
+      reset();
     } catch (error) {
       console.error('Error signing out:', error);
       throw error;
@@ -212,6 +217,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     setFirebaseUser(null);
     setLoading(false);
+
+    // Clear canvas state
+    const { reset } = useModelBuilderStore.getState();
+    reset();
   };
 
   const value: AuthContextType = {

@@ -23,6 +23,21 @@ def save_architecture(request, project_id):
     operations succeed or rollback together on failure.
     """
     project = get_object_or_404(Project, pk=project_id)
+
+    # Check authentication
+    if not hasattr(request, 'firebase_user') or not request.firebase_user:
+        return Response(
+            {'success': False, 'error': 'Authentication required'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    # Check ownership
+    if project.user != request.firebase_user:
+        return Response(
+            {'success': False, 'error': 'You do not have permission to modify this project'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
     serializer = SaveArchitectureSerializer(data=request.data)
     
     if not serializer.is_valid():
@@ -135,7 +150,21 @@ def load_architecture(request, project_id):
     Returns nodes and edges for frontend canvas
     """
     project = get_object_or_404(Project, pk=project_id)
-    
+
+    # Check authentication
+    if not hasattr(request, 'firebase_user') or not request.firebase_user:
+        return Response(
+            {'success': False, 'error': 'Authentication required'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    # Check ownership
+    if project.user != request.firebase_user:
+        return Response(
+            {'success': False, 'error': 'You do not have permission to access this project'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
     try:
         architecture = project.architecture
     except ModelArchitecture.DoesNotExist:

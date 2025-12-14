@@ -28,10 +28,41 @@ export default function LoginModal({
   required = false,
   onGuestContinue
 }: LoginModalProps) {
-  const { signInWithGoogle, signInWithGithub, continueAsGuest } = useAuth();
+  const { signInWithGoogle, signInWithGithub, continueAsGuest, firebaseUser } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleSmartRedirect = async () => {
+    try {
+      // Fetch user's project count for smart redirect
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      if (firebaseUser) {
+        const token = await firebaseUser.getIdToken();
+        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const projectCount = data.user.project_count;
+
+          if (projectCount === 0) {
+            navigate('/project');  // New users → canvas
+          } else {
+            navigate('/dashboard');  // Returning users → dashboard
+          }
+        } else {
+          // Fallback to dashboard if fetch fails
+          navigate('/dashboard');
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching user data for redirect:', error);
+      // Fallback to dashboard on error
+      navigate('/dashboard');
+    }
+  };
 
   const handleGoogleSignIn = async () => {
     try {
@@ -39,8 +70,8 @@ export default function LoginModal({
       setError(null);
       await signInWithGoogle();
       onOpenChange(false);
-      // Redirect to canvas after successful login
-      navigate('/project');
+      // Smart redirect based on project count
+      await handleSmartRedirect();
     } catch (err) {
       console.error('Google sign in error:', err);
       setError('Failed to sign in with Google. Please try again.');
@@ -55,8 +86,8 @@ export default function LoginModal({
       setError(null);
       await signInWithGithub();
       onOpenChange(false);
-      // Redirect to canvas after successful login
-      navigate('/project');
+      // Smart redirect based on project count
+      await handleSmartRedirect();
     } catch (err) {
       console.error('GitHub sign in error:', err);
       setError('Failed to sign in with GitHub. Please try again.');
