@@ -2,7 +2,7 @@
  * Firebase configuration and initialization
  */
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, GithubAuthProvider } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, GithubAuthProvider, setPersistence, browserLocalPersistence } from 'firebase/auth';
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
@@ -20,6 +20,11 @@ export const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase Authentication
 export const auth = getAuth(app);
+
+// Enable persistence - keeps user logged in across page reloads
+setPersistence(auth, browserLocalPersistence).catch((error) => {
+  console.error('Failed to enable Firebase persistence:', error);
+});
 
 // Configure authentication providers
 export const googleProvider = new GoogleAuthProvider();

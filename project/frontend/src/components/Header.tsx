@@ -635,7 +635,16 @@ export default function Header() {
 
       <header className="h-16 border-b border-border bg-card px-6 flex items-center justify-between">
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
+        <div
+          className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={() => {
+            if (user && !isGuest) {
+              navigate('/dashboard')
+            } else {
+              navigate('/')
+            }
+          }}
+        >
           <img src="/logo_navbar.png" alt="VisionForge Logo" className="h-10 w-auto" />
           <h1 className="text-xl font-semibold">VisionForge</h1>
         </div>

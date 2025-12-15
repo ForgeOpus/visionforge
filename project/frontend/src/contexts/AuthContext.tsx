@@ -10,6 +10,8 @@ import {
 } from 'firebase/auth';
 import { auth, googleProvider, githubProvider } from '../lib/firebase';
 import { useModelBuilderStore } from '../lib/store';
+import { useIdleTimeout } from '../hooks/useIdleTimeout';
+import { IdleWarningDialog } from '../components/IdleWarningDialog';
 
 // User type from our backend
 interface VisionForgeUser {
@@ -53,6 +55,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isGuest, setIsGuest] = useState(false);
+  const [showIdleWarning, setShowIdleWarning] = useState(false);
 
   // Verify token with backend and get user data
   const verifyToken = async (firebaseUser: FirebaseUser): Promise<VisionForgeUser | null> => {
@@ -223,6 +226,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     reset();
   };
 
+  // Idle timeout - auto logout after 10 minutes of inactivity
+  const { showWarning, resetTimer } = useIdleTimeout({
+    onIdle: async () => {
+      if (!isGuest && user) {
+        await signOut();
+      }
+    },
+    onWarning: () => {
+      if (!isGuest && user) {
+        setShowIdleWarning(true);
+      }
+    },
+    idleTime: 10 * 60 * 1000, // 10 minutes
+    warningTime: 60 * 1000, // 1 minute warning
+  });
+
+  const handleStayActive = () => {
+    setShowIdleWarning(false);
+    resetTimer();
+  };
+
+  const handleIdleLogout = async () => {
+    setShowIdleWarning(false);
+    await signOut();
+  };
+
   const value: AuthContextType = {
     user,
     firebaseUser,
@@ -235,5 +264,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshUser,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      {/* Idle warning dialog */}
+      {!isGuest && user && (
+        <IdleWarningDialog
+          open={showIdleWarning}
+          onStayActive={handleStayActive}
+          onLogout={handleIdleLogout}
+          timeRemaining={60}
+        />
+      )}
+    </AuthContext.Provider>
+  );
 };

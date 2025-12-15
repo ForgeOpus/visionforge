@@ -17,7 +17,7 @@ import { useAuth } from './contexts/AuthContext'
 function ProjectCanvas() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
-  const { isGuest } = useAuth()
+  const { isGuest, user } = useAuth()
   const { setNodes, setEdges, loadProject, loadGroupDefinitions, currentProject, reset } = useModelBuilderStore()
   const [isLoading, setIsLoading] = useState(false)
   const [draggedType, setDraggedType] = useState<string | null>(null)
@@ -32,7 +32,17 @@ function ProjectCanvas() {
       return
     }
 
-    if (projectId && (!currentProject || currentProject.id !== projectId)) {
+    // Wait for auth to finish loading before attempting to fetch project
+    if (!projectId || !user) {
+      return
+    }
+
+    // Only load if project ID changed
+    if (currentProject && currentProject.id === projectId) {
+      return
+    }
+
+    if (projectId) {
       setIsLoading(true)
       fetchProject(projectId)
         .then(async (backendProject) => {
@@ -70,7 +80,7 @@ function ProjectCanvas() {
           setIsLoading(false)
         })
     }
-  }, [projectId, currentProject, isGuest, setNodes, setEdges, loadProject, loadGroupDefinitions, navigate, reset])
+  }, [projectId, currentProject, isGuest, user, setNodes, setEdges, loadProject, loadGroupDefinitions, navigate, reset])
 
   const handleDragStart = (type: string) => {
     setDraggedType(type)
