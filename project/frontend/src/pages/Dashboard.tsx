@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, MagnifyingGlass, SquaresFour, Funnel, Fire, Lightning, Rocket, SignOut, User } from '@phosphor-icons/react';
+import { Plus, MagnifyingGlass, SquaresFour, Funnel, Rocket, SignOut, User } from '@phosphor-icons/react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchProjects, ProjectResponse } from '../lib/projectApi';
 import { ProjectCard } from '../components/ProjectCard';
@@ -20,10 +20,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 export const Dashboard = () => {
   const navigate = useNavigate();
-  const { user, refreshUser, logout } = useAuth();
+  const { user, refreshUser, signOut } = useAuth();
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -94,6 +95,29 @@ export const Dashboard = () => {
     await refreshUser();
   };
 
+  // PyTorch Logo Component - Matches official branding
+  const PyTorchLogo = () => (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+      {/* Flame/Torch */}
+      <path d="M16 4L17 6C17 6 18 4 19 4V9L17 11V4Z" fill="#EE4C2C"/>
+      {/* Outer circle */}
+      <circle cx="16" cy="18" r="9" stroke="#EE4C2C" strokeWidth="2.5" fill="none"/>
+      {/* Inner filled circle */}
+      <circle cx="16" cy="18" r="5.5" fill="#EE4C2C"/>
+    </svg>
+  );
+
+  // TensorFlow Logo Component - Matches official branding (3D cube)
+  const TensorFlowLogo = () => (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+      {/* 3D Cube */}
+      <path d="M16 6L26 12L26 20L16 26L6 20L6 12L16 6Z" fill="#FF6F00" fillOpacity="0.15" stroke="#FF6F00" strokeWidth="2"/>
+      <path d="M16 6L16 16L26 12" stroke="#FF6F00" strokeWidth="2" strokeLinejoin="round"/>
+      <path d="M16 16L6 12" stroke="#FF6F00" strokeWidth="2" strokeLinejoin="round"/>
+      <path d="M16 16L16 26" stroke="#FF6F00" strokeWidth="2"/>
+    </svg>
+  );
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header Section */}
@@ -110,10 +134,12 @@ export const Dashboard = () => {
               </p>
             </div>
 
-            {/* User Menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="rounded-full">
+            {/* Theme Toggle and User Menu */}
+            <div className="flex items-center gap-3">
+              <ThemeToggle />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="rounded-full">
                   {user?.avatar_url && !avatarError ? (
                     <img
                       src={user.avatar_url}
@@ -142,7 +168,7 @@ export const Dashboard = () => {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={logout}
+                  onClick={signOut}
                   className="text-destructive focus:text-destructive"
                 >
                   <SignOut size={16} className="mr-2" />
@@ -150,6 +176,7 @@ export const Dashboard = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           </div>
 
           {/* Stats Cards */}
@@ -170,7 +197,7 @@ export const Dashboard = () => {
                   <p className="text-sm font-medium text-muted-foreground">PyTorch</p>
                   <p className="text-3xl font-bold text-foreground">{stats.pytorch}</p>
                 </div>
-                <Fire className="text-orange-500" size={32} weight="duotone" />
+                <PyTorchLogo />
               </div>
             </Card>
 
@@ -180,7 +207,7 @@ export const Dashboard = () => {
                   <p className="text-sm font-medium text-muted-foreground">TensorFlow</p>
                   <p className="text-3xl font-bold text-foreground">{stats.tensorflow}</p>
                 </div>
-                <Lightning className="text-amber-500" size={32} weight="duotone" />
+                <TensorFlowLogo />
               </div>
             </Card>
           </div>
