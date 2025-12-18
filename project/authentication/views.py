@@ -6,6 +6,7 @@ from django.http import JsonResponse, HttpRequest
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
+from django_ratelimit.decorators import ratelimit
 import json
 
 from .firebase_auth import verify_firebase_token, get_user_info_from_token
@@ -15,6 +16,7 @@ from .middleware import require_authentication
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@ratelimit(key='ip', rate='30/m', method='POST', block=True)
 def verify_token(request: HttpRequest) -> JsonResponse:
     """
     Verify Firebase ID token and create/update user in database.
@@ -160,6 +162,7 @@ def get_current_user(request: HttpRequest) -> JsonResponse:
 @csrf_exempt
 @require_http_methods(["POST"])
 @require_authentication
+@ratelimit(key='user_or_ip', rate='120/h', method='POST', block=True)
 def update_session(request):
     """
     Update session information (increment session count, add time spent).
@@ -211,6 +214,7 @@ def update_session(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 @require_authentication
+@ratelimit(key='user_or_ip', rate='10/m', method='POST', block=True)
 def logout(request):
     """
     Logout user (update last login timestamp).
@@ -240,6 +244,7 @@ def logout(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 @require_authentication
+@ratelimit(key='user_or_ip', rate='60/h', method='POST', block=True)
 def mark_milestone(request):
     """
     Mark user milestones (first model created, first export).

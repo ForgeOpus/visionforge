@@ -213,10 +213,50 @@ USE_I18N = True
 USE_TZ = True
 
 
+# ==========================================
+# SECURITY HEADERS (Production Only)
+# ==========================================
+if not DEBUG:
+    # Force HTTPS in production
+    SECURE_SSL_REDIRECT = True
+
+    # Session and CSRF cookies only over HTTPS
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    # HTTP Strict Transport Security (HSTS)
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+    # Prevent clickjacking
+    X_FRAME_OPTIONS = 'DENY'
+
+    # Prevent MIME type sniffing
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+
+    # Enable XSS filter in browsers
+    SECURE_BROWSER_XSS_FILTER = True
+
+    # Referrer policy
+    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
+    # Content Security Policy (basic - customize as needed)
+    # CSP_DEFAULT_SRC = ("'self'",)
+    # CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'")  # Adjust based on your needs
+    # CSP_STYLE_SRC = ("'self'", "'unsafe-inline'")
+
+else:
+    # Development settings - less strict
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    SECURE_SSL_REDIRECT = False
+
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Logging Configuration
 # https://docs.djangoproject.com/en/5.2/topics/logging/

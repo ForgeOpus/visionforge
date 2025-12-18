@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.request import Request
 from django.http import HttpResponse
+from django_ratelimit.decorators import ratelimit
 
 from block_manager.serializers import ExportRequestSerializer
 from block_manager.services.tensorflow_codegen import generate_tensorflow_code
@@ -16,6 +17,7 @@ import io
 
 @api_view(['POST'])
 @require_authentication  # Require authentication for export
+@ratelimit(key='user', rate='30/h', method='POST', block=True)
 def export_model(request: Request) -> Response:
     """
     Export model code with professional class-based structure.

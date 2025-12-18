@@ -36,6 +36,7 @@ requests>=2.32.0
 # Security & Authentication
 PyJWT>=2.10.0
 cryptography>=46.0.0
+django-ratelimit>=4.1.0
 
 # Utilities
 pydantic>=2.10.0
