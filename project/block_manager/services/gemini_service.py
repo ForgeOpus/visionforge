@@ -15,7 +15,7 @@ class GeminiChatService:
 
     def __init__(self, api_key: Optional[str] = None):
         """
-        Initialize Gemini with API key.
+        Initialize Gemini with API key and dynamically select best available model.
 
         Args:
             api_key: Optional API key for BYOK mode. If None, reads from environment.
@@ -30,7 +30,52 @@ class GeminiChatService:
                 raise ValueError("GEMINI_API_KEY environment variable is not set")
 
         genai.configure(api_key=final_api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash')
+
+        # Try to get best available model dynamically
+        model_name = self._get_best_available_model()
+        self.model = genai.GenerativeModel(model_name)
+
+    def _get_best_available_model(self) -> str:
+        """
+        Dynamically detect and return the best available Gemini model.
+
+        Tries models in order of preference, returns first available.
+        Falls back to gemini-pro if all else fails.
+        """
+        # Model preference order (best to fallback)
+        preferred_models = [
+            'gemini-2.0-flash-exp',
+            'gemini-1.5-flash',
+            'gemini-1.5-pro',
+            'gemini-pro',
+        ]
+
+        try:
+            # List available models from Gemini API
+            available_models = []
+            for model in genai.list_models():
+                if 'generateContent' in model.supported_generation_methods:
+                    available_models.append(model.name.replace('models/', ''))
+
+            # Find first preferred model that's available
+            for preferred in preferred_models:
+                if preferred in available_models:
+                    print(f"Using Gemini model: {preferred}")
+                    return preferred
+
+            # If no preferred models found, use first available
+            if available_models:
+                model_name = available_models[0]
+                print(f"Using first available Gemini model: {model_name}")
+                return model_name
+
+        except Exception as e:
+            print(f"Error listing Gemini models: {e}")
+
+        # Final fallback
+        fallback = 'gemini-pro'
+        print(f"Falling back to: {fallback}")
+        return fallback
 
     def _format_workflow_context(self, workflow_state: Optional[Dict[str, Any]]) -> str:
         """Format workflow state into a readable context for the AI."""
