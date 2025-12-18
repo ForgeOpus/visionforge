@@ -16,33 +16,14 @@ google-generativeai>=0.8.3
 # Firebase
 firebase-admin>=6.0.0
 
-# Templates
+# Code Generation
 jinja2>=3.1.0
 
 # Image Processing
 pillow>=11.0.0
 
-# Data Processing
-pandas>=2.2.0
+# Numerical Computing
 numpy>=2.2.0
-openpyxl>=3.1.0
-pyarrow>=19.0.0
 
-# HTTP & Networking
-httpx>=0.28.0
-aiohttp>=3.12.0
-requests>=2.32.0
-
-# Security & Authentication
-PyJWT>=2.10.0
-cryptography>=46.0.0
+# Security & Rate Limiting
 django-ratelimit>=4.1.0
-
-# Utilities
-pydantic>=2.10.0
-redis>=6.0.0
-twilio>=9.8.0
-
-# Code Stream Dependencies (Git-based)
--e git+https://github.com/RETR0-OS/code_stream.git@be6c4c8c51565da7fba4af7c0dead35b11c3dc0e#egg=code_stream&subdirectory=code_stream
--e git+https://github.com/RETR0-OS/code_stream_no_docker.git@c99a117638ea078c7585a67ba568c9470fbaece2#egg=code_stream_sqlite&subdirectory=code_stream
