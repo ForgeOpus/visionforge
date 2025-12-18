@@ -48,7 +48,7 @@ export const useAuth = () => {
   return context;
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<VisionForgeUser | null>(null);
@@ -160,15 +160,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       setIsGuest(false);
-      const result = await signInWithPopup(auth, googleProvider);
-      const backendUser = await verifyToken(result.user);
-      setUser(backendUser);
+      // Just trigger Firebase auth - onAuthStateChanged will handle backend verification
+      await signInWithPopup(auth, googleProvider);
+      // Don't call verifyToken here - it creates double verification
+      // onAuthStateChanged listener will handle it automatically
     } catch (error) {
       console.error('Error signing in with Google:', error);
+      setLoading(false); // Reset loading only on error
       throw error;
-    } finally {
-      setLoading(false);
     }
+    // Don't set loading to false here - let onAuthStateChanged handle it
   };
 
   // Sign in with GitHub
@@ -176,15 +177,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       setIsGuest(false);
-      const result = await signInWithPopup(auth, githubProvider);
-      const backendUser = await verifyToken(result.user);
-      setUser(backendUser);
+      // Just trigger Firebase auth - onAuthStateChanged will handle backend verification
+      await signInWithPopup(auth, githubProvider);
+      // Don't call verifyToken here - it creates double verification
+      // onAuthStateChanged listener will handle it automatically
     } catch (error) {
       console.error('Error signing in with GitHub:', error);
+      setLoading(false); // Reset loading only on error
       throw error;
-    } finally {
-      setLoading(false);
     }
+    // Don't set loading to false here - let onAuthStateChanged handle it
   };
 
   // Sign out

@@ -6,12 +6,14 @@ from django.http import HttpResponse
 from block_manager.serializers import ExportRequestSerializer
 from block_manager.services.tensorflow_codegen import generate_tensorflow_code
 from block_manager.services.pytorch_codegen import generate_pytorch_code
+from authentication.middleware import require_authentication
 
 import zipfile
 import io
 
 
 @api_view(['POST'])
+@require_authentication  # Require authentication for export
 def export_model(request):
     """
     Export model code with professional class-based structure.
@@ -144,6 +146,10 @@ Generated with VisionForge
 
         # Prepare response with zip file
         zip_buffer.seek(0)
+
+        # Track first export milestone for user analytics
+        if hasattr(request, 'firebase_user') and request.firebase_user:
+            request.firebase_user.mark_first_export()
 
         # Return as JSON response with base64 encoded zip for frontend compatibility
         import base64

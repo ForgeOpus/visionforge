@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+import sys
 from dotenv import load_dotenv
 
 load_dotenv()  # take environment variables from .env file
@@ -28,6 +29,30 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-oy%j%4%)w%7#sx@e!h+
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True'
+
+# Environment Variable Validation (Production Only)
+REQUIRED_ENV_VARS = [
+    'DJANGO_SECRET_KEY',
+    'FIREBASE_PROJECT_ID',
+    'FIREBASE_PRIVATE_KEY',
+    'FIREBASE_CLIENT_EMAIL',
+    'ORACLE_USER',
+    'ORACLE_PASSWORD',
+    'ORACLE_DSN',
+]
+
+# Validate required environment variables in production
+if not DEBUG:
+    missing = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
+    if missing:
+        print("=" * 70)
+        print("ERROR: Missing required environment variables for production")
+        print("=" * 70)
+        print(f"Missing variables: {', '.join(missing)}")
+        print("\nPlease check your .env file and ensure all required variables are set.")
+        print("See project/.env.example for reference.")
+        print("=" * 70)
+        sys.exit(1)
 
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 

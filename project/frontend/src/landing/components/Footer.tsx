@@ -91,23 +91,23 @@ export default function Footer() {
             <h3 className="text-white font-semibold mb-4">Company</h3>
             <ul className="space-y-2 text-sm">
               <li>
-                <a href="#" className="text-gray-400 hover:text-cyan-400 transition-colors">
-                  About
+                <a href="/project" className="text-gray-400 hover:text-cyan-400 transition-colors">
+                  Get Started
                 </a>
               </li>
               <li>
-                <a href="#" className="text-gray-400 hover:text-cyan-400 transition-colors">
-                  Blog
+                <a href="/project" className="text-gray-400 hover:text-cyan-400 transition-colors">
+                  Try Now
                 </a>
               </li>
               <li>
-                <a href="#" className="text-gray-400 hover:text-cyan-400 transition-colors">
-                  Privacy Policy
+                <a href="/project" className="text-gray-400 hover:text-cyan-400 transition-colors">
+                  Build Your Model
                 </a>
               </li>
               <li>
-                <a href="#" className="text-gray-400 hover:text-cyan-400 transition-colors">
-                  Terms of Service
+                <a href="/dashboard" className="text-gray-400 hover:text-cyan-400 transition-colors">
+                  Dashboard
                 </a>
               </li>
             </ul>

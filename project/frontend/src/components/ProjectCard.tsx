@@ -85,7 +85,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDeleted }) 
       {/* Project Card */}
       <div
         onClick={handleCardClick}
-        className="bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all duration-200 cursor-pointer group relative overflow-hidden"
+        className="bg-card rounded-lg border border-border hover:border-primary hover:shadow-lg transition-all duration-200 cursor-pointer group relative overflow-hidden"
       >
         {/* Gradient accent on hover */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200"></div>
@@ -94,7 +94,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDeleted }) 
           {/* Header with title and menu */}
           <div className="flex items-start justify-between mb-3">
             <div className="flex-1 min-w-0">
-              <h3 className="text-lg font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors">
+              <h3 className="text-lg font-semibold text-card-foreground truncate group-hover:text-primary transition-colors">
                 {project.name}
               </h3>
             </div>
@@ -106,7 +106,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDeleted }) 
                   e.stopPropagation();
                   setShowMenu(!showMenu);
                 }}
-                className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                className="p-1 text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors"
                 aria-label="Project options"
               >
                 <MoreVertical size={18} />
@@ -119,14 +119,14 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDeleted }) 
                     className="fixed inset-0 z-10"
                     onClick={() => setShowMenu(false)}
                   ></div>
-                  <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                  <div className="absolute right-0 mt-1 w-48 bg-popover rounded-lg shadow-lg border border-border py-1 z-20">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setShowMenu(false);
                         setShowDeleteConfirm(true);
                       }}
-                      className="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                      className="w-full px-4 py-2 text-left text-destructive hover:bg-destructive/10 flex items-center gap-2 transition-colors"
                     >
                       <Trash2 size={16} />
                       Delete Project
@@ -138,7 +138,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDeleted }) 
           </div>
 
           {/* Description */}
-          <p className="text-gray-600 text-sm mb-4 line-clamp-2 min-h-[2.5rem]">
+          <p className="text-muted-foreground text-sm mb-4 line-clamp-2 min-h-[2.5rem]">
             {project.description || 'No description provided'}
           </p>
 
@@ -146,7 +146,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDeleted }) 
           <div className="flex items-center justify-between">
             {getFrameworkBadge()}
 
-            <div className="flex items-center gap-1 text-xs text-gray-500">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <Clock size={14} />
               {formatDate(project.updated_at)}
             </div>
@@ -157,9 +157,9 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDeleted }) 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Delete Project?</h3>
-            <p className="text-gray-600 mb-6">
+          <div className="bg-card rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-card-foreground mb-2">Delete Project?</h3>
+            <p className="text-muted-foreground mb-6">
               Are you sure you want to delete <span className="font-semibold">{project.name}</span>?
               This action cannot be undone.
             </p>
@@ -168,14 +168,14 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDeleted }) 
               <button
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={deleting}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 transition-colors disabled:opacity-50 flex items-center gap-2"
               >
                 {deleting ? (
                   <>

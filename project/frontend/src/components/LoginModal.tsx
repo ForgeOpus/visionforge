@@ -1,7 +1,7 @@
 /**
  * Login modal component for Firebase authentication
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
@@ -28,71 +28,45 @@ export default function LoginModal({
   required = false,
   onGuestContinue
 }: LoginModalProps) {
-  const { signInWithGoogle, signInWithGithub, continueAsGuest, firebaseUser } = useAuth();
+  const { signInWithGoogle, signInWithGithub, continueAsGuest, user, loading: authLoading, isGuest } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSmartRedirect = async () => {
-    try {
-      // Fetch user's project count for smart redirect
-      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-      if (firebaseUser) {
-        const token = await firebaseUser.getIdToken();
-        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+  // Wait for user to be populated by onAuthStateChanged, then redirect
+  useEffect(() => {
+    if (!authLoading && user && !isGuest) {
+      // User is authenticated and data is loaded
+      onOpenChange(false);
 
-        if (response.ok) {
-          const data = await response.json();
-          const projectCount = data.user.project_count;
-
-          if (projectCount === 0) {
-            navigate('/project');  // New users → canvas
-          } else {
-            navigate('/dashboard');  // Returning users → dashboard
-          }
-        } else {
-          // Fallback to dashboard if fetch fails
-          navigate('/dashboard');
-        }
+      // Smart redirect based on project count
+      if (user.project_count === 0) {
+        navigate('/project');  // New users → canvas
+      } else {
+        navigate('/dashboard');  // Returning users → dashboard
       }
-    } catch (error) {
-      console.error('Error fetching user data for redirect:', error);
-      // Fallback to dashboard on error
-      navigate('/dashboard');
     }
-  };
+  }, [user, authLoading, isGuest, navigate, onOpenChange]);
 
   const handleGoogleSignIn = async () => {
     try {
-      setLoading(true);
       setError(null);
+      // Just trigger sign-in - useEffect above will handle redirect after onAuthStateChanged completes
       await signInWithGoogle();
-      onOpenChange(false);
-      // Smart redirect based on project count
-      await handleSmartRedirect();
     } catch (err) {
       console.error('Google sign in error:', err);
       setError('Failed to sign in with Google. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleGithubSignIn = async () => {
     try {
-      setLoading(true);
       setError(null);
+      // Just trigger sign-in - useEffect above will handle redirect after onAuthStateChanged completes
       await signInWithGithub();
-      onOpenChange(false);
-      // Smart redirect based on project count
-      await handleSmartRedirect();
     } catch (err) {
       console.error('GitHub sign in error:', err);
       setError('Failed to sign in with GitHub. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 

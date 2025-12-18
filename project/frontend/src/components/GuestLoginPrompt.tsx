@@ -3,6 +3,7 @@
  * Displayed when guests try to save/export their work
  * Encourages conversion from guest to authenticated user
  */
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -22,7 +23,75 @@ export const GuestLoginPrompt: React.FC<GuestLoginPromptProps> = ({
   action = 'general',
 }) => {
   const navigate = useNavigate();
-  const { signInWithGoogle, signInWithGithub, firebaseUser, refreshUser } = useAuth();
+  const { signInWithGoogle, signInWithGithub, user, loading, refreshUser } = useAuth();
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Handle post-login flow when user becomes available
+  useEffect(() => {
+    const handlePostLoginFlow = async () => {
+      if (!loading && user && !isProcessing) {
+        setIsProcessing(true);
+
+        try {
+          // Check if guest has work to transfer
+          const guestCanvas = getGuestCanvasForTransfer();
+
+          if (guestCanvas && guestCanvas.nodes.length > 0) {
+            // Guest has work - create a new project with their canvas
+            const timestamp = new Date().toLocaleString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true
+            });
+
+            const project = await createProject({
+              name: `Guest Project - ${timestamp}`,
+              description: 'Transferred from guest mode',
+              framework: 'pytorch'
+            });
+
+            // Save the architecture
+            await saveArchitecture(
+              project.id,
+              guestCanvas.nodes,
+              guestCanvas.edges,
+              guestCanvas.groupDefinitions ? new Map(guestCanvas.groupDefinitions.map((g: any) => [g.id, g])) : undefined
+            );
+
+            // Clear guest storage
+            clearGuestCanvas();
+
+            // Refresh user data to update project count
+            await refreshUser();
+
+            // Navigate to the new project
+            navigate(`/project/${project.id}`);
+            toast.success('Your work has been saved!');
+          } else {
+            // No guest work - smart redirect based on project count from AuthContext
+            if (user.project_count === 0) {
+              navigate('/project');  // New users → canvas
+            } else {
+              navigate('/dashboard');  // Returning users → dashboard
+            }
+          }
+
+          onClose();
+        } catch (error) {
+          console.error('Error in post-login flow:', error);
+          toast.error('Failed to save your work. Please try again.');
+        } finally {
+          setIsProcessing(false);
+        }
+      }
+    };
+
+    if (user) {
+      handlePostLoginFlow();
+    }
+  }, [user, loading, isProcessing, navigate, onClose, refreshUser]);
 
   if (!isOpen) return null;
 
@@ -37,80 +106,10 @@ export const GuestLoginPrompt: React.FC<GuestLoginPromptProps> = ({
     }
   };
 
-  const handlePostLoginFlow = async () => {
-    try {
-      // Check if guest has work to transfer
-      const guestCanvas = getGuestCanvasForTransfer();
-
-      if (guestCanvas && guestCanvas.nodes.length > 0) {
-        // Guest has work - create a new project with their canvas
-        const timestamp = new Date().toLocaleString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true
-        });
-
-        const project = await createProject({
-          name: `Guest Project - ${timestamp}`,
-          description: 'Transferred from guest mode',
-          framework: 'pytorch'
-        });
-
-        // Save the architecture
-        await saveArchitecture(
-          project.id,
-          guestCanvas.nodes,
-          guestCanvas.edges,
-          guestCanvas.groupDefinitions ? new Map(guestCanvas.groupDefinitions.map((g: any) => [g.id, g])) : undefined
-        );
-
-        // Clear guest storage
-        clearGuestCanvas();
-
-        // Refresh user data to update project count
-        await refreshUser();
-
-        // Navigate to the new project
-        navigate(`/project/${project.id}`);
-        toast.success('Your work has been saved!');
-      } else {
-        // No guest work - smart redirect based on project count
-        // Fetch user's project count
-        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-        if (firebaseUser) {
-          const token = await firebaseUser.getIdToken();
-          const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            const projectCount = data.user.project_count;
-
-            if (projectCount === 0) {
-              navigate('/project');  // New users → canvas
-            } else {
-              navigate('/dashboard');  // Returning users → dashboard
-            }
-          } else {
-            // Fallback to dashboard if fetch fails
-            navigate('/dashboard');
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error in post-login flow:', error);
-      toast.error('Failed to save your work. Please try again.');
-    }
-  };
-
   const handleGoogleSignIn = async () => {
     try {
+      // Just trigger sign-in - useEffect will handle the post-login flow
       await signInWithGoogle();
-      await handlePostLoginFlow();
-      onClose();
     } catch (error) {
       console.error('Error signing in with Google:', error);
       toast.error('Failed to sign in');
@@ -119,9 +118,8 @@ export const GuestLoginPrompt: React.FC<GuestLoginPromptProps> = ({
 
   const handleGithubSignIn = async () => {
     try {
+      // Just trigger sign-in - useEffect will handle the post-login flow
       await signInWithGithub();
-      await handlePostLoginFlow();
-      onClose();
     } catch (error) {
       console.error('Error signing in with GitHub:', error);
       toast.error('Failed to sign in');
