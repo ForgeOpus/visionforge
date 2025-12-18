@@ -15,7 +15,7 @@ class ClaudeChatService:
 
     def __init__(self, api_key: Optional[str] = None):
         """
-        Initialize Claude with API key and dynamically select best available model.
+        Initialize Claude with API key.
 
         Args:
             api_key: Optional API key for BYOK mode. If None, reads from environment.
@@ -30,50 +30,9 @@ class ClaudeChatService:
                 raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
 
         self.client = anthropic.Anthropic(api_key=final_api_key)
-
-        # Try to get best available model dynamically
-        self.model = self._get_best_available_model()
-
-    def _get_best_available_model(self) -> str:
-        """
-        Dynamically detect and return the best available Claude model.
-
-        Tries models in order of preference, returns first available.
-        Falls back to claude-3-5-sonnet-20241022 if all else fails.
-        """
-        # Model preference order (best to fallback)
-        preferred_models = [
-            'claude-sonnet-4-5-20250929',  # Latest Sonnet 4.5
-            'claude-opus-4-5-20251101',     # Latest Opus 4.5
-            'claude-3-5-sonnet-20241022',   # Sonnet 3.5
-            'claude-3-5-haiku-20241022',    # Haiku 3.5
-            'claude-3-sonnet-20240229',     # Older Sonnet
-        ]
-
-        try:
-            # List available models from Anthropic API
-            models_response = self.client.models.list()
-            available_models = [model.id for model in models_response.data]
-
-            # Find first preferred model that's available
-            for preferred in preferred_models:
-                if preferred in available_models:
-                    print(f"Using Claude model: {preferred}")
-                    return preferred
-
-            # If no preferred models found, use first available
-            if available_models:
-                model_name = available_models[0]
-                print(f"Using first available Claude model: {model_name}")
-                return model_name
-
-        except Exception as e:
-            print(f"Error listing Claude models: {e}")
-
-        # Final fallback
-        fallback = 'claude-3-5-sonnet-20241022'
-        print(f"Falling back to: {fallback}")
-        return fallback
+        # Use claude-3-5-haiku - most cost-effective option in 2025
+        # (Note: Claude has no free API tier, Haiku is cheapest at $1/$5 per million tokens)
+        self.model = 'claude-3-5-haiku-20241022'
 
     def _format_workflow_context(self, workflow_state: Optional[Dict[str, Any]]) -> str:
         """Format workflow state into a readable context for the AI."""
