@@ -49,12 +49,17 @@ export const useAuth = () => {
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+const GUEST_MODE_KEY = 'visionforge_guest_mode';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<VisionForgeUser | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isGuest, setIsGuest] = useState(false);
+  // Initialize isGuest from localStorage
+  const [isGuest, setIsGuest] = useState(() => {
+    const savedGuestMode = localStorage.getItem(GUEST_MODE_KEY);
+    return savedGuestMode === 'true';
+  });
   const [showIdleWarning, setShowIdleWarning] = useState(false);
 
   // Verify token with backend and get user data
@@ -185,6 +190,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       setIsGuest(false);
+      localStorage.removeItem(GUEST_MODE_KEY); // Clear guest mode
       // Just trigger Firebase auth - onAuthStateChanged will handle backend verification
       await signInWithPopup(auth, googleProvider);
       // Don't call verifyToken here - it creates double verification
@@ -209,6 +215,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       setIsGuest(false);
+      localStorage.removeItem(GUEST_MODE_KEY); // Clear guest mode
       // Just trigger Firebase auth - onAuthStateChanged will handle backend verification
       await signInWithPopup(auth, githubProvider);
       // Don't call verifyToken here - it creates double verification
@@ -245,6 +252,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await firebaseSignOut(auth);
       setUser(null);
       setIsGuest(false);
+      localStorage.removeItem(GUEST_MODE_KEY); // Clear guest mode
 
       // Clear canvas state
       const { reset } = useModelBuilderStore.getState();
@@ -258,6 +266,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Continue as guest
   const continueAsGuest = () => {
     setIsGuest(true);
+    localStorage.setItem(GUEST_MODE_KEY, 'true'); // Persist guest mode
     setUser(null);
     setFirebaseUser(null);
     setLoading(false);
