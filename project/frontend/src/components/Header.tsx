@@ -20,7 +20,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Download, FloppyDisk, CaretDown, Code, CheckCircle, GitBranch, Upload, FileCode, FilePy, GearSix, Trash, Info, PencilSimple, Warning, Key, User, SignOut, SquaresFour } from '@phosphor-icons/react'
@@ -42,6 +41,9 @@ export default function Header() {
 
   // Authentication
   const { user, isGuest, signOut: authSignOut, refreshUser } = useAuth()
+
+  // Avatar error state
+  const [avatarError, setAvatarError] = useState(false)
 
   // API Key management for demo banner
   const { requiresApiKey, provider, environment } = useApiKeys()
@@ -82,6 +84,11 @@ export default function Header() {
   useEffect(() => {
     loadProjectsList()
   }, [])
+
+  // Reset avatar error when user changes
+  useEffect(() => {
+    setAvatarError(false)
+  }, [user?.firebase_uid])
 
   const loadProjectsList = async () => {
     setIsLoadingProjects(true)
@@ -682,8 +689,13 @@ export default function Header() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" className="gap-2">
-                {user.avatar_url ? (
-                  <img src={user.avatar_url} alt={user.display_name || user.email} className="w-6 h-6 rounded-full" />
+                {user.avatar_url && !avatarError ? (
+                  <img
+                    src={user.avatar_url}
+                    alt={user.display_name || user.email}
+                    className="w-6 h-6 rounded-full"
+                    onError={() => setAvatarError(true)}
+                  />
                 ) : (
                   <User size={20} />
                 )}
@@ -745,10 +757,10 @@ export default function Header() {
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                    Recent Projects
+                    Recent Projects (Top 3)
                   </DropdownMenuLabel>
-                  <ScrollArea className="max-h-[250px]">
-                    {projects.slice(0, 8).map((project) => (
+                  <div>
+                    {projects.slice(0, 3).map((project) => (
                       <DropdownMenuItem
                         key={project.id}
                         className="cursor-pointer flex-col items-start gap-1 py-2"
@@ -779,7 +791,7 @@ export default function Header() {
                         </div>
                       </DropdownMenuItem>
                     ))}
-                  </ScrollArea>
+                  </div>
                 </>
               )}
 
