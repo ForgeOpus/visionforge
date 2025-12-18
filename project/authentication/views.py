@@ -8,6 +8,7 @@ from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 from django_ratelimit.decorators import ratelimit
 import json
+import traceback
 
 from .firebase_auth import verify_firebase_token, get_user_info_from_token
 from .models import User
@@ -114,7 +115,6 @@ def verify_token(request: HttpRequest) -> JsonResponse:
             'message': 'Request body must be valid JSON'
         }, status=400)
     except Exception as e:
-        import traceback
         traceback.print_exc()  # Print full traceback to console
         return JsonResponse({
             'error': 'Server error',
