@@ -130,20 +130,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!firebaseUser || isGuest) return;
 
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
+
     const updateSession = async () => {
-      try {
-        const token = await firebaseUser.getIdToken();
-        await fetch(`${API_BASE_URL}/api/auth/update-session`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ minutes: 5 }), // Track 5 minutes of activity
-        });
-      } catch (error) {
-        console.error('Error updating session:', error);
-      }
+      const tryUpdate = async (): Promise<void> => {
+        try {
+          const token = await firebaseUser.getIdToken();
+          const response = await fetch(`${API_BASE_URL}/auth/update-session`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ minutes: 5 }), // Track 5 minutes of activity
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          // Reset retry count on success
+          retryCount = 0;
+        } catch (error) {
+          console.error('Error updating session:', error);
+
+          // Retry with exponential backoff if under max retries
+          if (retryCount < MAX_RETRIES) {
+            retryCount++;
+            const backoffMs = 5000 * retryCount; // 5s, 10s, 15s
+            console.log(`Retrying session update in ${backoffMs}ms (attempt ${retryCount}/${MAX_RETRIES})`);
+            setTimeout(tryUpdate, backoffMs);
+          } else {
+            console.error('Max retries reached for session update');
+            retryCount = 0; // Reset for next interval
+          }
+        }
+      };
+
+      await tryUpdate();
     };
 
     // Update session immediately on mount

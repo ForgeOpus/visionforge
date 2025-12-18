@@ -1,18 +1,29 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, lazy, Suspense } from 'react'
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { toast } from 'sonner'
 import Header from './components/Header'
-import ResizableBlockPalette from './components/ResizableBlockPalette'
-import Canvas from './components/Canvas'
-import ConfigPanel from './components/ConfigPanel'
-import ChatBot from './components/ChatBot'
 import { useModelBuilderStore } from './lib/store'
 import { fetchProject, loadArchitecture, convertToFrontendProject } from './lib/projectApi'
-import { LandingPage } from './landing'
-import { Dashboard } from './pages/Dashboard'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { useAuth } from './contexts/AuthContext'
+
+// Lazy load heavy components for better performance
+const Canvas = lazy(() => import('./components/Canvas'))
+const ResizableBlockPalette = lazy(() => import('./components/ResizableBlockPalette'))
+const ConfigPanel = lazy(() => import('./components/ConfigPanel'))
+const ChatBot = lazy(() => import('./components/ChatBot'))
+const LandingPage = lazy(() => import('./landing').then(module => ({ default: module.LandingPage })))
+const Dashboard = lazy(() => import('./pages/Dashboard').then(module => ({ default: module.Dashboard })))
+
+// Loading spinner component
+function LoadingSpinner() {
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+    </div>
+  )
+}
 
 function ProjectCanvas() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -111,19 +122,21 @@ function ProjectCanvas() {
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-background">
       <Header />
 
-      <div className="flex-1 flex overflow-hidden relative">
-        <ResizableBlockPalette
-          onDragStart={handleDragStart}
-          onBlockClick={handleBlockClick}
-        />
-        <Canvas
-          onDragStart={handleDragStart}
-          onRegisterAddNode={registerAddNodeHandler}
-        />
-        {selectedNodeId && <ConfigPanel />}
-      </div>
+      <Suspense fallback={<LoadingSpinner />}>
+        <div className="flex-1 flex overflow-hidden relative">
+          <ResizableBlockPalette
+            onDragStart={handleDragStart}
+            onBlockClick={handleBlockClick}
+          />
+          <Canvas
+            onDragStart={handleDragStart}
+            onRegisterAddNode={registerAddNodeHandler}
+          />
+          {selectedNodeId && <ConfigPanel />}
+        </div>
 
-      <ChatBot />
+        <ChatBot />
+      </Suspense>
       <Toaster position="bottom-right" richColors />
     </div>
   )
@@ -131,19 +144,21 @@ function ProjectCanvas() {
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route path="/project" element={<ProjectCanvas />} />
-      <Route path="/project/:projectId" element={<ProjectCanvas />} />
-    </Routes>
+    <Suspense fallback={<LoadingSpinner />}>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/project" element={<ProjectCanvas />} />
+        <Route path="/project/:projectId" element={<ProjectCanvas />} />
+      </Routes>
+    </Suspense>
   )
 }
 
