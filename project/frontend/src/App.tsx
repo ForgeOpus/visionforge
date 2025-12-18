@@ -43,6 +43,12 @@ function ProjectCanvas() {
       return
     }
 
+    // If no projectId in URL (blank canvas) and we have a currentProject loaded, clear it
+    if (!projectId && user && currentProject) {
+      reset()
+      return
+    }
+
     // Wait for auth to finish loading before attempting to fetch project
     if (!projectId || !user) {
       return
