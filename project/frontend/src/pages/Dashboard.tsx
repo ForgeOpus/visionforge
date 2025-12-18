@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, MagnifyingGlass, SquaresFour, Funnel, Fire, Lightning, Rocket } from '@phosphor-icons/react';
+import { Plus, MagnifyingGlass, SquaresFour, Funnel, Fire, Lightning, Rocket, SignOut, User } from '@phosphor-icons/react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchProjects, ProjectResponse } from '../lib/projectApi';
 import { ProjectCard } from '../components/ProjectCard';
@@ -12,10 +12,18 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export const Dashboard = () => {
   const navigate = useNavigate();
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -85,14 +93,56 @@ export const Dashboard = () => {
       {/* Header Section */}
       <div className="bg-card border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Welcome Message */}
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold text-foreground">
-              Welcome back, {user?.display_name || user?.email?.split('@')[0] || 'there'}!
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Manage your neural network projects and continue where you left off
-            </p>
+          {/* Welcome Message with User Menu */}
+          <div className="mb-6 flex items-start justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">
+                Welcome back, {user?.display_name || user?.email?.split('@')[0] || 'there'}!
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                Manage your neural network projects and continue where you left off
+              </p>
+            </div>
+
+            {/* User Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="rounded-full">
+                  {user?.avatar_url ? (
+                    <img
+                      src={user.avatar_url}
+                      alt={user.display_name || 'User'}
+                      className="w-8 h-8 rounded-full"
+                    />
+                  ) : (
+                    <User size={20} />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium">{user?.display_name || 'User'}</p>
+                    <p className="text-xs text-muted-foreground">{user?.email}</p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/')}>
+                  Home
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/project')}>
+                  New Project
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={logout}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <SignOut size={16} className="mr-2" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           {/* Stats Cards */}
