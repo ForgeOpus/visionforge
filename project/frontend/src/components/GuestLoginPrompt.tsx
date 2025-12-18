@@ -27,9 +27,10 @@ export const GuestLoginPrompt: React.FC<GuestLoginPromptProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Handle post-login flow when user becomes available
+  // ONLY run this when the prompt is actually open (user just logged in from guest mode)
   useEffect(() => {
     const handlePostLoginFlow = async () => {
-      if (!loading && user && !isProcessing) {
+      if (isOpen && !loading && user && !isProcessing) {
         setIsProcessing(true);
 
         try {
@@ -91,7 +92,7 @@ export const GuestLoginPrompt: React.FC<GuestLoginPromptProps> = ({
     if (user) {
       handlePostLoginFlow();
     }
-  }, [user, loading, isProcessing, navigate, onClose, refreshUser]);
+  }, [isOpen, user, loading, isProcessing, navigate, onClose, refreshUser]);
 
   if (!isOpen) return null;
 
