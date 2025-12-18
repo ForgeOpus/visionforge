@@ -204,9 +204,10 @@ def update_session(request):
             'message': 'Request body must be valid JSON'
         }, status=400)
     except Exception as e:
+        traceback.print_exc()  # Print full traceback to console for debugging
         return JsonResponse({
             'error': 'Server error',
-            'message': str(e)
+            'message': 'An unexpected error occurred. Please try again later.'
         }, status=500)
 
 
@@ -234,9 +235,10 @@ def logout(request):
         }, status=200)
 
     except Exception as e:
+        traceback.print_exc()  # Print full traceback to console for debugging
         return JsonResponse({
             'error': 'Server error',
-            'message': str(e)
+            'message': 'An unexpected error occurred. Please try again later.'
         }, status=500)
 
 
@@ -291,7 +293,8 @@ def mark_milestone(request):
             'message': 'Request body must be valid JSON'
         }, status=400)
     except Exception as e:
+        traceback.print_exc()  # Print full traceback to console for debugging
         return JsonResponse({
             'error': 'Server error',
-            'message': str(e)
+            'message': 'An unexpected error occurred. Please try again later.'
         }, status=500)
