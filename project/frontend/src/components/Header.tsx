@@ -386,6 +386,13 @@ export default function Header() {
   }
 
   const handleExportJSON = () => {
+    // Guest check
+    if (isGuest) {
+      setGuestPromptAction('export')
+      setShowGuestLoginPrompt(true)
+      return
+    }
+
     if (nodes.length === 0) {
       toast.error('Cannot export: No blocks in architecture')
       return

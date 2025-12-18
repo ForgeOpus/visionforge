@@ -56,7 +56,9 @@ export default function LoginModal({
       await signInWithGoogle();
     } catch (err) {
       console.error('Google sign in error:', err);
-      setError('Failed to sign in with Google. Please try again.');
+      // Show the actual error message if it's an Error object, otherwise generic message
+      const errorMessage = err instanceof Error ? err.message : 'Failed to sign in with Google. Please try again.';
+      setError(errorMessage);
     }
   };
 
@@ -67,7 +69,9 @@ export default function LoginModal({
       await signInWithGithub();
     } catch (err) {
       console.error('GitHub sign in error:', err);
-      setError('Failed to sign in with GitHub. Please try again.');
+      // Show the actual error message if it's an Error object, otherwise generic message
+      const errorMessage = err instanceof Error ? err.message : 'Failed to sign in with GitHub. Please try again.';
+      setError(errorMessage);
     }
   };
 

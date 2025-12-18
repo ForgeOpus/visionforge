@@ -113,7 +113,8 @@ export const GuestLoginPrompt: React.FC<GuestLoginPromptProps> = ({
       await signInWithGoogle();
     } catch (error) {
       console.error('Error signing in with Google:', error);
-      toast.error('Failed to sign in');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to sign in';
+      toast.error(errorMessage);
     }
   };
 
@@ -123,7 +124,8 @@ export const GuestLoginPrompt: React.FC<GuestLoginPromptProps> = ({
       await signInWithGithub();
     } catch (error) {
       console.error('Error signing in with GitHub:', error);
-      toast.error('Failed to sign in');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to sign in';
+      toast.error(errorMessage);
     }
   };
 

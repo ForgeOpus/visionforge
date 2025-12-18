@@ -189,9 +189,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await signInWithPopup(auth, googleProvider);
       // Don't call verifyToken here - it creates double verification
       // onAuthStateChanged listener will handle it automatically
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error signing in with Google:', error);
       setLoading(false); // Reset loading only on error
+
+      // Handle account exists with different credential
+      if (error.code === 'auth/account-exists-with-different-credential') {
+        const email = error.customData?.email;
+        throw new Error(`An account already exists with ${email}. Please sign in with your original provider (GitHub).`);
+      }
+
       throw error;
     }
     // Don't set loading to false here - let onAuthStateChanged handle it
@@ -206,9 +213,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await signInWithPopup(auth, githubProvider);
       // Don't call verifyToken here - it creates double verification
       // onAuthStateChanged listener will handle it automatically
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error signing in with GitHub:', error);
       setLoading(false); // Reset loading only on error
+
+      // Handle account exists with different credential
+      if (error.code === 'auth/account-exists-with-different-credential') {
+        const email = error.customData?.email;
+        throw new Error(`An account already exists with ${email}. Please sign in with your original provider (Google).`);
+      }
+
       throw error;
     }
     // Don't set loading to false here - let onAuthStateChanged handle it
