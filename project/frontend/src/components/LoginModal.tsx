@@ -34,8 +34,9 @@ export default function LoginModal({
   const [error, setError] = useState<string | null>(null);
 
   // Wait for user to be populated by onAuthStateChanged, then redirect
+  // ONLY redirect if modal is open (meaning user just logged in)
   useEffect(() => {
-    if (!authLoading && user && !isGuest) {
+    if (open && !authLoading && user && !isGuest) {
       // User is authenticated and data is loaded
       onOpenChange(false);
 
@@ -46,7 +47,7 @@ export default function LoginModal({
         navigate('/dashboard');  // Returning users → dashboard
       }
     }
-  }, [user, authLoading, isGuest, navigate, onOpenChange]);
+  }, [open, user, authLoading, isGuest, navigate, onOpenChange]);
 
   const handleGoogleSignIn = async () => {
     try {
