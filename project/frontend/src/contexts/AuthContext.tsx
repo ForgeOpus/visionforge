@@ -62,7 +62,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const token = await firebaseUser.getIdToken();
 
-      const response = await fetch(`${API_BASE_URL}/api/auth/verify-token`, {
+      const response = await fetch(`${API_BASE_URL}/auth/verify-token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -90,7 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const token = await firebaseUser.getIdToken();
 
-      const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -220,7 +220,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Update last login on backend
       if (firebaseUser) {
         const token = await firebaseUser.getIdToken();
-        await fetch(`${API_BASE_URL}/api/auth/logout`, {
+        await fetch(`${API_BASE_URL}/auth/logout`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
