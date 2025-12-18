@@ -1,7 +1,8 @@
 """
 Authentication API views for Firebase integration.
 """
-from django.http import JsonResponse
+from typing import Dict, Any
+from django.http import JsonResponse, HttpRequest
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
@@ -14,7 +15,7 @@ from .middleware import require_authentication
 
 @csrf_exempt
 @require_http_methods(["POST"])
-def verify_token(request):
+def verify_token(request: HttpRequest) -> JsonResponse:
     """
     Verify Firebase ID token and create/update user in database.
 
@@ -122,7 +123,7 @@ def verify_token(request):
 @csrf_exempt
 @require_http_methods(["GET"])
 @require_authentication
-def get_current_user(request):
+def get_current_user(request: HttpRequest) -> JsonResponse:
     """
     Get current authenticated user information.
 

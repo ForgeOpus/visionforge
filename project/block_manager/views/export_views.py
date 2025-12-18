@@ -1,6 +1,8 @@
+from typing import Dict, List, Any, Tuple
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.request import Request
 from django.http import HttpResponse
 
 from block_manager.serializers import ExportRequestSerializer
@@ -14,7 +16,7 @@ import io
 
 @api_view(['POST'])
 @require_authentication  # Require authentication for export
-def export_model(request):
+def export_model(request: Request) -> Response:
     """
     Export model code with professional class-based structure.
 
