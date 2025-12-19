@@ -698,11 +698,11 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
-        onNodeClick={onNodeClick}
-        onEdgeClick={onEdgeClick}
-        onPaneClick={onPaneClick}
-        onPaneContextMenu={onPaneContextMenu}
-        onNodeContextMenu={onNodeContextMenu}
+        onNodeClick={isInteractive ? onNodeClick : undefined}
+        onEdgeClick={isInteractive ? onEdgeClick : undefined}
+        onPaneClick={isInteractive ? onPaneClick : undefined}
+        onPaneContextMenu={isInteractive ? onPaneContextMenu : undefined}
+        onNodeContextMenu={isInteractive ? onNodeContextMenu : undefined}
         onReconnect={onReconnect}
         edgesReconnectable={true}
         nodeTypes={nodeTypes}
@@ -713,6 +713,7 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
         nodesDraggable={isInteractive}
         nodesConnectable={isInteractive}
         elementsSelectable={isInteractive}
+        onInteractiveChange={setIsInteractive}
         defaultEdgeOptions={{
           animated: true,
           style: { stroke: '#6366f1', strokeWidth: 2 }
