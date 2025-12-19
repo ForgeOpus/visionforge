@@ -82,6 +82,9 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
   const [selectedNodesForGrouping, setSelectedNodesForGrouping] = useState<string[]>([])
   const createGroupBlock = useModelBuilderStore((state) => state.createGroupBlock)
 
+  // Canvas interactivity state (for lock button in Controls)
+  const [isInteractive, setIsInteractive] = useState(true)
+
   // Validation is now triggered manually via the Validate button in Header
   // Removed automatic validation on nodes/edges change
 
@@ -707,6 +710,9 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
         fitView
         minZoom={0.5}
         maxZoom={1.5}
+        nodesDraggable={isInteractive}
+        nodesConnectable={isInteractive}
+        elementsSelectable={isInteractive}
         defaultEdgeOptions={{
           animated: true,
           style: { stroke: '#6366f1', strokeWidth: 2 }
