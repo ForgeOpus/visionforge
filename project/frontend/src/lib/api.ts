@@ -4,6 +4,7 @@
  */
 
 import type { NodeSpec, NodeDefinitionsResponse, RenderCodeResponse } from './nodeSpec.types'
+import { getAuthHeaders } from './auth'
 
 // API configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
@@ -182,8 +183,12 @@ export async function exportModel(modelData: {
   zip: string  // Base64 encoded zip file
   filename: string
 }>> {
+  // Get auth headers for Firebase authentication
+  const authHeaders = await getAuthHeaders()
+
   return apiFetch('/export', {
     method: 'POST',
+    headers: authHeaders,
     body: JSON.stringify({
       ...modelData,
       groupDefinitions: modelData.groupDefinitions || []
