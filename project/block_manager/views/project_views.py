@@ -8,7 +8,6 @@ from block_manager.serializers import (
     ProjectSerializer,
     ProjectDetailSerializer,
 )
-from authentication.models import User
 
 
 class ProjectViewSet(viewsets.ModelViewSet):
