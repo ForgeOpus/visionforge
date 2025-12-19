@@ -249,6 +249,10 @@ if not DEBUG:
     # Referrer policy
     SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
 
+    # Cross-Origin-Opener-Policy - Required for Firebase popup authentication
+    # https://github.com/firebase/firebase-js-sdk/issues/8541
+    SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
+
     # Content Security Policy (basic - customize as needed)
     # CSP_DEFAULT_SRC = ("'self'",)
     # CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'")  # Adjust based on your needs
