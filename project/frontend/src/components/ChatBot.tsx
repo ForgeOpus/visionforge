@@ -51,6 +51,8 @@ export default function ChatBot() {
   const {
     geminiApiKey,
     anthropicApiKey,
+    openaiApiKey,
+    activeProvider,
     requiresApiKey,
     hasRequiredKey,
     provider
@@ -159,7 +161,7 @@ export default function ChatBot() {
         modificationMode,
         workflowState,
         currentFile || undefined,
-        { geminiApiKey, anthropicApiKey }
+        { geminiApiKey, anthropicApiKey, openaiApiKey, activeProvider }
       )
 
       if (response.success && response.data) {
@@ -471,6 +473,19 @@ export default function ChatBot() {
                 ? 'AI can suggest changes to your workflow'
                 : 'AI will only answer questions (no workflow changes)'}
             </p>
+
+            {/* API Key Button - Show when API keys are required */}
+            {requiresApiKey && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full mt-2"
+                onClick={() => setShowApiKeyModal(true)}
+              >
+                <Icons.Key size={16} className="mr-2" />
+                Edit API Key
+              </Button>
+            )}
           </div>
 
           {/* Messages Area */}

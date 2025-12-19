@@ -20,6 +20,8 @@ interface ApiResponse<T = any> {
 interface ApiKeyHeaders {
   geminiApiKey?: string | null
   anthropicApiKey?: string | null
+  openaiApiKey?: string | null
+  activeProvider?: 'gemini' | 'claude' | 'openai'
 }
 
 /**
@@ -34,6 +36,14 @@ function getApiKeyHeaders(keys?: ApiKeyHeaders): Record<string, string> {
 
   if (keys?.anthropicApiKey) {
     headers['X-Anthropic-Api-Key'] = keys.anthropicApiKey
+  }
+
+  if (keys?.openaiApiKey) {
+    headers['X-OpenAI-Api-Key'] = keys.openaiApiKey
+  }
+
+  if (keys?.activeProvider) {
+    headers['X-Active-Provider'] = keys.activeProvider
   }
 
   return headers

@@ -47,9 +47,11 @@ def chat_message(request):
     import json as json_lib
     from django.conf import settings
 
-    # Extract API keys from headers (only used in PROD mode)
+    # Extract API keys and active provider from headers (only used in PROD mode)
     gemini_api_key = request.headers.get('X-Gemini-Api-Key')
     anthropic_api_key = request.headers.get('X-Anthropic-Api-Key')
+    openai_api_key = request.headers.get('X-OpenAI-Api-Key')
+    active_provider = request.headers.get('X-Active-Provider')  # 'gemini', 'claude', or 'openai'
 
     # Check if request has file upload (FormData)
     uploaded_file = request.FILES.get('file', None)
@@ -88,7 +90,9 @@ def chat_message(request):
         # Initialize AI service with appropriate API keys based on mode
         ai_service = AIServiceFactory.create_service(
             gemini_api_key=gemini_api_key,
-            anthropic_api_key=anthropic_api_key
+            anthropic_api_key=anthropic_api_key,
+            openai_api_key=openai_api_key,
+            active_provider=active_provider
         )
         provider_name = AIServiceFactory.get_provider_name()
 
@@ -195,9 +199,11 @@ def get_suggestions(request):
         "suggestions": [str]
     }
     """
-    # Extract API keys from headers (only used in PROD mode)
+    # Extract API keys and active provider from headers (only used in PROD mode)
     gemini_api_key = request.headers.get('X-Gemini-Api-Key')
     anthropic_api_key = request.headers.get('X-Anthropic-Api-Key')
+    openai_api_key = request.headers.get('X-OpenAI-Api-Key')
+    active_provider = request.headers.get('X-Active-Provider')  # 'gemini', 'claude', or 'openai'
 
     nodes = request.data.get('nodes', [])
     edges = request.data.get('edges', [])
@@ -211,7 +217,9 @@ def get_suggestions(request):
         # Initialize AI service with appropriate API keys based on mode
         ai_service = AIServiceFactory.create_service(
             gemini_api_key=gemini_api_key,
-            anthropic_api_key=anthropic_api_key
+            anthropic_api_key=anthropic_api_key,
+            openai_api_key=openai_api_key,
+            active_provider=active_provider
         )
         provider_name = AIServiceFactory.get_provider_name()
 

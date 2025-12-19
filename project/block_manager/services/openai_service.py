@@ -1,21 +1,20 @@
 """
-Gemini AI Service for chat functionality and workflow modifications.
+OpenAI Service for chat functionality and workflow modifications.
 """
-import google.generativeai as genai
+import openai
 import json
 import os
-import tempfile
 from typing import List, Dict, Any, Optional
 from django.conf import settings
 from django.core.files.uploadedfile import UploadedFile
 
 
-class GeminiChatService:
-    """Service to handle Gemini AI chat interactions with workflow context."""
+class OpenAIChatService:
+    """Service to handle OpenAI chat interactions with workflow context."""
 
     def __init__(self, api_key: Optional[str] = None):
         """
-        Initialize Gemini with API key.
+        Initialize OpenAI with API key.
 
         Args:
             api_key: Optional API key for BYOK mode. If None, reads from environment.
@@ -25,14 +24,13 @@ class GeminiChatService:
             final_api_key = api_key
         else:
             # DEV mode - use environment variable
-            final_api_key = os.getenv('GEMINI_API_KEY')
+            final_api_key = os.getenv('OPENAI_API_KEY')
             if not final_api_key:
-                raise ValueError("GEMINI_API_KEY environment variable is not set")
+                raise ValueError("OPENAI_API_KEY environment variable is not set")
 
-        genai.configure(api_key=final_api_key)
-        # Use gemini-2.5-flash - best free tier availability (Dec 2025)
-        # (gemini-2.0-* models have quota limit: 0 as of Dec 2025)
-        self.model = genai.GenerativeModel('gemini-2.5-flash')
+        self.client = openai.OpenAI(api_key=final_api_key)
+        # Use GPT-4o-mini for cost-effectiveness
+        self.model = 'gpt-4o-mini'
 
     def _format_workflow_context(self, workflow_state: Optional[Dict[str, Any]]) -> str:
         """Format workflow state into a readable context for the AI."""
@@ -256,7 +254,7 @@ STEP 1: When user requests connected nodes (e.g., "A connects to B connects to C
 
 STEP 2: After nodes exist in the workflow context, create connections:
   - Use the exact node IDs shown in the workflow context
-  
+
 Example (adding connection):
 ```json
 {
@@ -325,149 +323,20 @@ You cannot modify the workflow in this mode. If users want to make changes, sugg
         return f"{base_prompt}\n{mode_prompt}\n{workflow_context}"
 
     def _format_chat_history(self, history: List[Dict[str, str]]) -> List[Dict[str, Any]]:
-        """Convert chat history to Gemini format."""
+        """Convert chat history to OpenAI format."""
         formatted_history = []
 
         for message in history:
             role = message.get('role', 'user')
             content = message.get('content', '')
 
-            # Gemini uses 'user' and 'model' roles
-            gemini_role = 'model' if role == 'assistant' else 'user'
-
+            # OpenAI uses 'user' and 'assistant' roles
             formatted_history.append({
-                'role': gemini_role,
-                'parts': [content]
+                'role': role,
+                'content': content
             })
 
         return formatted_history
-
-    def upload_file_to_gemini(self, uploaded_file: UploadedFile) -> Optional[Any]:
-        """
-        Upload a file to Gemini's File API.
-
-        Args:
-            uploaded_file: Django UploadedFile object
-
-        Returns:
-            Gemini file object or None if upload failed
-        """
-        try:
-            # Save uploaded file to temporary location
-            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as temp_file:
-                for chunk in uploaded_file.chunks():
-                    temp_file.write(chunk)
-                temp_path = temp_file.name
-
-            # Upload to Gemini
-            gemini_file = genai.upload_file(temp_path, display_name=uploaded_file.name)
-
-            # Clean up temporary file
-            os.unlink(temp_path)
-
-            return gemini_file
-
-        except Exception as e:
-            print(f"Error uploading file to Gemini: {e}")
-            # Clean up temp file if it exists
-            if 'temp_path' in locals():
-                try:
-                    os.unlink(temp_path)
-                except:
-                    pass
-            return None
-
-    def analyze_file_for_architecture(
-        self,
-        gemini_file: Any,
-        user_message: str = "",
-        workflow_state: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        """
-        Analyze an uploaded file (image/document) to generate architecture suggestions.
-
-        Args:
-            gemini_file: Gemini file object from upload
-            user_message: Optional message from user
-            workflow_state: Current workflow state
-
-        Returns:
-            {
-                'response': str,
-                'modifications': Optional[List[Dict]] - suggested workflow changes
-            }
-        """
-        try:
-            workflow_context = self._format_workflow_context(workflow_state)
-
-            analysis_prompt = f"""You are analyzing a file uploaded by the user to help them build a neural network architecture in VisionForge.
-
-{workflow_context}
-
-KEY NODE CONFIGURATION RULES (use LOWERCASE node types):
-- "conv2d": {{"out_channels": number (REQUIRED), "kernel_size": 3, "stride": 1, "padding": 1}}
-  - NEVER use "in_channels" - it's automatically inferred
-- "linear": {{"out_features": number (REQUIRED)}}
-- "input": {{"shape": "[batch, channels, height, width]"}}
-- "output": {{}} (no config needed)
-- "relu", "sigmoid", etc.: {{}} (no config needed)
-- "batchnorm": {{"num_features": number (REQUIRED)}}
-
-TASK: Analyze the uploaded file (could be an architecture diagram, sketch, description, or reference) and:
-1. Understand what neural network architecture the user wants to build
-2. Generate a complete workflow with nodes and connections
-3. Provide a natural language explanation
-4. Return JSON modification blocks for each node and connection
-
-User's message: {user_message if user_message else "Please analyze this file and create an architecture"}
-
-CRITICAL: You MUST provide actionable workflow modifications in JSON format.
-
-For each node you want to add, use this exact format (PROVIDE ALL REQUIRED FIELDS, use LOWERCASE nodeType):
-```json
-{{
-  "action": "add_node",
-  "details": {{
-    "nodeType": "input",
-    "config": {{"shape": "[1, 3, 224, 224]"}},
-    "position": {{"x": 100, "y": 100}}
-  }},
-  "explanation": "Adding an Input node for image data"
-}}
-```
-
-For connections between nodes, you need to first add all nodes, then in subsequent messages you can connect them.
-Since this is the first analysis, focus on creating the nodes. Suggest reasonable positions (spread them out vertically by 100-150 pixels).
-
-EXAMPLE ARCHITECTURE for an image classifier (with LOWERCASE node types):
-1. "input" node (x: 100, y: 100)
-2. "conv2d" layer (x: 100, y: 250)
-3. "relu" activation (x: 100, y: 400)
-4. "maxpool" (x: 100, y: 550)
-5. "flatten" (x: 100, y: 700)
-6. "linear" layer (x: 100, y: 850)
-7. "output" (x: 100, y: 1000)
-
-Provide each node as a separate JSON block with appropriate configurations using lowercase nodeType values.
-"""
-
-            # Generate content with the file
-            response = self.model.generate_content([analysis_prompt, gemini_file])
-            response_text = response.text
-
-            # Extract modifications
-            modifications = self._extract_modifications(response_text)
-
-            return {
-                'response': response_text,
-                'modifications': modifications
-            }
-
-        except Exception as e:
-            return {
-                'response': f"Error analyzing file: {str(e)}",
-                'modifications': None
-            }
 
     def chat(
         self,
@@ -475,17 +344,16 @@ Provide each node as a separate JSON block with appropriate configurations using
         history: List[Dict[str, str]],
         modification_mode: bool = False,
         workflow_state: Optional[Dict[str, Any]] = None,
-        gemini_file: Optional[Any] = None
+        **kwargs
     ) -> Dict[str, Any]:
         """
-        Send a chat message and get a response from Gemini.
+        Send a chat message and get a response from OpenAI.
 
         Args:
             message: User's message
             history: Previous chat messages [{'role': 'user'|'assistant', 'content': '...'}]
             modification_mode: Whether workflow modification is enabled
             workflow_state: Current workflow state (nodes and edges)
-            gemini_file: Optional Gemini file object (already uploaded)
 
         Returns:
             {
@@ -494,30 +362,28 @@ Provide each node as a separate JSON block with appropriate configurations using
             }
         """
         try:
-            # If there's a file, use the analyze_file_for_architecture method
-            if gemini_file:
-                return self.analyze_file_for_architecture(
-                    gemini_file=gemini_file,
-                    user_message=message,
-                    workflow_state=workflow_state
-                )
-
             # Build system context
             system_prompt = self._build_system_prompt(modification_mode, workflow_state)
 
-            # Format history for Gemini
+            # Format history for OpenAI
             formatted_history = self._format_chat_history(history)
 
-            # Always include system prompt with current workflow context
-            # This ensures the AI always knows the current state and formatting requirements
-            full_message = f"{system_prompt}\n\nUser: {message}"
+            # Build messages array
+            messages = [
+                {'role': 'system', 'content': system_prompt}
+            ] + formatted_history + [
+                {'role': 'user', 'content': message}
+            ]
 
-            # Create chat session with history
-            chat = self.model.start_chat(history=formatted_history)
+            # Generate response
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_tokens=4096,
+                temperature=0.7
+            )
 
-            # Send message and get response
-            response = chat.send_message(full_message)
-            response_text = response.text
+            response_text = response.choices[0].message.content
 
             # Try to extract JSON modifications from response
             modifications = self._extract_modifications(response_text)
@@ -529,7 +395,7 @@ Provide each node as a separate JSON block with appropriate configurations using
 
         except Exception as e:
             return {
-                'response': f"Error communicating with Gemini AI: {str(e)}",
+                'response': f"Error communicating with OpenAI: {str(e)}",
                 'modifications': None
             }
 
@@ -586,8 +452,17 @@ Provide suggestions as a numbered list. Focus on:
 
 Format your response as a simple numbered list."""
 
-            response = self.model.generate_content(prompt)
-            response_text = response.text
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {'role': 'system', 'content': 'You are a helpful AI assistant for neural network architecture design.'},
+                    {'role': 'user', 'content': prompt}
+                ],
+                max_tokens=1024,
+                temperature=0.7
+            )
+
+            response_text = response.choices[0].message.content
 
             # Parse suggestions from numbered list
             import re

@@ -46,7 +46,7 @@ export default function Header() {
   const [avatarError, setAvatarError] = useState(false)
 
   // API Key management for demo banner
-  const { requiresApiKey, provider, environment } = useApiKeys()
+  const { requiresApiKey, provider, environment, hasRequiredKey } = useApiKeys()
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
 
   // Guest login prompt
@@ -626,13 +626,13 @@ export default function Header() {
 
   return (
     <>
-      {/* Demo Mode Banner */}
-      {requiresApiKey && (
+      {/* Demo Mode Banner - Only show when API key is required but not provided */}
+      {requiresApiKey && !hasRequiredKey() && (
         <div className="bg-yellow-500/10 border-b border-yellow-500/50 px-4 py-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Warning size={20} className="text-yellow-600 dark:text-yellow-400" />
             <span className="text-sm text-yellow-600 dark:text-yellow-400">
-              <strong>Demo Mode:</strong> Please provide your personal {provider} API key to enable AI assistant functionality.
+              <strong>Demo Mode:</strong> Please provide your personal API key to enable AI assistant functionality.
             </span>
           </div>
           <Button

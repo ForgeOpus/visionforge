@@ -3,13 +3,17 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 interface ApiKeyContextType {
   geminiApiKey: string | null
   anthropicApiKey: string | null
+  openaiApiKey: string | null
   isProduction: boolean
   requiresApiKey: boolean
-  provider: 'Gemini' | 'Claude' | null
+  provider: 'Gemini' | 'Claude' | 'OpenAI' | null
   environment: string | null
   isLoading: boolean
+  activeProvider: 'gemini' | 'claude' | 'openai'
   setGeminiApiKey: (key: string | null) => void
   setAnthropicApiKey: (key: string | null) => void
+  setOpenAIApiKey: (key: string | null) => void
+  setActiveProvider: (provider: 'gemini' | 'claude' | 'openai') => void
   clearKeys: () => void
   hasRequiredKey: () => boolean
 }
@@ -18,6 +22,8 @@ const ApiKeyContext = createContext<ApiKeyContextType | undefined>(undefined)
 
 const STORAGE_KEY_GEMINI = 'visionforge_gemini_api_key'
 const STORAGE_KEY_ANTHROPIC = 'visionforge_anthropic_api_key'
+const STORAGE_KEY_OPENAI = 'visionforge_openai_api_key'
+const STORAGE_KEY_ACTIVE_PROVIDER = 'visionforge_active_provider'
 
 interface ApiKeyProviderProps {
   children: ReactNode
@@ -26,19 +32,31 @@ interface ApiKeyProviderProps {
 export function ApiKeyProvider({ children }: ApiKeyProviderProps) {
   const [geminiApiKey, setGeminiApiKeyState] = useState<string | null>(null)
   const [anthropicApiKey, setAnthropicApiKeyState] = useState<string | null>(null)
+  const [openaiApiKey, setOpenAIApiKeyState] = useState<string | null>(null)
   const [isProduction, setIsProduction] = useState(false)
   const [requiresApiKey, setRequiresApiKey] = useState(false)
-  const [provider, setProvider] = useState<'Gemini' | 'Claude' | null>(null)
+  const [provider, setProvider] = useState<'Gemini' | 'Claude' | 'OpenAI' | null>(null)
   const [environment, setEnvironment] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+
+  // Active provider state (user's choice for which AI provider to use)
+  const [activeProvider, setActiveProviderState] = useState<'gemini' | 'claude' | 'openai'>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_ACTIVE_PROVIDER)
+    if (saved === 'claude' || saved === 'openai' || saved === 'gemini') {
+      return saved as 'gemini' | 'claude' | 'openai'
+    }
+    return 'gemini' // default
+  })
 
   // Load keys from sessionStorage on mount
   useEffect(() => {
     const savedGeminiKey = sessionStorage.getItem(STORAGE_KEY_GEMINI)
     const savedAnthropicKey = sessionStorage.getItem(STORAGE_KEY_ANTHROPIC)
+    const savedOpenAIKey = sessionStorage.getItem(STORAGE_KEY_OPENAI)
 
     if (savedGeminiKey) setGeminiApiKeyState(savedGeminiKey)
     if (savedAnthropicKey) setAnthropicApiKeyState(savedAnthropicKey)
+    if (savedOpenAIKey) setOpenAIApiKeyState(savedOpenAIKey)
   }, [])
 
   // Fetch environment info from backend
@@ -83,18 +101,36 @@ export function ApiKeyProvider({ children }: ApiKeyProviderProps) {
     }
   }
 
+  const setOpenAIApiKey = (key: string | null) => {
+    setOpenAIApiKeyState(key)
+    if (key) {
+      sessionStorage.setItem(STORAGE_KEY_OPENAI, key)
+    } else {
+      sessionStorage.removeItem(STORAGE_KEY_OPENAI)
+    }
+  }
+
+  const setActiveProvider = (provider: 'gemini' | 'claude' | 'openai') => {
+    setActiveProviderState(provider)
+    localStorage.setItem(STORAGE_KEY_ACTIVE_PROVIDER, provider)
+  }
+
   const clearKeys = () => {
     setGeminiApiKey(null)
     setAnthropicApiKey(null)
+    setOpenAIApiKey(null)
   }
 
   const hasRequiredKey = (): boolean => {
     if (!requiresApiKey) return true // DEV mode doesn't need client-side keys
 
-    if (provider === 'Gemini') {
+    // Check if user has API key for their active provider
+    if (activeProvider === 'gemini') {
       return !!geminiApiKey
-    } else if (provider === 'Claude') {
+    } else if (activeProvider === 'claude') {
       return !!anthropicApiKey
+    } else if (activeProvider === 'openai') {
+      return !!openaiApiKey
     }
 
     return false
@@ -105,13 +141,17 @@ export function ApiKeyProvider({ children }: ApiKeyProviderProps) {
       value={{
         geminiApiKey,
         anthropicApiKey,
+        openaiApiKey,
         isProduction,
         requiresApiKey,
         provider,
         environment,
         isLoading,
+        activeProvider,
         setGeminiApiKey,
         setAnthropicApiKey,
+        setOpenAIApiKey,
+        setActiveProvider,
         clearKeys,
         hasRequiredKey
       }}
