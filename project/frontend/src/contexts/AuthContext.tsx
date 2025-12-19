@@ -277,7 +277,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Idle timeout - auto logout after 10 minutes of inactivity
-  const { showWarning, resetTimer } = useIdleTimeout({
+  // Warning shows after 2 minutes, logout after 10 minutes
+  const { resetTimer } = useIdleTimeout({
     onIdle: async () => {
       if (!isGuest && user) {
         await signOut();
@@ -288,8 +289,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setShowIdleWarning(true);
       }
     },
-    idleTime: 10 * 60 * 1000, // 10 minutes
-    warningTime: 60 * 1000, // 1 minute warning
+    idleTime: 10 * 60 * 1000, // 10 minutes until logout
+    warningTime: 8 * 60 * 1000, // 8 minutes before logout = warning at 2 min
   });
 
   const handleStayActive = () => {
@@ -323,7 +324,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           open={showIdleWarning}
           onStayActive={handleStayActive}
           onLogout={handleIdleLogout}
-          timeRemaining={60}
+          timeRemaining={480}
         />
       )}
     </AuthContext.Provider>
