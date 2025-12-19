@@ -20,6 +20,9 @@ def chat_message(request):
     Request headers (PROD mode only):
         - X-Gemini-Api-Key: User's Gemini API key
         - X-Anthropic-Api-Key: User's Anthropic API key
+        - X-OpenAI-Api-Key: User's OpenAI API key
+        - X-Active-Provider: Active provider ('gemini', 'claude', or 'openai')
+        - X-Selected-Model: Selected model (e.g., 'gpt-5', 'claude-opus-4.5')
 
     Request body (JSON or FormData):
     - JSON format:
@@ -47,11 +50,12 @@ def chat_message(request):
     import json as json_lib
     from django.conf import settings
 
-    # Extract API keys and active provider from headers (only used in PROD mode)
+    # Extract API keys, active provider, and model from headers (only used in PROD mode)
     gemini_api_key = request.headers.get('X-Gemini-Api-Key')
     anthropic_api_key = request.headers.get('X-Anthropic-Api-Key')
     openai_api_key = request.headers.get('X-OpenAI-Api-Key')
     active_provider = request.headers.get('X-Active-Provider')  # 'gemini', 'claude', or 'openai'
+    selected_model = request.headers.get('X-Selected-Model')  # Frontend model name (e.g., 'gpt-5', 'claude-opus-4.5')
 
     # Check if request has file upload (FormData)
     uploaded_file = request.FILES.get('file', None)
@@ -87,12 +91,13 @@ def chat_message(request):
         )
 
     try:
-        # Initialize AI service with appropriate API keys based on mode
+        # Initialize AI service with appropriate API keys and model based on mode
         ai_service = AIServiceFactory.create_service(
             gemini_api_key=gemini_api_key,
             anthropic_api_key=anthropic_api_key,
             openai_api_key=openai_api_key,
-            active_provider=active_provider
+            active_provider=active_provider,
+            model=selected_model
         )
         provider_name = AIServiceFactory.get_provider_name()
 
@@ -187,6 +192,9 @@ def get_suggestions(request):
     Request headers (PROD mode only):
         - X-Gemini-Api-Key: User's Gemini API key
         - X-Anthropic-Api-Key: User's Anthropic API key
+        - X-OpenAI-Api-Key: User's OpenAI API key
+        - X-Active-Provider: Active provider ('gemini', 'claude', or 'openai')
+        - X-Selected-Model: Selected model (e.g., 'gpt-5', 'claude-opus-4.5')
 
     Request body:
     {
@@ -199,11 +207,12 @@ def get_suggestions(request):
         "suggestions": [str]
     }
     """
-    # Extract API keys and active provider from headers (only used in PROD mode)
+    # Extract API keys, active provider, and model from headers (only used in PROD mode)
     gemini_api_key = request.headers.get('X-Gemini-Api-Key')
     anthropic_api_key = request.headers.get('X-Anthropic-Api-Key')
     openai_api_key = request.headers.get('X-OpenAI-Api-Key')
     active_provider = request.headers.get('X-Active-Provider')  # 'gemini', 'claude', or 'openai'
+    selected_model = request.headers.get('X-Selected-Model')  # Frontend model name (e.g., 'gpt-5', 'claude-opus-4.5')
 
     nodes = request.data.get('nodes', [])
     edges = request.data.get('edges', [])
@@ -214,12 +223,13 @@ def get_suggestions(request):
         })
 
     try:
-        # Initialize AI service with appropriate API keys based on mode
+        # Initialize AI service with appropriate API keys and model based on mode
         ai_service = AIServiceFactory.create_service(
             gemini_api_key=gemini_api_key,
             anthropic_api_key=anthropic_api_key,
             openai_api_key=openai_api_key,
-            active_provider=active_provider
+            active_provider=active_provider,
+            model=selected_model
         )
         provider_name = AIServiceFactory.get_provider_name()
 

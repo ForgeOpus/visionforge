@@ -7,6 +7,7 @@ from django.conf import settings
 from block_manager.services.gemini_service import GeminiChatService
 from block_manager.services.claude_service import ClaudeChatService
 from block_manager.services.openai_service import OpenAIChatService
+from block_manager.services.model_config import get_model_identifier
 
 
 class AIServiceFactory:
@@ -28,7 +29,8 @@ class AIServiceFactory:
         gemini_api_key: Optional[str] = None,
         anthropic_api_key: Optional[str] = None,
         openai_api_key: Optional[str] = None,
-        active_provider: Optional[str] = None
+        active_provider: Optional[str] = None,
+        model: Optional[str] = None
     ) -> Union[GeminiChatService, ClaudeChatService, OpenAIChatService]:
         """
         Create and return the configured AI service.
@@ -41,6 +43,7 @@ class AIServiceFactory:
             anthropic_api_key: User-provided Anthropic API key (PROD mode only)
             openai_api_key: User-provided OpenAI API key (PROD mode only)
             active_provider: User's chosen provider ('gemini', 'claude', or 'openai')
+            model: Frontend model name (e.g., 'gpt-5', 'claude-opus-4.5')
 
         Returns:
             GeminiChatService, ClaudeChatService, or OpenAIChatService based on active_provider
@@ -52,35 +55,44 @@ class AIServiceFactory:
         provider = (active_provider or os.getenv('AI_PROVIDER', 'gemini')).lower()
         requires_user_key = AIServiceFactory.requires_user_api_key()
 
+        # Map frontend model name to API identifier if provided
+        model_identifier = None
+        if model:
+            try:
+                model_identifier = get_model_identifier(model)
+            except ValueError as e:
+                # If model mapping fails, log and continue with default
+                print(f"Warning: {e}. Using default model.")
+
         if provider == 'gemini':
             if requires_user_key:
                 # PROD mode: require user-provided key
                 if not gemini_api_key:
                     raise ValueError("Gemini API key is required. Please provide your API key.")
-                return GeminiChatService(api_key=gemini_api_key)
+                return GeminiChatService(api_key=gemini_api_key, model=model_identifier)
             else:
                 # DEV mode: use server-side key
-                return GeminiChatService()
+                return GeminiChatService(model=model_identifier)
 
         elif provider == 'claude':
             if requires_user_key:
                 # PROD mode: require user-provided key
                 if not anthropic_api_key:
                     raise ValueError("Anthropic API key is required. Please provide your API key.")
-                return ClaudeChatService(api_key=anthropic_api_key)
+                return ClaudeChatService(api_key=anthropic_api_key, model=model_identifier)
             else:
                 # DEV mode: use server-side key
-                return ClaudeChatService()
+                return ClaudeChatService(model=model_identifier)
 
         elif provider == 'openai':
             if requires_user_key:
                 # PROD mode: require user-provided key
                 if not openai_api_key:
                     raise ValueError("OpenAI API key is required. Please provide your API key.")
-                return OpenAIChatService(api_key=openai_api_key)
+                return OpenAIChatService(api_key=openai_api_key, model=model_identifier)
             else:
                 # DEV mode: use server-side key
-                return OpenAIChatService()
+                return OpenAIChatService(model=model_identifier)
         else:
             raise ValueError(
                 f"Invalid provider: '{provider}'. Must be 'gemini', 'claude', or 'openai'."

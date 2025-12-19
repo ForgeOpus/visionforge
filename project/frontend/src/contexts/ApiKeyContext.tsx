@@ -10,10 +10,12 @@ interface ApiKeyContextType {
   environment: string | null
   isLoading: boolean
   activeProvider: 'gemini' | 'claude' | 'openai'
+  selectedModel: string | null
   setGeminiApiKey: (key: string | null) => void
   setAnthropicApiKey: (key: string | null) => void
   setOpenAIApiKey: (key: string | null) => void
   setActiveProvider: (provider: 'gemini' | 'claude' | 'openai') => void
+  setSelectedModel: (model: string) => void
   clearKeys: () => void
   hasRequiredKey: () => boolean
 }
@@ -24,6 +26,7 @@ const STORAGE_KEY_GEMINI = 'visionforge_gemini_api_key'
 const STORAGE_KEY_ANTHROPIC = 'visionforge_anthropic_api_key'
 const STORAGE_KEY_OPENAI = 'visionforge_openai_api_key'
 const STORAGE_KEY_ACTIVE_PROVIDER = 'visionforge_active_provider'
+const STORAGE_KEY_SELECTED_MODEL = 'visionforge_selected_model'
 
 interface ApiKeyProviderProps {
   children: ReactNode
@@ -46,6 +49,12 @@ export function ApiKeyProvider({ children }: ApiKeyProviderProps) {
       return saved as 'gemini' | 'claude' | 'openai'
     }
     return 'gemini' // default
+  })
+
+  // Selected model state (user's choice for which model to use)
+  const [selectedModel, setSelectedModelState] = useState<string | null>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_SELECTED_MODEL)
+    return saved || 'gemini-3-flash' // default to latest Gemini model
   })
 
   // Load keys from sessionStorage on mount
@@ -115,6 +124,11 @@ export function ApiKeyProvider({ children }: ApiKeyProviderProps) {
     localStorage.setItem(STORAGE_KEY_ACTIVE_PROVIDER, provider)
   }
 
+  const setSelectedModel = (model: string) => {
+    setSelectedModelState(model)
+    localStorage.setItem(STORAGE_KEY_SELECTED_MODEL, model)
+  }
+
   const clearKeys = () => {
     setGeminiApiKey(null)
     setAnthropicApiKey(null)
@@ -148,10 +162,12 @@ export function ApiKeyProvider({ children }: ApiKeyProviderProps) {
         environment,
         isLoading,
         activeProvider,
+        selectedModel,
         setGeminiApiKey,
         setAnthropicApiKey,
         setOpenAIApiKey,
         setActiveProvider,
+        setSelectedModel,
         clearKeys,
         hasRequiredKey
       }}

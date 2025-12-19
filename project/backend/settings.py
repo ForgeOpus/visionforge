@@ -122,6 +122,9 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
     'x-gemini-api-key',
     'x-anthropic-api-key',
+    'x-openai-api-key',
+    'x-active-provider',
+    'x-selected-model',
     'x-firebase-token',
 ]
 

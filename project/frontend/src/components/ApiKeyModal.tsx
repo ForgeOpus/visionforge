@@ -11,11 +11,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Info, Eye, EyeSlash, Sparkle, Crown } from '@phosphor-icons/react'
+import { Info, Eye, EyeSlash } from '@phosphor-icons/react'
 import { useApiKeys } from '@/contexts/ApiKeyContext'
-import { useAuth } from '@/contexts/AuthContext'
 
 interface ApiKeyModalProps {
   open: boolean
@@ -23,7 +21,36 @@ interface ApiKeyModalProps {
   required?: boolean
 }
 
+type ModelType =
+  // Gemini models (Free tier available)
+  | 'gemini-3-flash'
+  | 'gemini-2.5-flash'
+  | 'gemini-2.0-flash'
+  // OpenAI models
+  | 'gpt-5'
+  | 'gpt-4.1'
+  | 'gpt-4o'
+  | 'gpt-4o-mini'
+  // Claude models
+  | 'claude-opus-4.5'
+  | 'claude-sonnet-4.5'
+  | 'claude-haiku-4.5'
+
 type ProviderType = 'gemini' | 'claude' | 'openai'
+
+// Map models to their providers
+const modelToProvider: Record<ModelType, ProviderType> = {
+  'gemini-3-flash': 'gemini',
+  'gemini-2.5-flash': 'gemini',
+  'gemini-2.0-flash': 'gemini',
+  'gpt-5': 'openai',
+  'gpt-4.1': 'openai',
+  'gpt-4o': 'openai',
+  'gpt-4o-mini': 'openai',
+  'claude-opus-4.5': 'claude',
+  'claude-sonnet-4.5': 'claude',
+  'claude-haiku-4.5': 'claude',
+}
 
 export default function ApiKeyModal({ open, onOpenChange, required = false }: ApiKeyModalProps) {
   const {
@@ -31,28 +58,30 @@ export default function ApiKeyModal({ open, onOpenChange, required = false }: Ap
     anthropicApiKey,
     openaiApiKey,
     activeProvider,
+    selectedModel: contextSelectedModel,
     setGeminiApiKey,
     setAnthropicApiKey,
     setOpenAIApiKey,
     setActiveProvider,
+    setSelectedModel: setContextSelectedModel,
     clearKeys,
     hasRequiredKey
   } = useApiKeys()
 
-  const { user } = useAuth()
-  const isPro = user?.tier === 'pro'
-
-  const [tier, setTier] = useState<'free' | 'pro'>('free')
+  const [selectedModel, setSelectedModel] = useState<ModelType>((contextSelectedModel as ModelType) || 'gemini-3-flash')
   const [selectedProvider, setSelectedProvider] = useState<ProviderType>('gemini')
   const [inputKey, setInputKey] = useState('')
   const [showKey, setShowKey] = useState(false)
 
+  // Update provider when model changes
+  const handleModelChange = (model: ModelType) => {
+    setSelectedModel(model)
+    setSelectedProvider(modelToProvider[model])
+  }
+
   // Load existing key when modal opens or provider changes
   useEffect(() => {
     if (open) {
-      // Set tier based on user or default to free
-      setTier(isPro ? 'pro' : 'free')
-
       // Load the active provider's key
       if (selectedProvider === 'gemini' && geminiApiKey) {
         setInputKey(geminiApiKey)
@@ -64,12 +93,20 @@ export default function ApiKeyModal({ open, onOpenChange, required = false }: Ap
         setInputKey('')
       }
     }
-  }, [open, selectedProvider, geminiApiKey, anthropicApiKey, openaiApiKey, isPro])
+  }, [open, selectedProvider, geminiApiKey, anthropicApiKey, openaiApiKey])
 
-  // Set selected provider based on active provider
+  // Set selected provider and model based on active provider
   useEffect(() => {
     if (open) {
       setSelectedProvider(activeProvider)
+      // Set a sensible default model for the active provider (latest/best)
+      if (activeProvider === 'gemini') {
+        setSelectedModel('gemini-3-flash')
+      } else if (activeProvider === 'openai') {
+        setSelectedModel('gpt-5')
+      } else if (activeProvider === 'claude') {
+        setSelectedModel('claude-opus-4.5')
+      }
     }
   }, [open, activeProvider])
 
@@ -101,6 +138,12 @@ export default function ApiKeyModal({ open, onOpenChange, required = false }: Ap
     }
   }
 
+  const handleClearKeys = () => {
+    clearKeys()
+    setInputKey('')
+    onOpenChange(false)
+  }
+
   const getProviderInfo = (provider: ProviderType) => {
     switch (provider) {
       case 'gemini':
@@ -108,7 +151,7 @@ export default function ApiKeyModal({ open, onOpenChange, required = false }: Ap
           name: 'Gemini',
           displayName: 'Google Gemini',
           url: 'https://aistudio.google.com/app/apikey',
-          placeholder: 'AIza...',
+          placeholder: 'Enter API key here',
           description: 'Fast, free tier available'
         }
       case 'openai':
@@ -116,7 +159,7 @@ export default function ApiKeyModal({ open, onOpenChange, required = false }: Ap
           name: 'OpenAI',
           displayName: 'OpenAI (GPT-4, GPT-3.5)',
           url: 'https://platform.openai.com/api-keys',
-          placeholder: 'sk-proj-...',
+          placeholder: 'Enter API key here',
           description: 'Industry standard, most popular'
         }
       case 'claude':
@@ -124,7 +167,7 @@ export default function ApiKeyModal({ open, onOpenChange, required = false }: Ap
           name: 'Claude',
           displayName: 'Anthropic Claude',
           url: 'https://console.anthropic.com/',
-          placeholder: 'sk-ant-...',
+          placeholder: 'Enter API key here',
           description: 'Advanced reasoning, latest models'
         }
     }
@@ -149,166 +192,137 @@ export default function ApiKeyModal({ open, onOpenChange, required = false }: Ap
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={tier} onValueChange={(v) => setTier(v as 'free' | 'pro')} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="free" className="flex items-center gap-2">
-              <Sparkle size={16} />
-              Free Tier
-            </TabsTrigger>
-            <TabsTrigger value="pro" className="flex items-center gap-2" disabled={!isPro}>
-              <Crown size={16} />
-              Pro Tier
-              {!isPro && <span className="text-xs">(Upgrade Required)</span>}
-            </TabsTrigger>
-          </TabsList>
+        <div className="space-y-4">
+          <Alert>
+            <Info size={16} />
+            <AlertDescription>
+              Choose from top AI models. Gemini models offer a generous free tier, while GPT and Claude models require paid API keys.
+            </AlertDescription>
+          </Alert>
 
-          {/* Free Tier Tab */}
-          <TabsContent value="free" className="space-y-4 mt-4">
-            <Alert>
-              <Info size={16} />
-              <AlertDescription>
-                <strong>Free Tier:</strong> Uses Google Gemini with your personal API key.
-                Gemini offers a generous free tier perfect for getting started.
-              </AlertDescription>
-            </Alert>
-
-            <div className="space-y-2">
-              <Label htmlFor="free-api-key" className="flex items-center gap-2">
-                Gemini API Key
-                <span className="text-xs text-muted-foreground">(Free tier available)</span>
-              </Label>
-              <div className="relative">
-                <Input
-                  id="free-api-key"
-                  type={showKey ? 'text' : 'password'}
-                  placeholder="AIza..."
-                  value={tier === 'free' && selectedProvider === 'gemini' ? inputKey : geminiApiKey || ''}
-                  onChange={(e) => {
-                    if (tier === 'free') {
-                      setSelectedProvider('gemini')
-                      setInputKey(e.target.value)
-                    }
-                  }}
-                  className="pr-10"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full"
-                  onClick={() => setShowKey(!showKey)}
-                >
-                  {showKey ? <EyeSlash size={18} /> : <Eye size={18} />}
-                </Button>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Don't have an API key?{' '}
-                <a
-                  href="https://aistudio.google.com/app/apikey"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  Get one from Google AI Studio (Free)
-                </a>
-              </p>
-            </div>
-          </TabsContent>
-
-          {/* Pro Tier Tab */}
-          <TabsContent value="pro" className="space-y-4 mt-4">
-            {isPro ? (
-              <>
-                <Alert>
-                  <Crown size={16} className="text-yellow-500" />
-                  <AlertDescription>
-                    <strong>Pro Tier:</strong> Choose from multiple AI providers including OpenAI (GPT-4),
-                    Anthropic (Claude), and Google (Gemini Pro models).
-                  </AlertDescription>
-                </Alert>
-
-                <div className="space-y-2">
-                  <Label htmlFor="provider-select">Select AI Provider</Label>
-                  <Select
-                    value={selectedProvider}
-                    onValueChange={(v) => setSelectedProvider(v as ProviderType)}
-                  >
-                    <SelectTrigger id="provider-select">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="openai">
-                        <div className="flex flex-col items-start">
-                          <span className="font-medium">OpenAI (GPT-4, GPT-3.5)</span>
-                          <span className="text-xs text-muted-foreground">Industry standard, most popular</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="claude">
-                        <div className="flex flex-col items-start">
-                          <span className="font-medium">Anthropic (Claude)</span>
-                          <span className="text-xs text-muted-foreground">Advanced reasoning, latest models</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="gemini">
-                        <div className="flex flex-col items-start">
-                          <span className="font-medium">Google (Gemini)</span>
-                          <span className="text-xs text-muted-foreground">Fast, multimodal capabilities</span>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="pro-api-key">{providerInfo.name} API Key</Label>
-                  <div className="relative">
-                    <Input
-                      id="pro-api-key"
-                      type={showKey ? 'text' : 'password'}
-                      placeholder={providerInfo.placeholder}
-                      value={inputKey}
-                      onChange={(e) => setInputKey(e.target.value)}
-                      className="pr-10"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-0 top-0 h-full"
-                      onClick={() => setShowKey(!showKey)}
-                    >
-                      {showKey ? <EyeSlash size={18} /> : <Eye size={18} />}
-                    </Button>
+          <div className="space-y-2">
+            <Label htmlFor="model-select">Select AI Model</Label>
+            <Select
+              value={selectedModel}
+              onValueChange={(v) => handleModelChange(v as ModelType)}
+            >
+              <SelectTrigger id="model-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {/* Free Tier Models (Gemini) */}
+                <SelectItem value="gemini-3-flash">
+                  <div className="flex items-center justify-between w-full gap-2">
+                    <div className="flex flex-col items-start">
+                      <span className="font-medium">Gemini 3 Flash</span>
+                      <span className="text-xs text-muted-foreground">Latest, 3x faster, frontier intelligence</span>
+                    </div>
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free Tier</span>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    Don't have a {providerInfo.name} API key?{' '}
-                    <a
-                      href={providerInfo.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline"
-                    >
-                      Get one from {providerInfo.name}
-                    </a>
-                  </p>
-                </div>
-              </>
-            ) : (
-              <div className="text-center py-8 space-y-4">
-                <Crown size={48} className="mx-auto text-yellow-500" />
-                <div>
-                  <h3 className="font-semibold text-lg">Upgrade to Pro</h3>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Access multiple AI providers including OpenAI's GPT-4, Anthropic's Claude, and more.
-                  </p>
-                </div>
-                <Button variant="default" className="mt-4">
-                  Upgrade to Pro
-                </Button>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+                </SelectItem>
+                <SelectItem value="gemini-2.5-flash">
+                  <div className="flex items-center justify-between w-full gap-2">
+                    <div className="flex flex-col items-start">
+                      <span className="font-medium">Gemini 2.5 Flash</span>
+                      <span className="text-xs text-muted-foreground">Stable, improved agentic tool use</span>
+                    </div>
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free Tier</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="gemini-2.0-flash">
+                  <div className="flex items-center justify-between w-full gap-2">
+                    <div className="flex flex-col items-start">
+                      <span className="font-medium">Gemini 2.0 Flash</span>
+                      <span className="text-xs text-muted-foreground">Multimodal capabilities, legacy</span>
+                    </div>
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free Tier</span>
+                  </div>
+                </SelectItem>
+
+                {/* OpenAI Models */}
+                <SelectItem value="gpt-5">
+                  <div className="flex flex-col items-start">
+                    <span className="font-medium">GPT-5</span>
+                    <span className="text-xs text-muted-foreground">Latest flagship, advanced reasoning (Aug 2025)</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="gpt-4.1">
+                  <div className="flex flex-col items-start">
+                    <span className="font-medium">GPT-4.1</span>
+                    <span className="text-xs text-muted-foreground">Coding specialist, precise instructions</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="gpt-4o">
+                  <div className="flex flex-col items-start">
+                    <span className="font-medium">GPT-4o</span>
+                    <span className="text-xs text-muted-foreground">Multimodal, popular choice</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="gpt-4o-mini">
+                  <div className="flex flex-col items-start">
+                    <span className="font-medium">GPT-4o Mini</span>
+                    <span className="text-xs text-muted-foreground">Fast and cost-effective</span>
+                  </div>
+                </SelectItem>
+
+                {/* Claude Models */}
+                <SelectItem value="claude-opus-4.5">
+                  <div className="flex flex-col items-start">
+                    <span className="font-medium">Claude Opus 4.5</span>
+                    <span className="text-xs text-muted-foreground">Latest flagship, best for coding (Nov 2025)</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="claude-sonnet-4.5">
+                  <div className="flex flex-col items-start">
+                    <span className="font-medium">Claude Sonnet 4.5</span>
+                    <span className="text-xs text-muted-foreground">Balanced performance and speed</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="claude-haiku-4.5">
+                  <div className="flex flex-col items-start">
+                    <span className="font-medium">Claude Haiku 4.5</span>
+                    <span className="text-xs text-muted-foreground">Fast, cost-effective, near-frontier quality</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="api-key-input">{providerInfo.name} API Key</Label>
+            <div className="relative">
+              <Input
+                id="api-key-input"
+                type={showKey ? 'text' : 'password'}
+                placeholder={providerInfo.placeholder}
+                value={inputKey}
+                onChange={(e) => setInputKey(e.target.value)}
+                className="pr-10"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-0 top-0 h-full"
+                onClick={() => setShowKey(!showKey)}
+              >
+                {showKey ? <EyeSlash size={18} /> : <Eye size={18} />}
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Don't have a {providerInfo.name} API key?{' '}
+              <a
+                href={providerInfo.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                Get one from {providerInfo.name}
+                {selectedProvider === 'gemini' && ' (Free)'}
+              </a>
+            </p>
+          </div>
+        </div>
 
         <Alert>
           <Info size={16} />
@@ -318,29 +332,30 @@ export default function ApiKeyModal({ open, onOpenChange, required = false }: Ap
           </AlertDescription>
         </Alert>
 
-        <DialogFooter className="flex-row justify-between sm:justify-between">
-          {!required && (
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={handleSkip}
-            >
-              Skip for now
-            </Button>
-          )}
+        <DialogFooter className="flex-row justify-between sm:justify-between gap-2">
+          <div className="flex gap-2">
+            {!required && !hasRequiredKey() && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleSkip}
+              >
+                Skip for now
+              </Button>
+            )}
+            {hasRequiredKey() && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleClearKeys}
+              >
+                Clear All Keys
+              </Button>
+            )}
+          </div>
           <Button
             type="button"
-            onClick={() => {
-              if (tier === 'free') {
-                setSelectedProvider('gemini')
-                if (geminiApiKey) {
-                  setInputKey(geminiApiKey)
-                  handleSave()
-                }
-              } else {
-                handleSave()
-              }
-            }}
+            onClick={handleSave}
             disabled={!inputKey.trim()}
             className="ml-auto"
           >

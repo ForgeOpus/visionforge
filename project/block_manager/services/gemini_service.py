@@ -13,12 +13,13 @@ from django.core.files.uploadedfile import UploadedFile
 class GeminiChatService:
     """Service to handle Gemini AI chat interactions with workflow context."""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         """
-        Initialize Gemini with API key.
+        Initialize Gemini with API key and model.
 
         Args:
             api_key: Optional API key for BYOK mode. If None, reads from environment.
+            model: Optional model identifier. If None, defaults to gemini-3-flash.
         """
         if api_key:
             # BYOK mode - use provided key
@@ -30,9 +31,9 @@ class GeminiChatService:
                 raise ValueError("GEMINI_API_KEY environment variable is not set")
 
         genai.configure(api_key=final_api_key)
-        # Use gemini-2.5-flash - best free tier availability (Dec 2025)
-        # (gemini-2.0-* models have quota limit: 0 as of Dec 2025)
-        self.model = genai.GenerativeModel('gemini-2.5-flash')
+        # Use provided model or default to gemini-3-flash (latest, best free tier)
+        model_name = model if model else 'gemini-3-flash'
+        self.model = genai.GenerativeModel(model_name)
 
     def _format_workflow_context(self, workflow_state: Optional[Dict[str, Any]]) -> str:
         """Format workflow state into a readable context for the AI."""

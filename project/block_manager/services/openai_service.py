@@ -12,12 +12,13 @@ from django.core.files.uploadedfile import UploadedFile
 class OpenAIChatService:
     """Service to handle OpenAI chat interactions with workflow context."""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         """
-        Initialize OpenAI with API key.
+        Initialize OpenAI with API key and model.
 
         Args:
             api_key: Optional API key for BYOK mode. If None, reads from environment.
+            model: Optional model identifier. If None, defaults to gpt-4o-mini.
         """
         if api_key:
             # BYOK mode - use provided key
@@ -29,8 +30,8 @@ class OpenAIChatService:
                 raise ValueError("OPENAI_API_KEY environment variable is not set")
 
         self.client = openai.OpenAI(api_key=final_api_key)
-        # Use GPT-4o-mini for cost-effectiveness
-        self.model = 'gpt-4o-mini'
+        # Use provided model or default to gpt-4o-mini for cost-effectiveness
+        self.model = model if model else 'gpt-4o-mini'
 
     def _format_workflow_context(self, workflow_state: Optional[Dict[str, Any]]) -> str:
         """Format workflow state into a readable context for the AI."""

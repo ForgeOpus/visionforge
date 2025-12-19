@@ -13,12 +13,13 @@ from django.core.files.uploadedfile import UploadedFile
 class ClaudeChatService:
     """Service to handle Claude AI chat interactions with workflow context."""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         """
-        Initialize Claude with API key.
+        Initialize Claude with API key and model.
 
         Args:
             api_key: Optional API key for BYOK mode. If None, reads from environment.
+            model: Optional model identifier. If None, defaults to claude-haiku-4-5.
         """
         if api_key:
             # BYOK mode - use provided key
@@ -30,9 +31,8 @@ class ClaudeChatService:
                 raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
 
         self.client = anthropic.Anthropic(api_key=final_api_key)
-        # Use claude-3-5-haiku - most cost-effective option in 2025
-        # (Note: Claude has no free API tier, Haiku is cheapest at $1/$5 per million tokens)
-        self.model = 'claude-3-5-haiku-20241022'
+        # Use provided model or default to claude-haiku-4-5 (most cost-effective 4.5 model)
+        self.model = model if model else 'claude-haiku-4-5'
 
     def _format_workflow_context(self, workflow_state: Optional[Dict[str, Any]]) -> str:
         """Format workflow state into a readable context for the AI."""
