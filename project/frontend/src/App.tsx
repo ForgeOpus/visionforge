@@ -1,19 +1,34 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, lazy, Suspense } from 'react'
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { toast } from 'sonner'
 import Header from './components/Header'
-import ResizableBlockPalette from './components/ResizableBlockPalette'
-import Canvas from './components/Canvas'
-import ConfigPanel from './components/ConfigPanel'
-import ChatBot from './components/ChatBot'
 import { useModelBuilderStore } from './lib/store'
 import { fetchProject, loadArchitecture, convertToFrontendProject } from './lib/projectApi'
-import { LandingPage } from './landing'
+import { ProtectedRoute } from './components/ProtectedRoute'
+import { useAuth } from './contexts/AuthContext'
+
+// Lazy load heavy components for better performance
+const Canvas = lazy(() => import('./components/Canvas'))
+const ResizableBlockPalette = lazy(() => import('./components/ResizableBlockPalette'))
+const ConfigPanel = lazy(() => import('./components/ConfigPanel'))
+const ChatBot = lazy(() => import('./components/ChatBot'))
+const LandingPage = lazy(() => import('./landing').then(module => ({ default: module.LandingPage })))
+const Dashboard = lazy(() => import('./pages/Dashboard').then(module => ({ default: module.Dashboard })))
+
+// Loading spinner component
+function LoadingSpinner() {
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+    </div>
+  )
+}
 
 function ProjectCanvas() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
+  const { isGuest, user } = useAuth()
   const { setNodes, setEdges, loadProject, loadGroupDefinitions, currentProject, reset } = useModelBuilderStore()
   const [isLoading, setIsLoading] = useState(false)
   const [draggedType, setDraggedType] = useState<string | null>(null)
@@ -22,7 +37,29 @@ function ProjectCanvas() {
 
   // Load project from URL parameter
   useEffect(() => {
-    if (projectId && (!currentProject || currentProject.id !== projectId)) {
+    // Clear canvas if in guest mode
+    if (isGuest) {
+      reset()
+      return
+    }
+
+    // If no projectId in URL (blank canvas) and we have a currentProject loaded, clear it
+    if (!projectId && user && currentProject) {
+      reset()
+      return
+    }
+
+    // Wait for auth to finish loading before attempting to fetch project
+    if (!projectId || !user) {
+      return
+    }
+
+    // Only load if project ID changed
+    if (currentProject && currentProject.id === projectId) {
+      return
+    }
+
+    if (projectId) {
       setIsLoading(true)
       fetchProject(projectId)
         .then(async (backendProject) => {
@@ -31,7 +68,7 @@ function ProjectCanvas() {
             const { nodes, edges, groupDefinitions } = await loadArchitecture(projectId)
             const project = convertToFrontendProject(backendProject, nodes, edges)
             loadProject(project)
-            
+
             // Load group definitions if they exist
             if (groupDefinitions && groupDefinitions.length > 0) {
               loadGroupDefinitions(groupDefinitions)
@@ -44,16 +81,23 @@ function ProjectCanvas() {
         })
         .catch((error) => {
           console.error('Failed to load project:', error)
-          toast.error('Failed to load project', {
-            description: error instanceof Error ? error.message : 'Unknown error'
+
+          // Clear the invalid project state
+          reset()
+
+          // Show error message
+          toast.error('Project not found', {
+            description: 'This project may have been deleted or you may not have access to it.'
           })
-          // Don't navigate away, just show error
+
+          // Navigate to clean canvas
+          navigate('/project', { replace: true })
         })
         .finally(() => {
           setIsLoading(false)
         })
     }
-  }, [projectId, currentProject, setNodes, setEdges, loadProject, loadGroupDefinitions, navigate])
+  }, [projectId, currentProject, isGuest, user, setNodes, setEdges, loadProject, loadGroupDefinitions, navigate, reset])
 
   const handleDragStart = (type: string) => {
     setDraggedType(type)
@@ -84,19 +128,21 @@ function ProjectCanvas() {
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-background">
       <Header />
 
-      <div className="flex-1 flex overflow-hidden relative">
-        <ResizableBlockPalette
-          onDragStart={handleDragStart}
-          onBlockClick={handleBlockClick}
-        />
-        <Canvas
-          onDragStart={handleDragStart}
-          onRegisterAddNode={registerAddNodeHandler}
-        />
-        {selectedNodeId && <ConfigPanel />}
-      </div>
+      <Suspense fallback={<LoadingSpinner />}>
+        <div className="flex-1 flex overflow-hidden relative">
+          <ResizableBlockPalette
+            onDragStart={handleDragStart}
+            onBlockClick={handleBlockClick}
+          />
+          <Canvas
+            onDragStart={handleDragStart}
+            onRegisterAddNode={registerAddNodeHandler}
+          />
+          {selectedNodeId && <ConfigPanel />}
+        </div>
 
-      <ChatBot />
+        <ChatBot />
+      </Suspense>
       <Toaster position="bottom-right" richColors />
     </div>
   )
@@ -104,11 +150,21 @@ function ProjectCanvas() {
 
 function App() {
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/project" element={<ProjectCanvas />} />
-      <Route path="/project/:projectId" element={<ProjectCanvas />} />
-    </Routes>
+    <Suspense fallback={<LoadingSpinner />}>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/project" element={<ProjectCanvas />} />
+        <Route path="/project/:projectId" element={<ProjectCanvas />} />
+      </Routes>
+    </Suspense>
   )
 }
 

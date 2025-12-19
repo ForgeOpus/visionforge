@@ -30,7 +30,9 @@ class ClaudeChatService:
                 raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
 
         self.client = anthropic.Anthropic(api_key=final_api_key)
-        self.model = 'claude-3-5-sonnet-20241022'  # Latest Claude model
+        # Use claude-3-5-haiku - most cost-effective option in 2025
+        # (Note: Claude has no free API tier, Haiku is cheapest at $1/$5 per million tokens)
+        self.model = 'claude-3-5-haiku-20241022'
 
     def _format_workflow_context(self, workflow_state: Optional[Dict[str, Any]]) -> str:
         """Format workflow state into a readable context for the AI."""

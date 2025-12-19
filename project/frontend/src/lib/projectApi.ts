@@ -1,7 +1,8 @@
 import { Node, Edge } from '@xyflow/react'
 import { BlockData, Project } from './types'
+import { getAuthHeaders } from './auth'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
 
 export interface ProjectResponse {
   id: string
@@ -34,11 +35,11 @@ export interface ProjectListResponse {
  * Fetch all projects
  */
 export async function fetchProjects(): Promise<ProjectResponse[]> {
+  const headers = await getAuthHeaders()
+
   const response = await fetch(`${API_BASE_URL}/projects/`, {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
   })
 
   if (!response.ok) {
@@ -53,11 +54,11 @@ export async function fetchProjects(): Promise<ProjectResponse[]> {
  * Fetch a single project with full details
  */
 export async function fetchProject(projectId: string): Promise<ProjectDetailResponse> {
+  const headers = await getAuthHeaders()
+
   const response = await fetch(`${API_BASE_URL}/projects/${projectId}/`, {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
   })
 
   if (!response.ok) {
@@ -75,11 +76,11 @@ export async function createProject(data: {
   description: string
   framework: 'pytorch' | 'tensorflow'
 }): Promise<ProjectResponse> {
+  const headers = await getAuthHeaders()
+
   const response = await fetch(`${API_BASE_URL}/projects/`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(data),
   })
 
@@ -101,11 +102,11 @@ export async function updateProject(
     framework: 'pytorch' | 'tensorflow'
   }>
 ): Promise<ProjectResponse> {
+  const headers = await getAuthHeaders()
+
   const response = await fetch(`${API_BASE_URL}/projects/${projectId}/`, {
     method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(data),
   })
 
@@ -120,11 +121,11 @@ export async function updateProject(
  * Delete a project
  */
 export async function deleteProject(projectId: string): Promise<void> {
+  const headers = await getAuthHeaders()
+
   const response = await fetch(`${API_BASE_URL}/projects/${projectId}/`, {
     method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
   })
 
   if (!response.ok) {
@@ -141,18 +142,18 @@ export async function saveArchitecture(
   edges: Edge[],
   groupDefinitions?: Map<string, any>
 ): Promise<{ success: boolean; architecture_id: string }> {
+  const headers = await getAuthHeaders()
+
   // Convert groupDefinitions Map to array for serialization
-  const groupDefinitionsArray = groupDefinitions 
+  const groupDefinitionsArray = groupDefinitions
     ? Array.from(groupDefinitions.values())
     : []
 
   const response = await fetch(`${API_BASE_URL}/projects/${projectId}/save-architecture`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ 
-      nodes, 
+    headers,
+    body: JSON.stringify({
+      nodes,
       edges,
       groupDefinitions: groupDefinitionsArray
     }),
@@ -173,11 +174,11 @@ export async function loadArchitecture(projectId: string): Promise<{
   edges: Edge[]
   groupDefinitions?: any[]
 }> {
+  const headers = await getAuthHeaders()
+
   const response = await fetch(`${API_BASE_URL}/projects/${projectId}/load-architecture`, {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
   })
 
   if (!response.ok) {

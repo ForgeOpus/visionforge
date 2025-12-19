@@ -30,7 +30,9 @@ class GeminiChatService:
                 raise ValueError("GEMINI_API_KEY environment variable is not set")
 
         genai.configure(api_key=final_api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash')
+        # Use gemini-2.0-flash-lite - best free tier availability in 2025
+        # (gemini-1.5-* deprecated April 2025, gemini-2.5-* severely limited)
+        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
 
     def _format_workflow_context(self, workflow_state: Optional[Dict[str, Any]]) -> str:
         """Format workflow state into a readable context for the AI."""

@@ -1,10 +1,29 @@
-django>=5.2.8
-django-cors-headers>=4.9.0
-django-restframework>=0.0.1
-dotenv>=0.9.9
-pillow>=12.0.0
+# Core Framework
+django>=5.1.0
 djangorestframework>=3.15.0
+django-cors-headers>=4.9.0
+
+# Environment & Configuration
 python-dotenv>=1.0.0
-google-generativeai>=0.8.3
+
+# Database
+oracledb>=2.0.0
+
+# AI & ML
 anthropic>=0.39.0
+google-generativeai>=0.8.3
+
+# Firebase
+firebase-admin>=6.0.0
+
+# Code Generation
 jinja2>=3.1.0
+
+# Image Processing
+pillow>=11.0.0
+
+# Numerical Computing
+numpy>=2.2.0
+
+# Security & Rate Limiting
+django-ratelimit>=4.1.0

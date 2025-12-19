@@ -56,3 +56,39 @@ __pycache__
 *.sqlite3
 *.db
 .claude/
+
+# Oracle Wallet (contains sensitive database credentials)
+**/Wallet*/
+**/wallet*/
+*.wallet
+*.sso
+*.p12
+*.jks
+*.pem
+ewallet.p12
+cwallet.sso
+tnsnames.ora
+sqlnet.ora
+
+# Django staticfiles and media
+  staticfiles/
+  media/
+
+  # Python build artifacts
+  *.egg-info/
+  dist/
+  build/
+
+  # Testing
+  .pytest_cache/
+  .coverage
+  .coverage.*
+  htmlcov/
+  .tox/
+
+  # Specific backup file found
+  sqlite_data_backup.json
+
+  # More env file patterns
+  .env.local
+  .env.*.local

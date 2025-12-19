@@ -10,7 +10,13 @@
     ],
     "module": "ESNext",
     "skipLibCheck": true,
-    "strictNullChecks": true,
+
+    /* Type Checking */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,

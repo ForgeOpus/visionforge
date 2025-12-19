@@ -82,17 +82,24 @@ export default function ValidationErrorsPanel() {
                   size={16}
                   className={`transition-transform ${isOpen ? 'rotate-180' : ''}`}
                 />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 hover:bg-accent ml-1"
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className="h-6 w-6 hover:bg-accent ml-1 rounded inline-flex items-center justify-center cursor-pointer transition-colors"
                   onClick={(e) => {
                     e.stopPropagation()
                     setIsVisible(false)
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setIsVisible(false)
+                    }
+                  }}
                 >
                   <Icons.X size={14} />
-                </Button>
+                </div>
               </div>
             </Button>
           </CollapsibleTrigger>

@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+import sys
 from dotenv import load_dotenv
 
 load_dotenv()  # take environment variables from .env file
@@ -24,12 +25,36 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-oy%j%4%)w%7#sx@e!h+m-hai9zvl*)-5$5uz%wlro4ry1*4vc-'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-oy%j%4%)w%7#sx@e!h+m-hai9zvl*)-5$5uz%wlro4ry1*4vc-')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = []
+# Environment Variable Validation (Production Only)
+REQUIRED_ENV_VARS = [
+    'DJANGO_SECRET_KEY',
+    'FIREBASE_PROJECT_ID',
+    'FIREBASE_PRIVATE_KEY',
+    'FIREBASE_CLIENT_EMAIL',
+    'ORACLE_USER',
+    'ORACLE_PASSWORD',
+    'ORACLE_DSN',
+]
+
+# Validate required environment variables in production
+if not DEBUG:
+    missing = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
+    if missing:
+        print("=" * 70)
+        print("ERROR: Missing required environment variables for production")
+        print("=" * 70)
+        print(f"Missing variables: {', '.join(missing)}")
+        print("\nPlease check your .env file and ensure all required variables are set.")
+        print("See project/.env.example for reference.")
+        print("=" * 70)
+        sys.exit(1)
+
+ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
 # Application definition
@@ -44,6 +69,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'block_manager',
+    'authentication',
 ]
 
 MIDDLEWARE = [
@@ -55,6 +81,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'authentication.middleware.FirebaseAuthenticationMiddleware',
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -96,6 +123,7 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
     'x-gemini-api-key',
     'x-anthropic-api-key',
+    'x-firebase-token',
 ]
 
 # Environment mode configuration
@@ -109,6 +137,15 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.AllowAny",
     ],
+    # Rate limiting via DRF throttling (global fallback)
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/hour",
+        "user": "1000/hour",
+    },
 }
 
 WSGI_APPLICATION = 'backend.wsgi.application'
@@ -118,11 +155,40 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
+    # Oracle Autonomous Database - now default for all data
     'default': {
+        'ENGINE': 'django.db.backends.oracle',
+        'NAME': os.getenv('ORACLE_DSN', ''),
+        'USER': os.getenv('ORACLE_USER', ''),
+        'PASSWORD': os.getenv('ORACLE_PASSWORD', ''),
+        'OPTIONS': {
+            'config_dir': os.getenv('ORACLE_WALLET_LOCATION', ''),
+            'wallet_location': os.getenv('ORACLE_WALLET_LOCATION', ''),
+            'wallet_password': os.getenv('ORACLE_WALLET_PASSWORD', ''),
+        },
+    },
+    # SQLite kept as backup/reference only
+    'sqlite_backup': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    },
 }
+
+# Database Router - REMOVED (all data now in Oracle)
+
+# Firebase Configuration
+FIREBASE_CONFIG = {
+    'apiKey': os.getenv('FIREBASE_API_KEY', ''),
+    'authDomain': os.getenv('FIREBASE_AUTH_DOMAIN', ''),
+    'projectId': os.getenv('FIREBASE_PROJECT_ID', ''),
+    'storageBucket': os.getenv('FIREBASE_STORAGE_BUCKET', ''),
+    'messagingSenderId': os.getenv('FIREBASE_MESSAGING_SENDER_ID', ''),
+    'appId': os.getenv('FIREBASE_APP_ID', ''),
+    'measurementId': os.getenv('FIREBASE_MEASUREMENT_ID', ''),
+}
+
+# Oracle Wallet Location (for cloud database connection)
+ORACLE_WALLET_LOCATION = os.getenv('ORACLE_WALLET_LOCATION', '')
 
 
 # Password validation
@@ -156,10 +222,125 @@ USE_I18N = True
 USE_TZ = True
 
 
+# ==========================================
+# SECURITY HEADERS (Production Only)
+# ==========================================
+if not DEBUG:
+    # Force HTTPS in production
+    SECURE_SSL_REDIRECT = True
+
+    # Session and CSRF cookies only over HTTPS
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    # HTTP Strict Transport Security (HSTS)
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+    # Prevent clickjacking
+    X_FRAME_OPTIONS = 'DENY'
+
+    # Prevent MIME type sniffing
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+
+    # Enable XSS filter in browsers
+    SECURE_BROWSER_XSS_FILTER = True
+
+    # Referrer policy
+    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
+    # Content Security Policy (basic - customize as needed)
+    # CSP_DEFAULT_SRC = ("'self'",)
+    # CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'")  # Adjust based on your needs
+    # CSP_STYLE_SRC = ("'self'", "'unsafe-inline'")
+
+else:
+    # Development settings - less strict
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    SECURE_SSL_REDIRECT = False
+
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Logging Configuration
+# https://docs.djangoproject.com/en/5.2/topics/logging/
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{levelname}] {asctime} {name} {funcName}:{lineno} - {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        'simple': {
+            'format': '[{levelname}] {message}',
+            'style': '{',
+        },
+    },
+    'filters': {
+        'require_debug_false': {
+            '()': 'django.utils.log.RequireDebugFalse',
+        },
+        'require_debug_true': {
+            '()': 'django.utils.log.RequireDebugTrue',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'file': {
+            'level': 'WARNING',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'visionforge.log',
+            'maxBytes': 1024 * 1024 * 10,  # 10MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+        'error_file': {
+            'level': 'ERROR',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'errors.log',
+            'maxBytes': 1024 * 1024 * 10,  # 10MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console', 'error_file'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'authentication': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'block_manager': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

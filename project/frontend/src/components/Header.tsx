@@ -20,26 +20,41 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Download, FloppyDisk, CaretDown, Code, CheckCircle, GitBranch, Upload, FileCode, FilePy, GearSix, Trash, Info, PencilSimple, Warning, Key } from '@phosphor-icons/react'
+import { Plus, Download, FloppyDisk, CaretDown, Code, CheckCircle, GitBranch, Upload, FileCode, FilePy, GearSix, Trash, Info, PencilSimple, Warning, Key, User, SignOut, SquaresFour } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { validateModel, exportModel as apiExportModel } from '@/lib/api'
 import { exportToJSON, importFromJSON, downloadJSON, readJSONFile } from '@/lib/exportImport'
 import * as projectApi from '@/lib/projectApi'
 import { useApiKeys } from '@/contexts/ApiKeyContext'
+import { useAuth } from '@/contexts/AuthContext'
 import ApiKeyModal from './ApiKeyModal'
+import { GuestLoginPrompt } from './GuestLoginPrompt'
+import LoginModal from './LoginModal'
 
 export default function Header() {
   const navigate = useNavigate()
   const { projectId } = useParams<{ projectId: string }>()
   const { currentProject, nodes, edges, groupDefinitions, createProject: createProjectInStore, saveProject, loadProject, validateArchitecture, setNodes, setEdges } = useModelBuilderStore()
 
+  // Authentication
+  const { user, isGuest, signOut: authSignOut, refreshUser } = useAuth()
+
+  // Avatar error state
+  const [avatarError, setAvatarError] = useState(false)
+
   // API Key management for demo banner
   const { requiresApiKey, provider, environment } = useApiKeys()
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
+
+  // Guest login prompt
+  const [showGuestLoginPrompt, setShowGuestLoginPrompt] = useState(false)
+  const [guestPromptAction, setGuestPromptAction] = useState<'save' | 'export' | 'general'>('general')
+
+  // Login modal for guest sign-in
+  const [showLoginModalForGuest, setShowLoginModalForGuest] = useState(false)
 
   const [projects, setProjects] = useState<projectApi.ProjectResponse[]>([])
   const [isLoadingProjects, setIsLoadingProjects] = useState(false)
@@ -70,6 +85,11 @@ export default function Header() {
     loadProjectsList()
   }, [])
 
+  // Reset avatar error when user changes
+  useEffect(() => {
+    setAvatarError(false)
+  }, [user?.firebase_uid])
+
   const loadProjectsList = async () => {
     setIsLoadingProjects(true)
     try {
@@ -84,6 +104,13 @@ export default function Header() {
   }
 
   const handleCreateProject = async () => {
+    // Guest check
+    if (isGuest) {
+      setGuestPromptAction('save')
+      setShowGuestLoginPrompt(true)
+      return
+    }
+
     if (!newProjectName.trim()) {
       toast.error('Please enter a project name')
       return
@@ -109,6 +136,9 @@ export default function Header() {
       // Reload projects list
       await loadProjectsList()
 
+      // Refresh user data to update project count
+      await refreshUser()
+
       // Navigate to the new project
       navigate(`/project/${backendProject.id}`)
     } catch (error) {
@@ -119,6 +149,13 @@ export default function Header() {
   }
 
   const handleSaveAsProject = async () => {
+    // Guest check
+    if (isGuest) {
+      setGuestPromptAction('save')
+      setShowGuestLoginPrompt(true)
+      return
+    }
+
     if (!saveAsProjectName.trim()) {
       toast.error('Please enter a project name')
       return
@@ -155,6 +192,9 @@ export default function Header() {
       // Reload projects list
       await loadProjectsList()
 
+      // Refresh user data to update project count
+      await refreshUser()
+
       // Navigate to the new project
       navigate(`/project/${backendProject.id}`, { replace: true })
     } catch (error) {
@@ -166,6 +206,13 @@ export default function Header() {
   }
 
   const handleSaveProject = async () => {
+    // Guest check
+    if (isGuest) {
+      setGuestPromptAction('save')
+      setShowGuestLoginPrompt(true)
+      return
+    }
+
     if (nodes.length === 0) {
       toast.error('No architecture to save')
       return
@@ -229,6 +276,13 @@ export default function Header() {
   }
 
   const handleExportCode = async () => {
+    // Guest check
+    if (isGuest) {
+      setGuestPromptAction('export')
+      setShowGuestLoginPrompt(true)
+      return
+    }
+
     const errors = validateArchitecture()
     const criticalErrors = errors.filter((e) => e.type === 'error')
 
@@ -332,6 +386,13 @@ export default function Header() {
   }
 
   const handleExportJSON = () => {
+    // Guest check
+    if (isGuest) {
+      setGuestPromptAction('export')
+      setShowGuestLoginPrompt(true)
+      return
+    }
+
     if (nodes.length === 0) {
       toast.error('Cannot export: No blocks in architecture')
       return
@@ -535,6 +596,9 @@ export default function Header() {
       setIsManageProjectOpen(false)
       loadProjectsList()
 
+      // Refresh user data to update project count
+      await refreshUser()
+
       // If we deleted the current project, clear the store and go to blank canvas
       if (currentProject?.id === managingProject.id) {
         const { reset } = useModelBuilderStore.getState()
@@ -543,6 +607,18 @@ export default function Header() {
       }
     } catch (error) {
       toast.error('Failed to delete project', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      })
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      await authSignOut()
+      toast.success('Logged out successfully!')
+      navigate('/')
+    } catch (error) {
+      toast.error('Failed to logout', {
         description: error instanceof Error ? error.message : 'Unknown error'
       })
     }
@@ -573,96 +649,184 @@ export default function Header() {
 
       <header className="h-16 border-b border-border bg-card px-6 flex items-center justify-between">
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <img src="/logo_navbar.png" alt="VisionForge Logo" className="h-10 w-auto" />
+        <div
+          className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={() => {
+            if (user && !isGuest) {
+              navigate('/dashboard')
+            } else {
+              navigate('/')
+            }
+          }}
+        >
+          <img src={import.meta.env.VITE_LOGO_URL || '/logo_navbar.png'} alt="VisionForge Logo" className="h-10 w-auto" />
           <h1 className="text-xl font-semibold">VisionForge</h1>
         </div>
 
-        {/* Project Dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="h-8 gap-2">
-              <GitBranch size={16} />
-              <span className="font-medium">
-                {currentProject ? currentProject.name : 'No Project'}
-              </span>
-              {currentProject && (
-                <span className="text-xs text-muted-foreground">
-                  ({currentProject.framework})
-                </span>
-              )}
-              <CaretDown size={14} className="text-muted-foreground" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-xs">
-            <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-              Switch project or create new
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
+        {/* Current Project Indicator - Show for authenticated users */}
+        {user && !isGuest && currentProject && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <GitBranch size={16} />
+            <span className="font-medium text-foreground">{currentProject.name}</span>
+            <span className="text-xs">({currentProject.framework})</span>
+          </div>
+        )}
 
-            {/* New Project Option */}
-            <DropdownMenuItem
-              className="gap-2 cursor-pointer"
-              onSelect={() => setIsNewProjectOpen(true)}
+        {/* Guest indicator - Show for guest users */}
+        {isGuest && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Guest Mode</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowLoginModalForGuest(true)}
+              className="h-8"
             >
-              <Plus size={16} className="text-primary" />
-              <div className="flex-1">
-                <div className="font-medium">Create New Project</div>
-                <div className="text-xs text-muted-foreground">
-                  Start building a new architecture
-                </div>
-              </div>
-            </DropdownMenuItem>
-
-            {/* Saved Projects List */}
-            {projects && projects.length > 0 && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                  Recent Projects
-                </DropdownMenuLabel>
-                <ScrollArea className="max-h-[300px]">
-                  {projects.slice(0, 10).map((project) => (
-                    <DropdownMenuItem
-                      key={project.id}
-                      className="cursor-pointer flex-col items-start gap-1 py-2"
-                      onSelect={() => handleLoadProject(project)}
-                    >
-                      <div className="flex items-center gap-2 w-full">
-                        <GitBranch size={14} className="text-muted-foreground shrink-0" />
-                        <span className="font-medium flex-1 truncate">{project.name}</span>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {currentProject?.id === project.id && (
-                            <CheckCircle size={14} weight="fill" className="text-primary" />
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 hover:bg-accent"
-                            onClick={(e) => handleOpenProjectManagement(project, e)}
-                          >
-                            <GearSix size={14} />
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="text-xs text-muted-foreground pl-5">
-                        {project.description || 'No description'} • {project.framework}
-                      </div>
-                      <div className="text-xs text-muted-foreground pl-5">
-                        Updated {new Date(project.updated_at).toLocaleDateString()}
-                      </div>
-                    </DropdownMenuItem>
-                  ))}
-                </ScrollArea>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+              Sign In
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-2">
         <ThemeToggle />
-        
+
+        {/* User Menu */}
+        {user && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="gap-2">
+                {user.avatar_url && !avatarError ? (
+                  <img
+                    src={user.avatar_url}
+                    alt={user.display_name || user.email}
+                    className="w-6 h-6 rounded-full"
+                    onError={() => setAvatarError(true)}
+                  />
+                ) : (
+                  <User size={20} />
+                )}
+                <span className="hidden md:inline">{user.display_name || user.email}</span>
+                <CaretDown size={14} className="text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72">
+              {/* User Info */}
+              <DropdownMenuLabel>
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium">{user.display_name || 'User'}</p>
+                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+
+              {/* Tier & Project Count */}
+              <DropdownMenuItem className="text-xs text-muted-foreground" disabled>
+                Tier: {user.tier.toUpperCase()} • Projects: {user.project_count}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+
+              {/* Current Project */}
+              {currentProject && (
+                <>
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                    Current Project
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem className="flex-col items-start gap-1 py-2" disabled>
+                    <div className="flex items-center gap-2 w-full">
+                      <GitBranch size={14} className="text-primary" />
+                      <span className="font-medium flex-1">{currentProject.name}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground pl-5">
+                      {currentProject.description || 'No description'} • {currentProject.framework}
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+
+              {/* Create New Project */}
+              <DropdownMenuItem
+                className="gap-2 cursor-pointer"
+                onSelect={() => setIsNewProjectOpen(true)}
+              >
+                <Plus size={16} className="text-primary" />
+                <div className="flex-1">
+                  <div className="font-medium">Create New Project</div>
+                  <div className="text-xs text-muted-foreground">
+                    Start building a new architecture
+                  </div>
+                </div>
+              </DropdownMenuItem>
+
+              {/* Recent Projects List */}
+              {projects && projects.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                    Recent Projects (Top 3)
+                  </DropdownMenuLabel>
+                  <div>
+                    {projects.slice(0, 3).map((project) => (
+                      <DropdownMenuItem
+                        key={project.id}
+                        className="cursor-pointer flex-col items-start gap-1 py-2"
+                        onSelect={() => handleLoadProject(project)}
+                      >
+                        <div className="flex items-center gap-2 w-full">
+                          <GitBranch size={14} className="text-muted-foreground shrink-0" />
+                          <span className="font-medium flex-1 truncate">{project.name}</span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {currentProject?.id === project.id && (
+                              <CheckCircle size={14} weight="fill" className="text-primary" />
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 hover:bg-accent"
+                              onClick={(e) => handleOpenProjectManagement(project, e)}
+                            >
+                              <GearSix size={14} />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted-foreground pl-5">
+                          {project.description || 'No description'} • {project.framework}
+                        </div>
+                        <div className="text-xs text-muted-foreground pl-5">
+                          Updated {new Date(project.updated_at).toLocaleDateString()}
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <DropdownMenuSeparator />
+
+              {/* Dashboard */}
+              <DropdownMenuItem
+                className="gap-2 cursor-pointer"
+                onClick={() => navigate('/dashboard')}
+              >
+                <SquaresFour size={16} />
+                <span>Dashboard</span>
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+
+              {/* Logout */}
+              <DropdownMenuItem
+                className="gap-2 cursor-pointer text-destructive focus:text-destructive"
+                onClick={handleLogout}
+              >
+                <SignOut size={16} />
+                <span>Logout</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
         {/* Hidden file input for JSON import */}
         <input
           ref={fileInputRef}
@@ -1157,6 +1321,22 @@ export default function Header() {
       onOpenChange={setShowApiKeyModal}
       required={false}
     />
+
+    {/* Guest Login Prompt */}
+    <GuestLoginPrompt
+      isOpen={showGuestLoginPrompt}
+      onClose={() => setShowGuestLoginPrompt(false)}
+      action={guestPromptAction}
+    />
+
+    {/* Login Modal for Guests */}
+    {isGuest && (
+      <LoginModal
+        open={showLoginModalForGuest}
+        onOpenChange={setShowLoginModalForGuest}
+        required={false}
+      />
+    )}
     </>
   )
 }

@@ -2,6 +2,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 import logging
+from django_ratelimit.decorators import ratelimit
 
 from block_manager.services.ai_service_factory import AIServiceFactory
 
@@ -9,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 @api_view(['POST'])
+@ratelimit(key='user_or_ip', rate='20/m', method='POST', block=True)
 def chat_message(request):
     """
     Handle chat messages with AI integration supporting both BYOK and server-side keys.
@@ -171,6 +173,7 @@ def chat_message(request):
 
 
 @api_view(['POST'])
+@ratelimit(key='user_or_ip', rate='15/m', method='POST', block=True)
 def get_suggestions(request):
     """
     Get model architecture suggestions based on current workflow.

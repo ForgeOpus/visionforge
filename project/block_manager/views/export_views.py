@@ -1,18 +1,23 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.request import Request
 from django.http import HttpResponse
+from django_ratelimit.decorators import ratelimit
 
 from block_manager.serializers import ExportRequestSerializer
 from block_manager.services.tensorflow_codegen import generate_tensorflow_code
 from block_manager.services.pytorch_codegen import generate_pytorch_code
+from authentication.middleware import require_authentication
 
 import zipfile
 import io
 
 
 @api_view(['POST'])
-def export_model(request):
+@require_authentication  # Require authentication for export
+@ratelimit(key='user', rate='30/h', method='POST', block=True)
+def export_model(request: Request) -> Response:
     """
     Export model code with professional class-based structure.
 
@@ -144,6 +149,10 @@ Generated with VisionForge
 
         # Prepare response with zip file
         zip_buffer.seek(0)
+
+        # Track first export milestone for user analytics
+        if hasattr(request, 'firebase_user') and request.firebase_user:
+            request.firebase_user.mark_first_export()
 
         # Return as JSON response with base64 encoded zip for frontend compatibility
         import base64
