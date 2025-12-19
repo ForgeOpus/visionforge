@@ -28,15 +28,14 @@ export default function LoginModal({
   required = false,
   onGuestContinue
 }: LoginModalProps) {
-  const { signInWithGoogle, signInWithGithub, continueAsGuest, user, loading: authLoading, isGuest } = useAuth();
+  const { signInWithGoogle, signInWithGithub, continueAsGuest, user, loading, isGuest } = useAuth();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Wait for user to be populated by onAuthStateChanged, then redirect
   // ONLY redirect if modal is open (meaning user just logged in)
   useEffect(() => {
-    if (open && !authLoading && user && !isGuest) {
+    if (open && !loading && user && !isGuest) {
       // User is authenticated and data is loaded
       onOpenChange(false);
 
@@ -47,7 +46,7 @@ export default function LoginModal({
         navigate('/dashboard');  // Returning users → dashboard
       }
     }
-  }, [open, user, authLoading, isGuest, navigate, onOpenChange]);
+  }, [open, user, loading, isGuest, navigate, onOpenChange]);
 
   const handleGoogleSignIn = async () => {
     try {
