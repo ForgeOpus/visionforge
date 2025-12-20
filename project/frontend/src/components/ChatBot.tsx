@@ -49,10 +49,8 @@ export default function ChatBot() {
 
   // API Key management
   const {
-    geminiApiKey,
-    anthropicApiKey,
-    openaiApiKey,
-    activeProvider,
+    openrouterApiKey,
+    selectedModel,
     requiresApiKey,
     hasRequiredKey,
     provider
@@ -161,7 +159,7 @@ export default function ChatBot() {
         modificationMode,
         workflowState,
         currentFile || undefined,
-        { geminiApiKey, anthropicApiKey, openaiApiKey, activeProvider }
+        { openrouterApiKey, selectedModel }
       )
 
       if (response.success && response.data) {

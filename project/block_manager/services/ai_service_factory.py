@@ -1,17 +1,15 @@
 """
-AI Service Factory - Provider selection for Gemini, Claude, or OpenAI with BYOK support.
+AI Service Factory - OpenRouter unified access to all AI providers.
 """
 import os
-from typing import Union, Optional
+from typing import Optional
 from django.conf import settings
-from block_manager.services.gemini_service import GeminiChatService
-from block_manager.services.claude_service import ClaudeChatService
-from block_manager.services.openai_service import OpenAIChatService
+from block_manager.services.openrouter_service import OpenRouterService
 from block_manager.services.model_config import get_model_identifier
 
 
 class AIServiceFactory:
-    """Factory to create the appropriate AI service based on configuration."""
+    """Factory to create OpenRouter AI service with unified API access."""
 
     @staticmethod
     def requires_user_api_key() -> bool:
@@ -26,36 +24,32 @@ class AIServiceFactory:
 
     @staticmethod
     def create_service(
-        gemini_api_key: Optional[str] = None,
-        anthropic_api_key: Optional[str] = None,
-        openai_api_key: Optional[str] = None,
-        active_provider: Optional[str] = None,
-        model: Optional[str] = None
-    ) -> Union[GeminiChatService, ClaudeChatService, OpenAIChatService]:
+        openrouter_api_key: Optional[str] = None,
+        model: Optional[str] = None,
+        **kwargs  # Accept legacy parameters for backwards compatibility
+    ) -> OpenRouterService:
         """
-        Create and return the configured AI service.
+        Create and return OpenRouter AI service.
 
-        In PROD mode (or missing): uses user-provided API keys (BYOK)
-        In DEV mode: uses server-side API keys from environment
+        OpenRouter provides unified access to Gemini, GPT, and Claude models
+        through a single API key, simplifying integration.
+
+        In PROD mode (or missing): uses user-provided API key (BYOK)
+        In DEV mode: uses server-side API key from environment
 
         Args:
-            gemini_api_key: User-provided Gemini API key (PROD mode only)
-            anthropic_api_key: User-provided Anthropic API key (PROD mode only)
-            openai_api_key: User-provided OpenAI API key (PROD mode only)
-            active_provider: User's chosen provider ('gemini', 'claude', or 'openai')
-            model: Frontend model name (e.g., 'gpt-5', 'claude-opus-4.5')
+            openrouter_api_key: User-provided OpenRouter API key (PROD mode only)
+            model: Frontend model name (e.g., 'gpt-5.2', 'claude-opus-4.5', 'gemini-3-flash')
 
         Returns:
-            GeminiChatService, ClaudeChatService, or OpenAIChatService based on active_provider
+            OpenRouterService configured with the specified model
 
         Raises:
-            ValueError: If API keys are missing or provider is invalid
+            ValueError: If API key is missing in PROD mode
         """
-        # Use active_provider if provided, otherwise fall back to AI_PROVIDER env var
-        provider = (active_provider or os.getenv('AI_PROVIDER', 'gemini')).lower()
         requires_user_key = AIServiceFactory.requires_user_api_key()
 
-        # Map frontend model name to API identifier if provided
+        # Map frontend model name to OpenRouter identifier if provided
         model_identifier = None
         if model:
             try:
@@ -64,52 +58,24 @@ class AIServiceFactory:
                 # If model mapping fails, log and continue with default
                 print(f"Warning: {e}. Using default model.")
 
-        if provider == 'gemini':
-            if requires_user_key:
-                # PROD mode: require user-provided key
-                if not gemini_api_key:
-                    raise ValueError("Gemini API key is required. Please provide your API key.")
-                return GeminiChatService(api_key=gemini_api_key, model=model_identifier)
-            else:
-                # DEV mode: use server-side key
-                return GeminiChatService(model=model_identifier)
-
-        elif provider == 'claude':
-            if requires_user_key:
-                # PROD mode: require user-provided key
-                if not anthropic_api_key:
-                    raise ValueError("Anthropic API key is required. Please provide your API key.")
-                return ClaudeChatService(api_key=anthropic_api_key, model=model_identifier)
-            else:
-                # DEV mode: use server-side key
-                return ClaudeChatService(model=model_identifier)
-
-        elif provider == 'openai':
-            if requires_user_key:
-                # PROD mode: require user-provided key
-                if not openai_api_key:
-                    raise ValueError("OpenAI API key is required. Please provide your API key.")
-                return OpenAIChatService(api_key=openai_api_key, model=model_identifier)
-            else:
-                # DEV mode: use server-side key
-                return OpenAIChatService(model=model_identifier)
+        if requires_user_key:
+            # PROD mode: require user-provided OpenRouter key
+            if not openrouter_api_key:
+                raise ValueError("OpenRouter API key is required. Please provide your API key.")
+            return OpenRouterService(api_key=openrouter_api_key, model=model_identifier)
         else:
-            raise ValueError(
-                f"Invalid provider: '{provider}'. Must be 'gemini', 'claude', or 'openai'."
-            )
+            # DEV mode: use server-side OpenRouter key
+            return OpenRouterService(model=model_identifier)
 
     @staticmethod
     def get_provider_name() -> str:
         """
-        Get the name of the current AI provider.
+        Get the name of the unified AI provider.
 
         Returns:
-            'Gemini', 'Claude', or 'OpenAI'
+            'OpenRouter' (unified access to all AI models)
         """
-        provider = os.getenv('AI_PROVIDER', 'gemini').lower()
-        if provider == 'openai':
-            return 'OpenAI'
-        return provider.capitalize()
+        return 'OpenRouter'
 
     @staticmethod
     def get_environment_mode() -> str:

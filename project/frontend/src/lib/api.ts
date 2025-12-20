@@ -18,10 +18,8 @@ interface ApiResponse<T = any> {
 
 // Type for API key headers
 interface ApiKeyHeaders {
-  geminiApiKey?: string | null
-  anthropicApiKey?: string | null
-  openaiApiKey?: string | null
-  activeProvider?: 'gemini' | 'claude' | 'openai'
+  openrouterApiKey?: string | null
+  selectedModel?: string | null
 }
 
 /**
@@ -30,20 +28,12 @@ interface ApiKeyHeaders {
 function getApiKeyHeaders(keys?: ApiKeyHeaders): Record<string, string> {
   const headers: Record<string, string> = {}
 
-  if (keys?.geminiApiKey) {
-    headers['X-Gemini-Api-Key'] = keys.geminiApiKey
+  if (keys?.openrouterApiKey) {
+    headers['X-OpenRouter-Api-Key'] = keys.openrouterApiKey
   }
 
-  if (keys?.anthropicApiKey) {
-    headers['X-Anthropic-Api-Key'] = keys.anthropicApiKey
-  }
-
-  if (keys?.openaiApiKey) {
-    headers['X-OpenAI-Api-Key'] = keys.openaiApiKey
-  }
-
-  if (keys?.activeProvider) {
-    headers['X-Active-Provider'] = keys.activeProvider
+  if (keys?.selectedModel) {
+    headers['X-Selected-Model'] = keys.selectedModel
   }
 
   return headers

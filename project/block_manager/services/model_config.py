@@ -1,28 +1,31 @@
 """
-Model configuration mapping - maps frontend model names to API model identifiers.
+Model configuration mapping - maps frontend model names to OpenRouter model identifiers.
+OpenRouter provides unified access to all AI providers through a single API.
 """
 
-# Gemini model mapping (frontend name -> API identifier)
+# Gemini model mapping (frontend name -> OpenRouter identifier)
+# Latest models as of December 2025 - Available on free tier
 GEMINI_MODELS = {
-    'gemini-3-flash': 'gemini-3-flash',
-    'gemini-2.5-flash': 'gemini-2.5-flash',
-    'gemini-2.0-flash': 'gemini-2.0-flash',
+    'gemini-3-flash': 'google/gemini-3-flash-preview',  # Newest - Dec 17, 2025 (free tier)
+    'gemini-3-pro': 'google/gemini-3-pro-preview',  # Nov 18, 2025 - multimodal (free tier)
+    'gemini-2.5-flash': 'google/gemini-2.5-flash-image',  # Stable - intelligent speed (free tier)
+    'gemini-2.5-pro': 'google/gemini-2.5-flash-image',  # Using flash-image variant (free tier)
 }
 
-# OpenAI model mapping (frontend name -> API identifier)
+# OpenAI model mapping (frontend name -> OpenRouter identifier)
+# Latest models as of December 2025 - Pay-as-you-go
 OPENAI_MODELS = {
-    'gpt-5': 'gpt-5',  # Will map to actual identifier when available
-    'gpt-4.1': 'gpt-4.1',  # Coding specialist model
-    'gpt-4o': 'gpt-4o',
-    'gpt-4o-mini': 'gpt-4o-mini',
+    'gpt-5.2': 'openai/gpt-5.2',  # Newest flagship - Dec 11, 2025
+    'gpt-4o': 'openai/chatgpt-4o-latest',  # Latest GPT-4 omni model
+    'gpt-4o-mini': 'openai/gpt-4o-mini',  # Fast and cost-effective
 }
 
-# Claude model mapping (frontend name -> API identifier)
-# Using dated model identifiers as per Anthropic API
+# Claude model mapping (frontend name -> OpenRouter identifier)
+# Latest models as of December 2025 - Pay-as-you-go
 CLAUDE_MODELS = {
-    'claude-opus-4.5': 'claude-opus-4-20250514',  # Latest Opus 4.5
-    'claude-sonnet-4.5': 'claude-sonnet-4-5-20250929',  # Sonnet 4.5 from Sept 2025
-    'claude-haiku-4.5': 'claude-haiku-4-5',  # Haiku 4.5
+    'claude-opus-4.5': 'anthropic/claude-opus-4.5',  # Newest - Nov 24, 2025
+    'claude-sonnet-4.5': 'anthropic/claude-sonnet-4.5',  # Sept 29, 2025
+    'claude-haiku-4.5': 'anthropic/claude-haiku-4.5',  # Oct 15, 2025
 }
 
 # Combined model mapping

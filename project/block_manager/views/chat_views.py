@@ -18,11 +18,8 @@ def chat_message(request):
     Endpoint: POST /api/chat
 
     Request headers (PROD mode only):
-        - X-Gemini-Api-Key: User's Gemini API key
-        - X-Anthropic-Api-Key: User's Anthropic API key
-        - X-OpenAI-Api-Key: User's OpenAI API key
-        - X-Active-Provider: Active provider ('gemini', 'claude', or 'openai')
-        - X-Selected-Model: Selected model (e.g., 'gpt-5', 'claude-opus-4.5')
+        - X-OpenRouter-Api-Key: User's OpenRouter API key (unified access to all models)
+        - X-Selected-Model: Selected model (e.g., 'gpt-5.2', 'claude-opus-4.5', 'gemini-3-flash')
 
     Request body (JSON or FormData):
     - JSON format:
@@ -50,12 +47,9 @@ def chat_message(request):
     import json as json_lib
     from django.conf import settings
 
-    # Extract API keys, active provider, and model from headers (only used in PROD mode)
-    gemini_api_key = request.headers.get('X-Gemini-Api-Key')
-    anthropic_api_key = request.headers.get('X-Anthropic-Api-Key')
-    openai_api_key = request.headers.get('X-OpenAI-Api-Key')
-    active_provider = request.headers.get('X-Active-Provider')  # 'gemini', 'claude', or 'openai'
-    selected_model = request.headers.get('X-Selected-Model')  # Frontend model name (e.g., 'gpt-5', 'claude-opus-4.5')
+    # Extract OpenRouter API key and model from headers (only used in PROD mode)
+    openrouter_api_key = request.headers.get('X-OpenRouter-Api-Key')
+    selected_model = request.headers.get('X-Selected-Model')  # Frontend model name (e.g., 'gpt-5.2', 'claude-opus-4.5', 'gemini-3-flash')
 
     # Check if request has file upload (FormData)
     uploaded_file = request.FILES.get('file', None)
@@ -91,53 +85,24 @@ def chat_message(request):
         )
 
     try:
-        # Initialize AI service with appropriate API keys and model based on mode
+        # Initialize OpenRouter AI service with API key and model
         ai_service = AIServiceFactory.create_service(
-            gemini_api_key=gemini_api_key,
-            anthropic_api_key=anthropic_api_key,
-            openai_api_key=openai_api_key,
-            active_provider=active_provider,
+            openrouter_api_key=openrouter_api_key,
             model=selected_model
         )
         provider_name = AIServiceFactory.get_provider_name()
 
-        # Handle file upload if present
-        file_content = None
+        # Log file upload if present
         if uploaded_file:
             logger.info(f"Processing file with {provider_name}: {uploaded_file.name}")
 
-            # For Gemini, upload file to Gemini API
-            if provider_name == 'Gemini':
-                file_content = ai_service.upload_file_to_gemini(uploaded_file)
-                if not file_content:
-                    return Response(
-                        {
-                            'error': f'Failed to upload file to {provider_name}',
-                            'response': 'Sorry, I could not process the uploaded file. Please try again.'
-                        },
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                    )
-            # For Claude, read file content directly
-            elif provider_name == 'Claude':
-                file_content = ai_service._read_file_content(uploaded_file)
-                if file_content.get('type') == 'text' and 'Error' in file_content.get('text', ''):
-                    return Response(
-                        {
-                            'error': f'Failed to process file with {provider_name}',
-                            'response': file_content.get('text', 'Could not process file.')
-                        },
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                    )
-
-        # Get chat response
-        # Note: For Gemini, file_content is the gemini_file object
-        # For Claude, file_content is the formatted file dict
+        # Get chat response (OpenRouter handles file uploads via base64 encoding)
         result = ai_service.chat(
             message=message,
             history=history,
             modification_mode=modification_mode,
             workflow_state=workflow_state,
-            **({'gemini_file': file_content} if provider_name == 'Gemini' else {'file_content': file_content})
+            uploaded_file=uploaded_file
         )
 
         return Response(result)
@@ -190,11 +155,8 @@ def get_suggestions(request):
     Endpoint: POST /api/suggestions
 
     Request headers (PROD mode only):
-        - X-Gemini-Api-Key: User's Gemini API key
-        - X-Anthropic-Api-Key: User's Anthropic API key
-        - X-OpenAI-Api-Key: User's OpenAI API key
-        - X-Active-Provider: Active provider ('gemini', 'claude', or 'openai')
-        - X-Selected-Model: Selected model (e.g., 'gpt-5', 'claude-opus-4.5')
+        - X-OpenRouter-Api-Key: User's OpenRouter API key (unified access to all models)
+        - X-Selected-Model: Selected model (e.g., 'gpt-5.2', 'claude-opus-4.5', 'gemini-3-flash')
 
     Request body:
     {
@@ -207,12 +169,9 @@ def get_suggestions(request):
         "suggestions": [str]
     }
     """
-    # Extract API keys, active provider, and model from headers (only used in PROD mode)
-    gemini_api_key = request.headers.get('X-Gemini-Api-Key')
-    anthropic_api_key = request.headers.get('X-Anthropic-Api-Key')
-    openai_api_key = request.headers.get('X-OpenAI-Api-Key')
-    active_provider = request.headers.get('X-Active-Provider')  # 'gemini', 'claude', or 'openai'
-    selected_model = request.headers.get('X-Selected-Model')  # Frontend model name (e.g., 'gpt-5', 'claude-opus-4.5')
+    # Extract OpenRouter API key and model from headers (only used in PROD mode)
+    openrouter_api_key = request.headers.get('X-OpenRouter-Api-Key')
+    selected_model = request.headers.get('X-Selected-Model')  # Frontend model name (e.g., 'gpt-5.2', 'claude-opus-4.5', 'gemini-3-flash')
 
     nodes = request.data.get('nodes', [])
     edges = request.data.get('edges', [])
@@ -223,12 +182,9 @@ def get_suggestions(request):
         })
 
     try:
-        # Initialize AI service with appropriate API keys and model based on mode
+        # Initialize OpenRouter AI service with API key and model
         ai_service = AIServiceFactory.create_service(
-            gemini_api_key=gemini_api_key,
-            anthropic_api_key=anthropic_api_key,
-            openai_api_key=openai_api_key,
-            active_provider=active_provider,
+            openrouter_api_key=openrouter_api_key,
             model=selected_model
         )
         provider_name = AIServiceFactory.get_provider_name()

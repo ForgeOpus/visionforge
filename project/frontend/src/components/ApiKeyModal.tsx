@@ -24,11 +24,11 @@ interface ApiKeyModalProps {
 type ModelType =
   // Gemini models (Free tier available)
   | 'gemini-3-flash'
+  | 'gemini-3-pro'
   | 'gemini-2.5-flash'
-  | 'gemini-2.0-flash'
+  | 'gemini-2.5-pro'
   // OpenAI models
-  | 'gpt-5'
-  | 'gpt-4.1'
+  | 'gpt-5.2'
   | 'gpt-4o'
   | 'gpt-4o-mini'
   // Claude models
@@ -41,10 +41,10 @@ type ProviderType = 'gemini' | 'claude' | 'openai'
 // Map models to their providers
 const modelToProvider: Record<ModelType, ProviderType> = {
   'gemini-3-flash': 'gemini',
+  'gemini-3-pro': 'gemini',
   'gemini-2.5-flash': 'gemini',
-  'gemini-2.0-flash': 'gemini',
-  'gpt-5': 'openai',
-  'gpt-4.1': 'openai',
+  'gemini-2.5-pro': 'gemini',
+  'gpt-5.2': 'openai',
   'gpt-4o': 'openai',
   'gpt-4o-mini': 'openai',
   'claude-opus-4.5': 'claude',
@@ -54,61 +54,32 @@ const modelToProvider: Record<ModelType, ProviderType> = {
 
 export default function ApiKeyModal({ open, onOpenChange, required = false }: ApiKeyModalProps) {
   const {
-    geminiApiKey,
-    anthropicApiKey,
-    openaiApiKey,
-    activeProvider,
+    openrouterApiKey,
     selectedModel: contextSelectedModel,
-    setGeminiApiKey,
-    setAnthropicApiKey,
-    setOpenAIApiKey,
-    setActiveProvider,
+    setOpenRouterApiKey,
     setSelectedModel: setContextSelectedModel,
     clearKeys,
     hasRequiredKey
   } = useApiKeys()
 
   const [selectedModel, setSelectedModel] = useState<ModelType>((contextSelectedModel as ModelType) || 'gemini-3-flash')
-  const [selectedProvider, setSelectedProvider] = useState<ProviderType>('gemini')
   const [inputKey, setInputKey] = useState('')
   const [showKey, setShowKey] = useState(false)
 
-  // Update provider when model changes
+  // Update context when model changes
   const handleModelChange = (model: ModelType) => {
     setSelectedModel(model)
-    setSelectedProvider(modelToProvider[model])
+    setContextSelectedModel(model)
   }
 
-  // Load existing key when modal opens or provider changes
+  // Load existing OpenRouter key when modal opens
   useEffect(() => {
-    if (open) {
-      // Load the active provider's key
-      if (selectedProvider === 'gemini' && geminiApiKey) {
-        setInputKey(geminiApiKey)
-      } else if (selectedProvider === 'claude' && anthropicApiKey) {
-        setInputKey(anthropicApiKey)
-      } else if (selectedProvider === 'openai' && openaiApiKey) {
-        setInputKey(openaiApiKey)
-      } else {
-        setInputKey('')
-      }
+    if (open && openrouterApiKey) {
+      setInputKey(openrouterApiKey)
+    } else if (open) {
+      setInputKey('')
     }
-  }, [open, selectedProvider, geminiApiKey, anthropicApiKey, openaiApiKey])
-
-  // Set selected provider and model based on active provider
-  useEffect(() => {
-    if (open) {
-      setSelectedProvider(activeProvider)
-      // Set a sensible default model for the active provider (latest/best)
-      if (activeProvider === 'gemini') {
-        setSelectedModel('gemini-3-flash')
-      } else if (activeProvider === 'openai') {
-        setSelectedModel('gpt-5')
-      } else if (activeProvider === 'claude') {
-        setSelectedModel('claude-opus-4.5')
-      }
-    }
-  }, [open, activeProvider])
+  }, [open, openrouterApiKey])
 
   const handleSave = () => {
     if (!inputKey.trim()) {
@@ -117,17 +88,8 @@ export default function ApiKeyModal({ open, onOpenChange, required = false }: Ap
 
     const trimmedKey = inputKey.trim()
 
-    // Save the API key for the selected provider
-    if (selectedProvider === 'gemini') {
-      setGeminiApiKey(trimmedKey)
-    } else if (selectedProvider === 'claude') {
-      setAnthropicApiKey(trimmedKey)
-    } else if (selectedProvider === 'openai') {
-      setOpenAIApiKey(trimmedKey)
-    }
-
-    // Set active provider
-    setActiveProvider(selectedProvider)
+    // Save the OpenRouter API key
+    setOpenRouterApiKey(trimmedKey)
 
     onOpenChange(false)
   }
@@ -144,36 +106,13 @@ export default function ApiKeyModal({ open, onOpenChange, required = false }: Ap
     onOpenChange(false)
   }
 
-  const getProviderInfo = (provider: ProviderType) => {
-    switch (provider) {
-      case 'gemini':
-        return {
-          name: 'Gemini',
-          displayName: 'Google Gemini',
-          url: 'https://aistudio.google.com/app/apikey',
-          placeholder: 'Enter API key here',
-          description: 'Fast, free tier available'
-        }
-      case 'openai':
-        return {
-          name: 'OpenAI',
-          displayName: 'OpenAI (GPT-4, GPT-3.5)',
-          url: 'https://platform.openai.com/api-keys',
-          placeholder: 'Enter API key here',
-          description: 'Industry standard, most popular'
-        }
-      case 'claude':
-        return {
-          name: 'Claude',
-          displayName: 'Anthropic Claude',
-          url: 'https://console.anthropic.com/',
-          placeholder: 'Enter API key here',
-          description: 'Advanced reasoning, latest models'
-        }
-    }
+  const providerInfo = {
+    name: 'OpenRouter',
+    displayName: 'OpenRouter',
+    url: 'https://openrouter.ai/keys',
+    placeholder: 'Enter OpenRouter API key',
+    description: 'Unified access to all AI models'
   }
-
-  const providerInfo = getProviderInfo(selectedProvider)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -196,7 +135,7 @@ export default function ApiKeyModal({ open, onOpenChange, required = false }: Ap
           <Alert>
             <Info size={16} />
             <AlertDescription>
-              Choose from top AI models. Gemini models offer a generous free tier, while GPT and Claude models require paid API keys.
+              Choose from the latest AI models. Gemini models offer a free tier for development, while OpenAI and Claude models are pay-as-you-go.
             </AlertDescription>
           </Alert>
 
@@ -209,13 +148,22 @@ export default function ApiKeyModal({ open, onOpenChange, required = false }: Ap
               <SelectTrigger id="model-select">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[300px]">
                 {/* Free Tier Models (Gemini) */}
                 <SelectItem value="gemini-3-flash">
                   <div className="flex items-center justify-between w-full gap-2">
                     <div className="flex flex-col items-start">
                       <span className="font-medium">Gemini 3 Flash</span>
-                      <span className="text-xs text-muted-foreground">Latest, 3x faster, frontier intelligence</span>
+                      <span className="text-xs text-muted-foreground">Newest - frontier intelligence for speed (Dec 2025)</span>
+                    </div>
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free Tier</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="gemini-3-pro">
+                  <div className="flex items-center justify-between w-full gap-2">
+                    <div className="flex flex-col items-start">
+                      <span className="font-medium">Gemini 3 Pro</span>
+                      <span className="text-xs text-muted-foreground">Best multimodal understanding (Nov 2025)</span>
                     </div>
                     <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free Tier</span>
                   </div>
@@ -224,38 +172,32 @@ export default function ApiKeyModal({ open, onOpenChange, required = false }: Ap
                   <div className="flex items-center justify-between w-full gap-2">
                     <div className="flex flex-col items-start">
                       <span className="font-medium">Gemini 2.5 Flash</span>
-                      <span className="text-xs text-muted-foreground">Stable, improved agentic tool use</span>
+                      <span className="text-xs text-muted-foreground">Stable - intelligent speed, production-ready</span>
                     </div>
                     <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free Tier</span>
                   </div>
                 </SelectItem>
-                <SelectItem value="gemini-2.0-flash">
+                <SelectItem value="gemini-2.5-pro">
                   <div className="flex items-center justify-between w-full gap-2">
                     <div className="flex flex-col items-start">
-                      <span className="font-medium">Gemini 2.0 Flash</span>
-                      <span className="text-xs text-muted-foreground">Multimodal capabilities, legacy</span>
+                      <span className="font-medium">Gemini 2.5 Pro</span>
+                      <span className="text-xs text-muted-foreground">Stable - state-of-the-art thinking model</span>
                     </div>
                     <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Free Tier</span>
                   </div>
                 </SelectItem>
 
                 {/* OpenAI Models */}
-                <SelectItem value="gpt-5">
+                <SelectItem value="gpt-5.2">
                   <div className="flex flex-col items-start">
-                    <span className="font-medium">GPT-5</span>
-                    <span className="text-xs text-muted-foreground">Latest flagship, advanced reasoning (Aug 2025)</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="gpt-4.1">
-                  <div className="flex flex-col items-start">
-                    <span className="font-medium">GPT-4.1</span>
-                    <span className="text-xs text-muted-foreground">Coding specialist, precise instructions</span>
+                    <span className="font-medium">GPT-5.2</span>
+                    <span className="text-xs text-muted-foreground">Newest flagship - professional work (Dec 2025)</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="gpt-4o">
                   <div className="flex flex-col items-start">
                     <span className="font-medium">GPT-4o</span>
-                    <span className="text-xs text-muted-foreground">Multimodal, popular choice</span>
+                    <span className="text-xs text-muted-foreground">Multimodal omni model</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="gpt-4o-mini">
@@ -269,7 +211,7 @@ export default function ApiKeyModal({ open, onOpenChange, required = false }: Ap
                 <SelectItem value="claude-opus-4.5">
                   <div className="flex flex-col items-start">
                     <span className="font-medium">Claude Opus 4.5</span>
-                    <span className="text-xs text-muted-foreground">Latest flagship, best for coding (Nov 2025)</span>
+                    <span className="text-xs text-muted-foreground">Newest - best for coding & agents (Nov 2025)</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="claude-sonnet-4.5">
@@ -310,15 +252,14 @@ export default function ApiKeyModal({ open, onOpenChange, required = false }: Ap
               </Button>
             </div>
             <p className="text-sm text-muted-foreground">
-              Don't have a {providerInfo.name} API key?{' '}
+              Don't have an {providerInfo.name} API key?{' '}
               <a
                 href={providerInfo.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-primary hover:underline"
               >
-                Get one from {providerInfo.name}
-                {selectedProvider === 'gemini' && ' (Free)'}
+                Get one from {providerInfo.name} (Free tier: 50 requests/day)
               </a>
             </p>
           </div>
@@ -328,7 +269,7 @@ export default function ApiKeyModal({ open, onOpenChange, required = false }: Ap
           <Info size={16} />
           <AlertDescription className="text-xs">
             Your API key is stored only in your browser's session storage and is never sent to our servers.
-            It's used to communicate directly with the selected AI provider's API.
+            OpenRouter routes your requests to the selected AI provider.
           </AlertDescription>
         </Alert>
 

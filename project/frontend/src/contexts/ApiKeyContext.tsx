@@ -1,20 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 
 interface ApiKeyContextType {
-  geminiApiKey: string | null
-  anthropicApiKey: string | null
-  openaiApiKey: string | null
+  openrouterApiKey: string | null
   isProduction: boolean
   requiresApiKey: boolean
-  provider: 'Gemini' | 'Claude' | 'OpenAI' | null
+  provider: 'OpenRouter' | null
   environment: string | null
   isLoading: boolean
-  activeProvider: 'gemini' | 'claude' | 'openai'
   selectedModel: string | null
-  setGeminiApiKey: (key: string | null) => void
-  setAnthropicApiKey: (key: string | null) => void
-  setOpenAIApiKey: (key: string | null) => void
-  setActiveProvider: (provider: 'gemini' | 'claude' | 'openai') => void
+  setOpenRouterApiKey: (key: string | null) => void
   setSelectedModel: (model: string) => void
   clearKeys: () => void
   hasRequiredKey: () => boolean
@@ -22,10 +16,7 @@ interface ApiKeyContextType {
 
 const ApiKeyContext = createContext<ApiKeyContextType | undefined>(undefined)
 
-const STORAGE_KEY_GEMINI = 'visionforge_gemini_api_key'
-const STORAGE_KEY_ANTHROPIC = 'visionforge_anthropic_api_key'
-const STORAGE_KEY_OPENAI = 'visionforge_openai_api_key'
-const STORAGE_KEY_ACTIVE_PROVIDER = 'visionforge_active_provider'
+const STORAGE_KEY_OPENROUTER = 'visionforge_openrouter_api_key'
 const STORAGE_KEY_SELECTED_MODEL = 'visionforge_selected_model'
 
 interface ApiKeyProviderProps {
@@ -33,39 +24,23 @@ interface ApiKeyProviderProps {
 }
 
 export function ApiKeyProvider({ children }: ApiKeyProviderProps) {
-  const [geminiApiKey, setGeminiApiKeyState] = useState<string | null>(null)
-  const [anthropicApiKey, setAnthropicApiKeyState] = useState<string | null>(null)
-  const [openaiApiKey, setOpenAIApiKeyState] = useState<string | null>(null)
+  const [openrouterApiKey, setOpenRouterApiKeyState] = useState<string | null>(null)
   const [isProduction, setIsProduction] = useState(false)
   const [requiresApiKey, setRequiresApiKey] = useState(false)
-  const [provider, setProvider] = useState<'Gemini' | 'Claude' | 'OpenAI' | null>(null)
+  const [provider, setProvider] = useState<'OpenRouter' | null>(null)
   const [environment, setEnvironment] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-
-  // Active provider state (user's choice for which AI provider to use)
-  const [activeProvider, setActiveProviderState] = useState<'gemini' | 'claude' | 'openai'>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_ACTIVE_PROVIDER)
-    if (saved === 'claude' || saved === 'openai' || saved === 'gemini') {
-      return saved as 'gemini' | 'claude' | 'openai'
-    }
-    return 'gemini' // default
-  })
 
   // Selected model state (user's choice for which model to use)
   const [selectedModel, setSelectedModelState] = useState<string | null>(() => {
     const saved = localStorage.getItem(STORAGE_KEY_SELECTED_MODEL)
-    return saved || 'gemini-3-flash' // default to latest Gemini model
+    return saved || 'gemini-3-flash' // default to latest free tier Gemini model
   })
 
-  // Load keys from sessionStorage on mount
+  // Load OpenRouter API key from sessionStorage on mount
   useEffect(() => {
-    const savedGeminiKey = sessionStorage.getItem(STORAGE_KEY_GEMINI)
-    const savedAnthropicKey = sessionStorage.getItem(STORAGE_KEY_ANTHROPIC)
-    const savedOpenAIKey = sessionStorage.getItem(STORAGE_KEY_OPENAI)
-
-    if (savedGeminiKey) setGeminiApiKeyState(savedGeminiKey)
-    if (savedAnthropicKey) setAnthropicApiKeyState(savedAnthropicKey)
-    if (savedOpenAIKey) setOpenAIApiKeyState(savedOpenAIKey)
+    const savedOpenRouterKey = sessionStorage.getItem(STORAGE_KEY_OPENROUTER)
+    if (savedOpenRouterKey) setOpenRouterApiKeyState(savedOpenRouterKey)
   }, [])
 
   // Fetch environment info from backend
@@ -92,36 +67,13 @@ export function ApiKeyProvider({ children }: ApiKeyProviderProps) {
     fetchEnvironmentInfo()
   }, [])
 
-  const setGeminiApiKey = (key: string | null) => {
-    setGeminiApiKeyState(key)
+  const setOpenRouterApiKey = (key: string | null) => {
+    setOpenRouterApiKeyState(key)
     if (key) {
-      sessionStorage.setItem(STORAGE_KEY_GEMINI, key)
+      sessionStorage.setItem(STORAGE_KEY_OPENROUTER, key)
     } else {
-      sessionStorage.removeItem(STORAGE_KEY_GEMINI)
+      sessionStorage.removeItem(STORAGE_KEY_OPENROUTER)
     }
-  }
-
-  const setAnthropicApiKey = (key: string | null) => {
-    setAnthropicApiKeyState(key)
-    if (key) {
-      sessionStorage.setItem(STORAGE_KEY_ANTHROPIC, key)
-    } else {
-      sessionStorage.removeItem(STORAGE_KEY_ANTHROPIC)
-    }
-  }
-
-  const setOpenAIApiKey = (key: string | null) => {
-    setOpenAIApiKeyState(key)
-    if (key) {
-      sessionStorage.setItem(STORAGE_KEY_OPENAI, key)
-    } else {
-      sessionStorage.removeItem(STORAGE_KEY_OPENAI)
-    }
-  }
-
-  const setActiveProvider = (provider: 'gemini' | 'claude' | 'openai') => {
-    setActiveProviderState(provider)
-    localStorage.setItem(STORAGE_KEY_ACTIVE_PROVIDER, provider)
   }
 
   const setSelectedModel = (model: string) => {
@@ -130,43 +82,25 @@ export function ApiKeyProvider({ children }: ApiKeyProviderProps) {
   }
 
   const clearKeys = () => {
-    setGeminiApiKey(null)
-    setAnthropicApiKey(null)
-    setOpenAIApiKey(null)
+    setOpenRouterApiKey(null)
   }
 
   const hasRequiredKey = (): boolean => {
     if (!requiresApiKey) return true // DEV mode doesn't need client-side keys
-
-    // Check if user has API key for their active provider
-    if (activeProvider === 'gemini') {
-      return !!geminiApiKey
-    } else if (activeProvider === 'claude') {
-      return !!anthropicApiKey
-    } else if (activeProvider === 'openai') {
-      return !!openaiApiKey
-    }
-
-    return false
+    return !!openrouterApiKey
   }
 
   return (
     <ApiKeyContext.Provider
       value={{
-        geminiApiKey,
-        anthropicApiKey,
-        openaiApiKey,
+        openrouterApiKey,
         isProduction,
         requiresApiKey,
         provider,
         environment,
         isLoading,
-        activeProvider,
         selectedModel,
-        setGeminiApiKey,
-        setAnthropicApiKey,
-        setOpenAIApiKey,
-        setActiveProvider,
+        setOpenRouterApiKey,
         setSelectedModel,
         clearKeys,
         hasRequiredKey
