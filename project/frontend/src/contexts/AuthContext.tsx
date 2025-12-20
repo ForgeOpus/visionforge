@@ -55,11 +55,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<VisionForgeUser | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
-  // Initialize isGuest from localStorage
-  const [isGuest, setIsGuest] = useState(() => {
-    const savedGuestMode = localStorage.getItem(GUEST_MODE_KEY);
-    return savedGuestMode === 'true';
-  });
+  // isGuest is true whenever there's no authenticated Firebase user
+  // This ensures unauthenticated users are ALWAYS in guest mode
+  const [isGuest, setIsGuest] = useState(true);
   const [showIdleWarning, setShowIdleWarning] = useState(false);
 
   // Verify token with backend and get user data
@@ -116,12 +114,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setFirebaseUser(firebaseUser);
 
-      if (firebaseUser && !isGuest) {
-        // User is signed in
+      if (firebaseUser) {
+        // User is authenticated - verify with backend and exit guest mode
+        setIsGuest(false);
+        localStorage.removeItem(GUEST_MODE_KEY); // Clear guest mode flag
         const backendUser = await verifyToken(firebaseUser);
         setUser(backendUser);
       } else {
-        // User is signed out or guest
+        // No authenticated user - ALWAYS enter guest mode
+        setIsGuest(true);
+        localStorage.setItem(GUEST_MODE_KEY, 'true'); // Persist guest mode
         setUser(null);
       }
 
@@ -129,7 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => unsubscribe();
-  }, [isGuest]);
+  }, []);
 
   // Session management - update session every 5 minutes when user is active
   useEffect(() => {
@@ -189,9 +191,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInWithGoogle = async () => {
     try {
       setLoading(true);
-      setIsGuest(false);
-      localStorage.removeItem(GUEST_MODE_KEY); // Clear guest mode
-      // Just trigger Firebase auth - onAuthStateChanged will handle backend verification
+      // Just trigger Firebase auth - onAuthStateChanged will handle the rest
       await signInWithPopup(auth, googleProvider);
       // Don't call verifyToken here - it creates double verification
       // onAuthStateChanged listener will handle it automatically
@@ -214,9 +214,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInWithGithub = async () => {
     try {
       setLoading(true);
-      setIsGuest(false);
-      localStorage.removeItem(GUEST_MODE_KEY); // Clear guest mode
-      // Just trigger Firebase auth - onAuthStateChanged will handle backend verification
+      // Just trigger Firebase auth - onAuthStateChanged will handle the rest
       await signInWithPopup(auth, githubProvider);
       // Don't call verifyToken here - it creates double verification
       // onAuthStateChanged listener will handle it automatically
@@ -250,9 +248,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       await firebaseSignOut(auth);
-      setUser(null);
-      setIsGuest(false);
-      localStorage.removeItem(GUEST_MODE_KEY); // Clear guest mode
+      // onAuthStateChanged will automatically set isGuest=true and clear user
 
       // Clear canvas state
       const { reset } = useModelBuilderStore.getState();
@@ -263,17 +259,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Continue as guest
+  // Continue as guest (now just dismisses login modal - user is already in guest mode)
   const continueAsGuest = () => {
+    // User is already in guest mode by default (no Firebase user)
+    // This function now just ensures the state is correct and dismisses any prompts
     setIsGuest(true);
-    localStorage.setItem(GUEST_MODE_KEY, 'true'); // Persist guest mode
-    setUser(null);
-    setFirebaseUser(null);
+    localStorage.setItem(GUEST_MODE_KEY, 'true');
     setLoading(false);
-
-    // Clear canvas state
-    const { reset } = useModelBuilderStore.getState();
-    reset();
   };
 
   // Idle timeout - auto logout after 10 minutes of inactivity
