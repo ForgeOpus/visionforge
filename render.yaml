@@ -1,0 +1,55 @@
+services:
+  - type: web
+    name: visionforge
+    env: python
+    region: oregon
+    plan: free
+    branch: deploy
+    buildCommand: |
+      # Setup Oracle Wallet (REQUIRED - fail if missing)
+      if [ ! -f /etc/secrets/oracle_wallet.zip ]; then
+        echo "ERROR: Oracle Wallet not found at /etc/secrets/oracle_wallet.zip"
+        echo "Please add the wallet file in Render Secret Files section"
+        exit 1
+      fi
+
+      echo "Setting up Oracle Wallet..."
+      mkdir -p /opt/oracle/wallet
+      unzip -o /etc/secrets/oracle_wallet.zip -d /opt/oracle/wallet
+      chmod 600 /opt/oracle/wallet/*
+      echo "Oracle Wallet configured at /opt/oracle/wallet"
+
+      # Verify wallet files exist
+      if [ ! -f /opt/oracle/wallet/tnsnames.ora ]; then
+        echo "ERROR: Wallet extraction failed - tnsnames.ora not found"
+        exit 1
+      fi
+
+      # Install Python dependencies
+      cd project
+      pip install -r requirements.txt
+
+      # Test Oracle Database Connection (REQUIRED - fail if connection fails)
+      echo "Testing Oracle Database connection..."
+      python manage.py check --database default || {
+        echo "ERROR: Oracle Database connection failed"
+        echo "Please verify:"
+        echo "  - ORACLE_USER is correct"
+        echo "  - ORACLE_PASSWORD is correct"
+        echo "  - ORACLE_DSN matches tnsnames.ora"
+        echo "  - ORACLE_WALLET_PASSWORD is correct"
+        exit 1
+      }
+      echo "Oracle Database connection successful!"
+
+      # Build frontend
+      cd ..
+      chmod +x build_frontend.sh
+      ./build_frontend.sh
+
+      # Collect Django static files
+      cd project
+      python manage.py collectstatic --noinput
+    startCommand: |
+      cd project
+      gunicorn --workers 2 --bind 0.0.0.0:$PORT backend.wsgi:application
