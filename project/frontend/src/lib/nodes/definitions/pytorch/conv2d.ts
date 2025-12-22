@@ -70,10 +70,13 @@ export class Conv2DNode extends NodeDefinition {
     }
 
     const [batch, _, height, width] = inputShape.dims as number[]
-    const kernel = config.kernel_size as number
-    const stride = config.stride as number
-    const padding = config.padding as number
-    const dilation = config.dilation as number
+
+    // Apply defaults from schema if values are not present in config
+    // This ensures computation works even when user hasn't set these optional values
+    const kernel = (config.kernel_size ?? 3) as number
+    const stride = (config.stride ?? 1) as number
+    const padding = (config.padding ?? 0) as number
+    const dilation = (config.dilation ?? 1) as number
 
     const [outHeight, outWidth] = this.computeConv2DOutput(
       height,
