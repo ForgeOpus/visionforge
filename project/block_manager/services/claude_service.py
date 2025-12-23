@@ -541,7 +541,7 @@ Provide each node as a separate JSON block with appropriate configurations using
         history: List[Dict[str, str]],
         modification_mode: bool = False,
         workflow_state: Optional[Dict[str, Any]] = None,
-        file_content: Optional[Dict[str, Any]] = None
+        uploaded_file: Optional[UploadedFile] = None
     ) -> Dict[str, Any]:
         """
         Send a chat message and get a response from Claude.
@@ -551,7 +551,7 @@ Provide each node as a separate JSON block with appropriate configurations using
             history: Previous chat messages [{'role': 'user'|'assistant', 'content': '...'}]
             modification_mode: Whether workflow modification is enabled
             workflow_state: Current workflow state (nodes and edges)
-            file_content: Optional file content formatted for Claude
+            uploaded_file: Optional Django UploadedFile object
 
         Returns:
             {
@@ -560,8 +560,9 @@ Provide each node as a separate JSON block with appropriate configurations using
             }
         """
         try:
-            # If there's a file, use the analyze_file_for_architecture method
-            if file_content:
+            # If there's a file, process it and analyze for architecture
+            if uploaded_file:
+                file_content = self._read_file_content(uploaded_file)
                 return self.analyze_file_for_architecture(
                     file_content=file_content,
                     user_message=message,

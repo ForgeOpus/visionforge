@@ -345,7 +345,7 @@ You cannot modify the workflow in this mode. If users want to make changes, sugg
         history: List[Dict[str, str]],
         modification_mode: bool = False,
         workflow_state: Optional[Dict[str, Any]] = None,
-        **kwargs
+        uploaded_file: Optional[UploadedFile] = None
     ) -> Dict[str, Any]:
         """
         Send a chat message and get a response from OpenAI.
@@ -355,6 +355,7 @@ You cannot modify the workflow in this mode. If users want to make changes, sugg
             history: Previous chat messages [{'role': 'user'|'assistant', 'content': '...'}]
             modification_mode: Whether workflow modification is enabled
             workflow_state: Current workflow state (nodes and edges)
+            uploaded_file: Optional Django UploadedFile object (currently not supported)
 
         Returns:
             {
@@ -363,6 +364,12 @@ You cannot modify the workflow in this mode. If users want to make changes, sugg
             }
         """
         try:
+            # Note: OpenAI file upload support could be added here in the future
+            if uploaded_file:
+                return {
+                    'response': "File uploads are not yet supported with OpenAI models. Please use text-only messages.",
+                    'modifications': None
+                }
             # Build system context
             system_prompt = self._build_system_prompt(modification_mode, workflow_state)
 

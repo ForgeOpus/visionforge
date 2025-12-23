@@ -22,6 +22,15 @@ GOOGLE_AI_MODELS = {
     'gemini-2.5-pro': 'gemini-2.5-pro',  # Advanced thinking model
 }
 
+# Claude model mapping for direct Anthropic API (frontend name -> Anthropic API identifier)
+# Reference: https://github.com/anthropics/anthropic-sdk-python
+# Note: Anthropic uses HYPHENS (4-5) not periods (4.5)
+ANTHROPIC_AI_MODELS = {
+    'claude-opus-4.5': 'claude-opus-4-5',  # Best for coding - Nov 2025
+    'claude-sonnet-4.5': 'claude-sonnet-4-5',  # Balanced performance - Sept 2025
+    'claude-haiku-4.5': 'claude-haiku-4-5',  # Fast, near-frontier - Oct 2025
+}
+
 # OpenAI model mapping (frontend name -> OpenRouter identifier)
 # Latest models as of December 2025 - Pay-as-you-go
 # Reference: https://openrouter.ai/openai
@@ -86,3 +95,25 @@ def get_google_ai_model(frontend_model: str) -> str:
         )
 
     return GOOGLE_AI_MODELS[frontend_model]
+
+def get_anthropic_ai_model(frontend_model: str) -> str:
+    """
+    Get the Anthropic API model identifier for a frontend model name.
+
+    Args:
+        frontend_model: Model name from frontend (e.g., 'claude-opus-4.5', 'claude-sonnet-4.5')
+
+    Returns:
+        Anthropic API model identifier (e.g., 'claude-opus-4-5')
+
+    Raises:
+        ValueError: If model name is not recognized or not a Claude model
+    """
+    if frontend_model not in ANTHROPIC_AI_MODELS:
+        available = ', '.join(ANTHROPIC_AI_MODELS.keys())
+        raise ValueError(
+            f"Unknown Anthropic model: {frontend_model}. "
+            f"Available models: {available}"
+        )
+
+    return ANTHROPIC_AI_MODELS[frontend_model]

@@ -713,7 +713,6 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
         nodesDraggable={isInteractive}
         nodesConnectable={isInteractive}
         elementsSelectable={isInteractive}
-        onInteractiveChange={setIsInteractive}
         defaultEdgeOptions={{
           animated: true,
           style: { stroke: '#6366f1', strokeWidth: 2 }

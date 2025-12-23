@@ -11,7 +11,11 @@ from block_manager.services.openrouter_service import OpenRouterService
 from block_manager.services.gemini_service import GeminiChatService
 from block_manager.services.openai_service import OpenAIChatService
 from block_manager.services.claude_service import ClaudeChatService
-from block_manager.services.model_config import get_model_identifier, get_google_ai_model
+from block_manager.services.model_config import (
+    get_model_identifier,
+    get_google_ai_model,
+    get_anthropic_ai_model
+)
 
 
 class UniversalAIFactory:
@@ -117,8 +121,9 @@ class UniversalAIFactory:
                     print(f"Warning: {e}. Using default Gemini model.")
                     model_identifier = 'gemini-3-flash-preview'  # Default to newest model
 
-            else:
-                # For other direct providers (OpenAI, Anthropic), validate model availability
+            # For Anthropic, use special mapping (frontend names with periods -> API names with hyphens)
+            elif detected_provider == 'anthropic':
+                # Validate model is available for Anthropic
                 if not APIKeyDetector.is_model_available(model, detected_provider):
                     available = APIKeyDetector.get_available_models(detected_provider)
                     provider_info = APIKeyDetector.get_provider_info(detected_provider)
@@ -126,7 +131,23 @@ class UniversalAIFactory:
                         f"Model '{model}' is not available with {provider_info.display_name}. "
                         f"Available models: {', '.join(available)}"
                     )
-                # Model name is valid, use it as-is for direct providers
+                # Map to Anthropic API model name (periods -> hyphens)
+                try:
+                    model_identifier = get_anthropic_ai_model(model)
+                except ValueError as e:
+                    print(f"Warning: {e}. Using default Claude model.")
+                    model_identifier = 'claude-haiku-4-5'  # Default to most cost-effective
+
+            else:
+                # For OpenAI, validate model availability
+                if not APIKeyDetector.is_model_available(model, detected_provider):
+                    available = APIKeyDetector.get_available_models(detected_provider)
+                    provider_info = APIKeyDetector.get_provider_info(detected_provider)
+                    raise ValueError(
+                        f"Model '{model}' is not available with {provider_info.display_name}. "
+                        f"Available models: {', '.join(available)}"
+                    )
+                # Model name is valid, use it as-is for OpenAI
                 model_identifier = model
 
         # Create appropriate service based on detected provider
@@ -205,10 +226,12 @@ class UniversalAIFactory:
             return GeminiChatService(api_key=api_key, model=model)
 
         elif provider == 'openai':
-            return OpenAIChatService(api_key=api_key)
+            # Pass model to OpenAIChatService
+            return OpenAIChatService(api_key=api_key, model=model)
 
         elif provider == 'anthropic':
-            return ClaudeChatService(api_key=api_key)
+            # Pass model to ClaudeChatService
+            return ClaudeChatService(api_key=api_key, model=model)
 
         else:
             raise ValueError(f"Unknown provider: {provider}")
