@@ -11,7 +11,7 @@ from block_manager.services.openrouter_service import OpenRouterService
 from block_manager.services.gemini_service import GeminiChatService
 from block_manager.services.openai_service import OpenAIChatService
 from block_manager.services.claude_service import ClaudeChatService
-from block_manager.services.model_config import get_model_identifier
+from block_manager.services.model_config import get_model_identifier, get_google_ai_model
 
 
 class UniversalAIFactory:
@@ -99,8 +99,26 @@ class UniversalAIFactory:
                 except ValueError as e:
                     # Only catch model config errors for OpenRouter, not validation errors
                     print(f"Warning: {e}. Using default model.")
+
+            # For Google AI, use special mapping (frontend names -> Google API names)
+            elif detected_provider == 'google':
+                # Validate model is available for Google
+                if not APIKeyDetector.is_model_available(model, detected_provider):
+                    available = APIKeyDetector.get_available_models(detected_provider)
+                    provider_info = APIKeyDetector.get_provider_info(detected_provider)
+                    raise ValueError(
+                        f"Model '{model}' is not available with {provider_info.display_name}. "
+                        f"Available models: {', '.join(available)}"
+                    )
+                # Map to Google AI API model name
+                try:
+                    model_identifier = get_google_ai_model(model)
+                except ValueError as e:
+                    print(f"Warning: {e}. Using default Gemini model.")
+                    model_identifier = 'gemini-3-flash-preview'  # Default to newest model
+
             else:
-                # For direct providers, validate model availability (strict validation)
+                # For other direct providers (OpenAI, Anthropic), validate model availability
                 if not APIKeyDetector.is_model_available(model, detected_provider):
                     available = APIKeyDetector.get_available_models(detected_provider)
                     provider_info = APIKeyDetector.get_provider_info(detected_provider)
@@ -183,9 +201,8 @@ class UniversalAIFactory:
             return OpenRouterService(api_key=api_key, model=model)
 
         elif provider == 'google':
-            # GeminiChatService doesn't use model parameter in __init__
-            # Model selection happens at chat() time
-            return GeminiChatService(api_key=api_key)
+            # Pass model to GeminiChatService (uses Google AI API model names)
+            return GeminiChatService(api_key=api_key, model=model)
 
         elif provider == 'openai':
             return OpenAIChatService(api_key=api_key)

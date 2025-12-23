@@ -31,8 +31,8 @@ class GeminiChatService:
                 raise ValueError("GEMINI_API_KEY environment variable is not set")
 
         genai.configure(api_key=final_api_key)
-        # Use provided model or default to gemini-3-flash (latest, best free tier)
-        model_name = model if model else 'gemini-3-flash'
+        # Use provided model or default to gemini-3-flash-preview (latest Google AI API model)
+        model_name = model if model else 'gemini-3-flash-preview'
         self.model = genai.GenerativeModel(model_name)
 
     def _format_workflow_context(self, workflow_state: Optional[Dict[str, Any]]) -> str:
