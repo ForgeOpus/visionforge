@@ -1,13 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 
 interface ApiKeyContextType {
-  openrouterApiKey: string | null
+  openrouterApiKey: string | null  // Universal API key (supports OpenRouter, Google, OpenAI, Anthropic)
   isProduction: boolean
   requiresApiKey: boolean
-  provider: 'OpenRouter' | null
+  provider: 'OpenRouter' | 'Universal AI (Multi-Provider)' | null
   environment: string | null
   isLoading: boolean
   selectedModel: string | null
+  detectedProvider: string | null  // Auto-detected provider from API key
   setOpenRouterApiKey: (key: string | null) => void
   setSelectedModel: (model: string) => void
   clearKeys: () => void
@@ -16,7 +17,8 @@ interface ApiKeyContextType {
 
 const ApiKeyContext = createContext<ApiKeyContextType | undefined>(undefined)
 
-const STORAGE_KEY_OPENROUTER = 'visionforge_openrouter_api_key'
+// Storage keys (kept as 'openrouter' for backward compatibility, but now stores universal API keys)
+const STORAGE_KEY_OPENROUTER = 'visionforge_openrouter_api_key'  // Stores any provider's key
 const STORAGE_KEY_SELECTED_MODEL = 'visionforge_selected_model'
 
 interface ApiKeyProviderProps {
@@ -27,9 +29,10 @@ export function ApiKeyProvider({ children }: ApiKeyProviderProps) {
   const [openrouterApiKey, setOpenRouterApiKeyState] = useState<string | null>(null)
   const [isProduction, setIsProduction] = useState(false)
   const [requiresApiKey, setRequiresApiKey] = useState(false)
-  const [provider, setProvider] = useState<'OpenRouter' | null>(null)
+  const [provider, setProvider] = useState<'OpenRouter' | 'Universal AI (Multi-Provider)' | null>(null)
   const [environment, setEnvironment] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [detectedProvider, setDetectedProvider] = useState<string | null>(null)
 
   // Selected model state (user's choice for which model to use)
   const [selectedModel, setSelectedModelState] = useState<string | null>(() => {
@@ -37,10 +40,10 @@ export function ApiKeyProvider({ children }: ApiKeyProviderProps) {
     return saved || 'gemini-3-flash' // default to latest free tier Gemini model
   })
 
-  // Load OpenRouter API key from sessionStorage on mount
+  // Load universal API key from sessionStorage on mount (supports any provider)
   useEffect(() => {
-    const savedOpenRouterKey = sessionStorage.getItem(STORAGE_KEY_OPENROUTER)
-    if (savedOpenRouterKey) setOpenRouterApiKeyState(savedOpenRouterKey)
+    const savedKey = sessionStorage.getItem(STORAGE_KEY_OPENROUTER)
+    if (savedKey) setOpenRouterApiKeyState(savedKey)
   }, [])
 
   // Fetch environment info from backend
@@ -100,6 +103,7 @@ export function ApiKeyProvider({ children }: ApiKeyProviderProps) {
         environment,
         isLoading,
         selectedModel,
+        detectedProvider,
         setOpenRouterApiKey,
         setSelectedModel,
         clearKeys,

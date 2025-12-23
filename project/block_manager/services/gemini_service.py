@@ -476,7 +476,7 @@ Provide each node as a separate JSON block with appropriate configurations using
         history: List[Dict[str, str]],
         modification_mode: bool = False,
         workflow_state: Optional[Dict[str, Any]] = None,
-        gemini_file: Optional[Any] = None
+        uploaded_file: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
         Send a chat message and get a response from Gemini.
@@ -486,7 +486,7 @@ Provide each node as a separate JSON block with appropriate configurations using
             history: Previous chat messages [{'role': 'user'|'assistant', 'content': '...'}]
             modification_mode: Whether workflow modification is enabled
             workflow_state: Current workflow state (nodes and edges)
-            gemini_file: Optional Gemini file object (already uploaded)
+            uploaded_file: Optional Gemini file object (already uploaded)
 
         Returns:
             {
@@ -496,9 +496,9 @@ Provide each node as a separate JSON block with appropriate configurations using
         """
         try:
             # If there's a file, use the analyze_file_for_architecture method
-            if gemini_file:
+            if uploaded_file:
                 return self.analyze_file_for_architecture(
-                    gemini_file=gemini_file,
+                    gemini_file=uploaded_file,
                     user_message=message,
                     workflow_state=workflow_state
                 )

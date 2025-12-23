@@ -16,20 +16,26 @@ interface ApiResponse<T = any> {
   message?: string
 }
 
-// Type for API key headers
+// Type for API key headers (supports universal API keys from any provider)
 interface ApiKeyHeaders {
-  openrouterApiKey?: string | null
+  apiKey?: string | null  // Universal API key (OpenRouter, Google, OpenAI, Anthropic)
+  openrouterApiKey?: string | null  // Backward compatibility
   selectedModel?: string | null
 }
 
 /**
  * Get API key headers for requests
+ * Supports universal API keys from any provider
  */
 function getApiKeyHeaders(keys?: ApiKeyHeaders): Record<string, string> {
   const headers: Record<string, string> = {}
 
-  if (keys?.openrouterApiKey) {
-    headers['X-OpenRouter-Api-Key'] = keys.openrouterApiKey
+  // Use universal apiKey or fall back to openrouterApiKey for backward compatibility
+  const key = keys?.apiKey || keys?.openrouterApiKey
+  if (key) {
+    headers['X-API-Key'] = key
+    // Also send as X-OpenRouter-Api-Key for backward compatibility
+    headers['X-OpenRouter-Api-Key'] = key
   }
 
   if (keys?.selectedModel) {
@@ -274,6 +280,40 @@ export async function getEnvironmentInfo(): Promise<ApiResponse<{
   })
 }
 
+/**
+ * Validate an API key and detect its provider
+ */
+export async function validateApiKey(apiKey: string): Promise<ApiResponse<{
+  valid: boolean
+  provider: string | null
+  displayName: string | null
+  availableModels: number
+  models: string[]
+  isFreeTier: boolean
+  message: string
+}>> {
+  return apiFetch('/validate-key', {
+    method: 'POST',
+    body: JSON.stringify({ apiKey }),
+  })
+}
+
+/**
+ * Get available models for a specific API key
+ */
+export async function getAvailableModelsForKey(apiKey: string): Promise<ApiResponse<{
+  provider: string
+  displayName: string
+  models: string[]
+  defaultModel: string
+  isFreeTier: boolean
+}>> {
+  return apiFetch('/available-models', {
+    method: 'POST',
+    body: JSON.stringify({ apiKey }),
+  })
+}
+
 export default {
   validateModel,
   sendChatMessage,
@@ -283,4 +323,6 @@ export default {
   getNodeDefinition,
   renderNodeCode,
   getEnvironmentInfo,
+  validateApiKey,
+  getAvailableModelsForKey,
 }

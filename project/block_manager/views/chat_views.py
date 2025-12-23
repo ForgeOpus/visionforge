@@ -5,6 +5,8 @@ import logging
 from django_ratelimit.decorators import ratelimit
 
 from block_manager.services.ai_service_factory import AIServiceFactory
+from block_manager.services.universal_ai_factory import UniversalAIFactory
+from block_manager.services.api_key_detector import APIKeyDetector
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +49,9 @@ def chat_message(request):
     import json as json_lib
     from django.conf import settings
 
-    # Extract OpenRouter API key and model from headers (only used in PROD mode)
-    openrouter_api_key = request.headers.get('X-OpenRouter-Api-Key')
+    # Extract API key and model from headers (supports any provider in PROD mode)
+    # X-API-Key accepts keys from: OpenRouter, Google AI, OpenAI, or Anthropic
+    api_key = request.headers.get('X-API-Key') or request.headers.get('X-OpenRouter-Api-Key')  # Backward compatibility
     selected_model = request.headers.get('X-Selected-Model')  # Frontend model name (e.g., 'gpt-5.2', 'claude-opus-4.5', 'gemini-3-flash')
 
     # Check if request has file upload (FormData)
@@ -85,12 +88,12 @@ def chat_message(request):
         )
 
     try:
-        # Initialize OpenRouter AI service with API key and model
-        ai_service = AIServiceFactory.create_service(
-            openrouter_api_key=openrouter_api_key,
+        # Initialize Universal AI service with API key and model (auto-detects provider)
+        ai_service = UniversalAIFactory.detect_and_create_service(
+            api_key=api_key,
             model=selected_model
         )
-        provider_name = AIServiceFactory.get_provider_name()
+        provider_name = UniversalAIFactory.get_provider_name(api_key)
 
         # Log file upload if present
         if uploaded_file:
@@ -169,8 +172,8 @@ def get_suggestions(request):
         "suggestions": [str]
     }
     """
-    # Extract OpenRouter API key and model from headers (only used in PROD mode)
-    openrouter_api_key = request.headers.get('X-OpenRouter-Api-Key')
+    # Extract API key and model from headers (supports any provider in PROD mode)
+    api_key = request.headers.get('X-API-Key') or request.headers.get('X-OpenRouter-Api-Key')  # Backward compatibility
     selected_model = request.headers.get('X-Selected-Model')  # Frontend model name (e.g., 'gpt-5.2', 'claude-opus-4.5', 'gemini-3-flash')
 
     nodes = request.data.get('nodes', [])
@@ -182,12 +185,12 @@ def get_suggestions(request):
         })
 
     try:
-        # Initialize OpenRouter AI service with API key and model
-        ai_service = AIServiceFactory.create_service(
-            openrouter_api_key=openrouter_api_key,
+        # Initialize Universal AI service with API key and model (auto-detects provider)
+        ai_service = UniversalAIFactory.detect_and_create_service(
+            api_key=api_key,
             model=selected_model
         )
-        provider_name = AIServiceFactory.get_provider_name()
+        provider_name = UniversalAIFactory.get_provider_name(api_key)
 
         # Get suggestions
         workflow_state = {
@@ -249,4 +252,119 @@ def get_environment_info(request):
         'isProduction': is_production,
         'requiresApiKey': requires_api_key,
         'provider': provider
+    })
+
+
+@api_view(['POST'])
+def validate_api_key(request):
+    """
+    Validate an API key and detect its provider.
+
+    Endpoint: POST /api/validate-key
+
+    Request body:
+    {
+        "apiKey": str
+    }
+
+    Response:
+    {
+        "valid": boolean,
+        "provider": str | null,
+        "displayName": str | null,
+        "availableModels": int,
+        "models": [str],
+        "isFreeTier": boolean,
+        "message": str
+    }
+    """
+    api_key = request.data.get('apiKey')
+
+    if not api_key:
+        return Response({
+            'valid': False,
+            'provider': None,
+            'displayName': None,
+            'availableModels': 0,
+            'models': [],
+            'isFreeTier': False,
+            'message': 'No API key provided'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # Detect provider
+    provider = APIKeyDetector.detect_provider(api_key)
+
+    if not provider:
+        return Response({
+            'valid': False,
+            'provider': None,
+            'displayName': None,
+            'availableModels': 0,
+            'models': [],
+            'isFreeTier': False,
+            'message': 'Unknown API key format. Supported: OpenRouter (sk-or-v1-...), Google AI (AIza...), OpenAI (sk-proj-... or sk-...), Anthropic (sk-ant-api03-...)'
+        })
+
+    # Get provider info
+    provider_info = APIKeyDetector.get_provider_info(provider)
+    available_models = APIKeyDetector.get_available_models(provider)
+
+    return Response({
+        'valid': True,
+        'provider': provider,
+        'displayName': provider_info.display_name,
+        'availableModels': provider_info.models_count,
+        'models': available_models,
+        'isFreeTier': provider_info.is_free_tier,
+        'message': f'Valid {provider_info.display_name} API key detected'
+    })
+
+
+@api_view(['POST'])
+def get_available_models_for_key(request):
+    """
+    Get list of models available for a specific API key.
+
+    Endpoint: POST /api/available-models
+
+    Request body:
+    {
+        "apiKey": str
+    }
+
+    Response:
+    {
+        "provider": str,
+        "models": [str],
+        "defaultModel": str
+    }
+    """
+    api_key = request.data.get('apiKey')
+
+    if not api_key:
+        return Response({
+            'error': 'No API key provided'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # Detect provider
+    provider = APIKeyDetector.detect_provider(api_key)
+
+    if not provider:
+        return Response({
+            'error': 'Unknown API key format'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # Get available models
+    models = APIKeyDetector.get_available_models(provider)
+    provider_info = APIKeyDetector.get_provider_info(provider)
+
+    # Determine default model
+    default_model = models[0] if models else None
+
+    return Response({
+        'provider': provider,
+        'displayName': provider_info.display_name,
+        'models': models,
+        'defaultModel': default_model,
+        'isFreeTier': provider_info.is_free_tier
     })

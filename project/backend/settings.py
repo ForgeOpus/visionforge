@@ -120,7 +120,8 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
-    'x-openrouter-api-key',
+    'x-api-key',  # Universal API key header (supports all providers)
+    'x-openrouter-api-key',  # Legacy header (backward compatibility)
     'x-selected-model',
     'x-firebase-token',
 ]
@@ -153,14 +154,17 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# Check if running tests
+IS_TESTING = 'test' in sys.argv
+
 DATABASES = {
     # Oracle Autonomous Database - now default for all data
     'default': {
-        'ENGINE': 'django.db.backends.oracle',
-        'NAME': os.getenv('ORACLE_DSN', ''),
-        'USER': os.getenv('ORACLE_USER', ''),
-        'PASSWORD': os.getenv('ORACLE_PASSWORD', ''),
-        'OPTIONS': {
+        'ENGINE': 'django.db.backends.oracle' if not IS_TESTING else 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'test_db.sqlite3' if IS_TESTING else os.getenv('ORACLE_DSN', ''),
+        'USER': '' if IS_TESTING else os.getenv('ORACLE_USER', ''),
+        'PASSWORD': '' if IS_TESTING else os.getenv('ORACLE_PASSWORD', ''),
+        'OPTIONS': {} if IS_TESTING else {
             'config_dir': os.getenv('ORACLE_WALLET_LOCATION', ''),
             'wallet_location': os.getenv('ORACLE_WALLET_LOCATION', ''),
             'wallet_password': os.getenv('ORACLE_WALLET_PASSWORD', ''),

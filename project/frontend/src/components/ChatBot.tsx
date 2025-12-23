@@ -13,7 +13,7 @@ import { useModelBuilderStore } from '@/lib/store'
 import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
 import { BlockType } from '@/lib/types'
 import { useApiKeys } from '@/contexts/ApiKeyContext'
-import ApiKeyModal from './ApiKeyModal'
+import UniversalApiKeyModal from './UniversalApiKeyModal'
 
 interface Message {
   id: string
@@ -179,16 +179,28 @@ export default function ChatBot() {
           })
         }
       } else {
-        // Show error message
+        // Show error message - safely extract error text
+        let errorText = 'Unknown error'
+        try {
+          if (typeof response.error === 'string') {
+            errorText = response.error
+          } else if (response.error && typeof response.error === 'object') {
+            // Handle nested error objects
+            errorText = (response.error as any).error || (response.error as any).message || JSON.stringify(response.error)
+          }
+        } catch (e) {
+          errorText = 'Failed to parse error message'
+        }
+
         const errorMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          content: `I apologize, but I encountered an error: ${response.error || 'Unknown error'}. Please try again.`,
+          content: `I apologize, but I encountered an error: ${errorText}. Please try again.`,
           timestamp: new Date()
         }
         setMessages(prev => [...prev, errorMessage])
         toast.error('Failed to get response', {
-          description: response.error
+          description: errorText
         })
       }
     } catch (error) {
@@ -684,8 +696,8 @@ export default function ChatBot() {
         </Card>
       )}
 
-      {/* API Key Modal */}
-      <ApiKeyModal
+      {/* Universal API Key Modal */}
+      <UniversalApiKeyModal
         open={showApiKeyModal}
         onOpenChange={setShowApiKeyModal}
         required={requiresApiKey && !hasRequiredKey()}

@@ -11,7 +11,13 @@ from block_manager.views.architecture_views import (
 )
 from block_manager.views.validation_views import validate_model
 from block_manager.views.export_views import export_model
-from block_manager.views.chat_views import chat_message, get_suggestions, get_environment_info
+from block_manager.views.chat_views import (
+    chat_message,
+    get_suggestions,
+    get_environment_info,
+    validate_api_key,
+    get_available_models_for_key
+)
 from block_manager.views.group_views import group_definition_list, group_definition_detail
 
 # Create router for viewsets
@@ -47,4 +53,8 @@ urlpatterns = [
 
     # Environment info endpoint
     path('environment', get_environment_info, name='environment-info'),
+
+    # Universal API Key endpoints
+    path('validate-key', validate_api_key, name='validate-api-key'),
+    path('available-models', get_available_models_for_key, name='available-models'),
 ]
