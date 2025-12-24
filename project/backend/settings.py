@@ -125,6 +125,13 @@ CORS_ALLOW_HEADERS = [
     'x-firebase-token',
 ]
 
+csrf_origins = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:3000,http://localhost:5173,http://localhost:5000')
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_origins.split(',')]
+
+# Exempt API endpoints from CSRF (using token-based auth instead)
+CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript to read CSRF cookie if needed
+CSRF_USE_SESSIONS = False  # Use cookie-based CSRF tokens
+
 # Environment mode configuration
 # Controls API key behavior: PROD/missing = BYOK, DEV/LOCAL = server keys
 ENVIRONMENT = os.getenv('ENVIRONMENT', 'DEV')
