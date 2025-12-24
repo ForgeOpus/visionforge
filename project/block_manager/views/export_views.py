@@ -7,7 +7,6 @@ from django_ratelimit.decorators import ratelimit
 
 from block_manager.serializers import ExportRequestSerializer
 from block_manager.services.tensorflow_codegen import generate_tensorflow_code
-from block_manager.services.pytorch_codegen import generate_pytorch_code
 from block_manager.services.enhanced_pytorch_codegen import generate_pytorch_code
 from authentication.middleware import require_authentication
 
