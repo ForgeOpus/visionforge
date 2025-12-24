@@ -378,10 +378,10 @@ class ReLUBlock(nn.Module):
         - Output: [batch_size, *] (same shape as input)
     """
 
-    def __init__(self):
+    def __init__(self, inplace: bool = False):
         """Initialize the ReLU activation."""
-        super(ReLUBlock, self).__init__()
-        self.relu = nn.ReLU()
+        super(ReLUBlock, self,).__init__()
+        self.relu = nn.ReLU(inplace=inplace)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -466,10 +466,10 @@ class DropoutBlock(nn.Module):
         - Output: [batch_size, *] (same shape as input)
     """
 
-    def __init__(self, p):
+    def __init__(self, p:float = 0.5, inplace:bool = False):
         """Initialize the dropout layer."""
         super(DropoutBlock, self).__init__()
-        self.dropout = nn.Dropout(p=p)
+        self.dropout = nn.Dropout(p=p, inplace=inplace)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -564,14 +564,15 @@ class MultiHeadSelfAttentionBlock(nn.Module):
         - Output: [batch_size, seq_len, embed_dim]
     """
 
-    def __init__(self, embed_dim:int = 1, num_heads:int = 8, dropout:float = 0.0):
+    def __init__(self, embed_dim:int = 768, num_heads:int = 8, dropout:float = 0.0, bias:bool = True):
         """Initialize the multi-head attention layer."""
         super(MultiHeadSelfAttentionBlock, self).__init__()
         self.attention = nn.MultiheadAttention(
             embed_dim=embed_dim,
             num_heads=num_heads,
             dropout=dropout,
-            batch_first=True
+            batch_first=True,
+            bias=bias
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -596,7 +597,7 @@ class MultiHeadSelfAttentionBlock(nn.Module):
 
         Args:
             group_definition (Dict): Group definition used in Architecture
-        
+
         Returns:
             str: A class definition for the Pytorch module to reuse in architecture.
         """
@@ -605,35 +606,89 @@ class {group_definition['name']}(nn.Module):
     """
     Group Block: {group_definition['name']}
     {group_definition.get('description', 'No description provided.')}
-    """ 
+    """
         '''
+
+        # Extract output port mappings to determine if multiple outputs are needed
+        port_mappings = group_definition.get('internal_structure', {}).get('portMappings', [])
+        output_ports = [pm for pm in port_mappings if pm.get('type') == 'output']
+
         init_method = '''
     def __init__(self, **args):
         super().__init__()
         '''
         layers = []
+        layer_to_node_id = {}  # Track which node each layer corresponds to
+
         for node in group_definition.get('internal_structure', {}).get('nodes', []):
             node_type = cls.get_node_type(node)
             class_name = cls.node_type_to_class_name(node_type)
-            layer_name = f"self.{node['id'].replace('-','_')}_{class_name}"
+            node_id = node['id']
+            layer_name = f"self.{node_id.replace('-','_')}_{class_name}"
             layers.append(layer_name)
-            params = node.get('data', {}).get('config', {})
-            params = ', '.join([f"{k}={repr(v)}" for k, v in params.items()])
-            init_method += f"\n        {layer_name} = {class_name}({params})"
+            layer_to_node_id[layer_name] = node_id
+
+            # Extract shape parameters for this layer type
+            node_data = node.get('data', {})
+            shape_params = LayerInitializationGenerator._extract_shape_params(node_type, node_data)
+
+            # Get config parameters
+            config_params = node_data.get('config', {})
+
+            # Merge shape params with config params (shape params take precedence)
+            params = {**config_params, **shape_params}
+
+            params_str = ', '.join([f"{k}={repr(v)}" for k, v in params.items()])
+            init_method += f"\n        {layer_name} = {class_name}({params_str})"
         block_definition += init_method + "\n"
-        forward_method = '''
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+
+        # Determine return type based on number of output ports
+        if len(output_ports) > 1:
+            return_type = "Tuple[torch.Tensor, ...]"
+        else:
+            return_type = "torch.Tensor"
+
+        forward_method = f'''
+    def forward(self, x: torch.Tensor) -> {return_type}:
         """
         Forward pass through the group block.
         Args:
             x: Input tensor
         Returns:
-            Output tensor after processing through the group block
+            {"Tuple of output tensors" if len(output_ports) > 1 else "Output tensor after processing through the group block"}
         """
         '''
+
+        # Track outputs from internal nodes
+        output_vars = {}  # Maps internal node ID to its saved variable name
+
+        # Build set of internal node IDs that need to be saved
+        nodes_to_save = {port.get('internalNodeId') for port in output_ports}
+
         for layer in layers:
             forward_method += f"\n        x = {layer}(x)"
-        forward_method += "\n        return x\n"
+            layer_node_id = layer_to_node_id[layer]
+
+            # If this layer's output needs to be exposed as a port, save it
+            if layer_node_id in nodes_to_save:
+                # Save to unique variable before it gets overwritten
+                save_var = f"{layer_node_id.replace('-', '_')}_output"
+                forward_method += f"\n        {save_var} = x"
+                output_vars[layer_node_id] = save_var
+
+        # Return tuple if multiple outputs, else return single tensor
+        if len(output_ports) > 1:
+            # Sort output ports by their external port ID to ensure consistent order
+            sorted_ports = sorted(output_ports, key=lambda p: p.get('externalPortId', ''))
+            return_values = []
+            for port in sorted_ports:
+                internal_node_id = port.get('internalNodeId')
+                var_name = output_vars.get(internal_node_id, 'x')
+                return_values.append(var_name)
+            forward_method += f"\n        return ({', '.join(return_values)})\n"
+        else:
+            forward_method += "\n        return x\n"
+
         block_definition += forward_method + "\n"
         return block_definition
 
@@ -756,6 +811,55 @@ class LayerInitializationGenerator():
     """
 
     @classmethod
+    def _extract_shape_params(cls, node_type: str, node_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Extract shape-related parameters needed for layer initialization.
+
+        Args:
+            node_type: Type of the node (conv2d, linear, etc.)
+            node_data: Node data containing inputShape and outputShape
+
+        Returns:
+            Dict of shape parameters needed for this layer type
+        """
+        shape_params = {}
+        input_shape = node_data.get('inputShape', {})
+        output_shape = node_data.get('outputShape', {})
+        input_dims = input_shape.get('dims', [])
+        output_dims = output_shape.get('dims', [])
+
+        if node_type == 'conv2d':
+            # Conv2D needs in_channels and out_channels
+            if len(input_dims) >= 2:
+                shape_params['in_channels'] = input_dims[1]  # NCHW format
+            if len(output_dims) >= 2:
+                shape_params['out_channels'] = output_dims[1]
+
+        elif node_type == 'linear':
+            # Linear needs in_features and out_features
+            if len(input_dims) >= 1:
+                shape_params['in_features'] = input_dims[-1]  # Last dimension
+            if len(output_dims) >= 1:
+                shape_params['out_features'] = output_dims[-1]
+
+        elif node_type == 'batchnorm':
+            # BatchNorm needs num_features (number of channels)
+            if len(input_dims) >= 2:
+                shape_params['num_features'] = input_dims[1]
+            elif len(output_dims) >= 2:
+                shape_params['num_features'] = output_dims[1]
+
+        elif node_type == 'attention':
+            # Attention needs embed_dim
+            if len(input_dims) >= 1:
+                shape_params['embed_dim'] = input_dims[-1]
+
+        # Other layer types (maxpool, flatten, relu, softmax, dropout, add, concat)
+        # don't need shape parameters - they're determined by config or are shape-agnostic
+
+        return shape_params
+
+    @classmethod
     def generate_layer_initializations(cls, nodes: List[Dict[str, Any]], group_definitions: Optional[List[Dict[str,Any]]] = None) -> str:
         """
         Generate layer initializations for all nodes in the architecture.
@@ -776,22 +880,23 @@ class LayerInitializationGenerator():
         for node in nodes:
             node_type = ClassDefinitionGenerator.get_node_type(node)
             node_id = node['id'].replace('-', '_')
+            node_data = node.get('data', {})
 
             params = {}
             if node_type in ('input', 'dataloader', 'output'):
                 continue
             elif node_type == 'group':
-                group_type = node['data'].get('groupDefinitionId', '').replace('-', '_')
+                group_type = node_data.get('groupDefinitionId', '').replace('-', '_')
                 class_name = ClassDefinitionGenerator.group_node_type_to_class_name(group_type)
                 layer_name = f"self.{node_id}_{class_name}"
 
-                #get params
-                group_definition_id = node['data'].get('groupDefinitionId')
+                # Get params from group definition
+                group_definition_id = node_data.get('groupDefinitionId')
                 group_params = {}
                 for group_def in group_definitions:
                     if group_def['id'] == group_definition_id:
-                        for node in group_def.get('internal_structure').get('nodes'):
-                            group_params.update(node.get('data').get('config'))
+                        for internal_node in group_def.get('internal_structure', {}).get('nodes', []):
+                            group_params.update(internal_node.get('data', {}).get('config', {}))
                     params = group_params
                     break
 
@@ -799,7 +904,16 @@ class LayerInitializationGenerator():
                 # Get layer names
                 class_name = ClassDefinitionGenerator.node_type_to_class_name(node_type)
                 layer_name = f"self.{node_id}_{class_name}"
-                params = node.get('data', {}).get('config', {})
+
+                # Extract shape parameters for this layer type
+                shape_params = cls._extract_shape_params(node_type, node_data)
+
+                # Get config parameters
+                config_params = node_data.get('config', {})
+
+                # Merge shape params with config params (shape params take precedence)
+                params = {**config_params, **shape_params}
+
             params_str = ', '.join([f"{k}={repr(v)}" for k, v in params.items()])
             layer_initializations += f"\n        {layer_name} = {class_name}({params_str})"
         return layer_initializations
@@ -1473,49 +1587,118 @@ class {project_name}(nn.Module):
     # Sort nodes topologically based on edges
     sorted_nodes = topological_sort(nodes, edges)
 
-    # Build edge map to track incoming connections
-    edge_map = {}
-    for edge in edges:
-        target = edge.get('target')
-        source = edge.get('source')
-        if target not in edge_map:
-            edge_map[target] = []
-        edge_map[target].append(source)
+    # Build edge map with source/target handles and detect branch points
+    edge_map_detailed = {}  # Maps target_node -> [(source_node, source_handle, target_handle), ...]
+    outgoing_count = {}     # Count outgoing edges per node (for branch detection)
 
-    # Generate forward pass with variable tracking
-    var_map = {}  # Maps node_id -> variable_name
+    for edge in edges:
+        source = edge.get('source')
+        target = edge.get('target')
+        source_handle = edge.get('sourceHandle', 'default')
+        target_handle = edge.get('targetHandle', 'default')
+
+        # Track detailed edges with handles
+        if target not in edge_map_detailed:
+            edge_map_detailed[target] = []
+        edge_map_detailed[target].append((source, source_handle, target_handle))
+
+        # Count outgoing edges for branch detection
+        if source not in outgoing_count:
+            outgoing_count[source] = 0
+        outgoing_count[source] += 1
+
+    # Build map of group nodes to their output port count
+    group_output_ports = {}
+    if group_definitions:
+        for group_def in group_definitions:
+            group_id = group_def['id']
+            port_mappings = group_def.get('internal_structure', {}).get('portMappings', [])
+            output_ports = [pm for pm in port_mappings if pm.get('type') == 'output']
+            group_output_ports[group_id] = len(output_ports)
+
+    # Generate forward pass with enhanced variable tracking
+    # var_map now stores: {(node_id, output_handle): variable_name}
+    var_map = {}
 
     input_shape = (1, 3, 224, 224)  # Default input shape
 
     for node in sorted_nodes:
         node_id = node['id'].replace('-', '_')
+        node_id_original = node['id']  # Keep original with dashes for edge lookups
         node_type = ClassDefinitionGenerator.get_node_type(node)
 
-        # Skip input/output nodes
+        # Skip input/output nodes but track input in var_map
         if node_type in ('input', 'dataloader', 'output'):
             if node_type == 'input':
                 # Extract input shape
                 config = node.get('data').get('config')
                 input_shape = eval(config.get('shape', '[1, 3, 224, 224]'))
-            var_map[node_id] = 'x'
+                var_map[(node_id, 'default')] = 'x'
+            elif node_type == 'output':
+                var_map[(node_id, 'default')] = 'x'
             continue
-        elif node_type == 'group':
+
+        # Determine layer name and class
+        if node_type == 'group':
             group_type = node['data'].get('groupDefinitionId', '').replace('-', '_')
             class_name = ClassDefinitionGenerator.group_node_type_to_class_name(group_type)
             layer_name = f"self.{node_id}_{class_name}"
         else:
-            # Get layer names
             class_name = ClassDefinitionGenerator.node_type_to_class_name(node_type)
             layer_name = f"self.{node_id}_{class_name}"
 
-        # Determine input variable(s)
-        incoming = edge_map.get(node_id, [])
-        input_var = get_input_variable(incoming, var_map)
+        # Get incoming connections with handles
+        incoming = edge_map_detailed.get(node_id_original, [])
 
-        # Generate forward pass line
-        output_var = 'x'
-        model_definition += f"\n        {output_var} = {layer_name}({input_var})"
-        var_map[node_id] = output_var
+        # Build input variable based on incoming connections
+        if not incoming:
+            input_var = 'x'
+        elif len(incoming) == 1:
+            src_node, src_handle, tgt_handle = incoming[0]
+            src_node_id = src_node.replace('-', '_')
+            input_var = var_map.get((src_node_id, src_handle), 'x')
+        else:
+            # Multiple inputs (Add, Concat, etc.)
+            input_vars = []
+            for src_node, src_handle, tgt_handle in incoming:
+                src_node_id = src_node.replace('-', '_')
+                input_vars.append(var_map.get((src_node_id, src_handle), 'x'))
+            input_var = f"[{', '.join(input_vars)}]"
+
+        # Generate forward pass with special handling for group blocks
+        if node_type == 'group':
+            # Check if this group has multiple outputs
+            group_def_id = node.get('data', {}).get('groupDefinitionId')
+            num_outputs = group_output_ports.get(group_def_id, 1)
+
+            if num_outputs > 1:
+                # Unpack multiple outputs
+                output_vars = [f'{node_id}_out{i}' for i in range(num_outputs)]
+                model_definition += f"\n        {', '.join(output_vars)} = {layer_name}({input_var})"
+                # Store each output with its handle
+                for i, var in enumerate(output_vars):
+                    var_map[(node_id, f'group-output-{i}')] = var
+            else:
+                # Single output - check if branch point
+                model_definition += f"\n        x = {layer_name}({input_var})"
+                if outgoing_count.get(node_id_original, 0) > 1:
+                    branch_var = f'{node_id}_out'
+                    model_definition += f"\n        {branch_var} = x"
+                    var_map[(node_id, 'default')] = branch_var
+                else:
+                    var_map[(node_id, 'default')] = 'x'
+        else:
+            # Regular layer - check if branch point
+            model_definition += f"\n        x = {layer_name}({input_var})"
+
+            if outgoing_count.get(node_id_original, 0) > 1:
+                # This node feeds multiple downstream nodes - save its output
+                branch_var = f'{node_id}_out'
+                model_definition += f"\n        {branch_var} = x"
+                var_map[(node_id, 'default')] = branch_var
+            else:
+                # Sequential flow - just use 'x'
+                var_map[(node_id, 'default')] = 'x'
 
     model_definition += "\n        return x\n"
 
