@@ -710,7 +710,6 @@ class {group_definition['name']}(nn.Module):
         Returns:
             str: Corresponding class name
         """
-        print(cls.group_class_mapper)
         return cls.group_class_mapper.get(definition_id, 'UnknownGroupBlock')
     
     @classmethod
@@ -1468,8 +1467,6 @@ class {project_name}(nn.Module):
     for node in sorted_nodes:
         node_id = node['id'].replace('-', '_')
         node_type = ClassDefinitionGenerator.get_node_type(node)
-
-        print(f"Processing node: {node_id} of type {node_type}")
 
         # Skip input/output nodes
         if node_type in ('input', 'dataloader', 'output'):
