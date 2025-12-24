@@ -380,7 +380,7 @@ class ReLUBlock(nn.Module):
 
     def __init__(self, inplace: bool = False):
         """Initialize the ReLU activation."""
-        super(ReLUBlock, self,).__init__()
+        super(ReLUBlock, self).__init__()
         self.relu = nn.ReLU(inplace=inplace)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
