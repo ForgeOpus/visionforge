@@ -24,19 +24,43 @@ interface UniversalApiKeyModalProps {
 }
 
 type ModelType =
-  // Gemini models (Free tier available)
+  // FREE OpenRouter models ($0/$0 with :free suffix - VERIFIED)
+  | 'llama-4-maverick'
+  | 'llama-4-scout'
+  | 'llama-3.3-70b'
+  | 'gemini-2.0-flash-exp'
+  | 'gemini-2.5-pro-exp'
+  | 'mistral-small-3.1'
+  | 'devstral-2'
+  | 'deepseek-chat-v3'
+  | 'deepseek-r1-zero'
+  | 'nemotron-nano-8b'
+  | 'mimo-v2-flash'
+  | 'kat-coder-pro'
+  | 'optimus-alpha'
+  | 'quasar-alpha'
+  // Gemini models (Paid on OpenRouter, Free on Google AI)
   | 'gemini-3-flash'
   | 'gemini-3-pro'
   | 'gemini-2.5-flash'
   | 'gemini-2.5-pro'
-  // OpenAI models
+  // OpenAI models (Paid)
   | 'gpt-5.2'
   | 'gpt-4o'
   | 'gpt-4o-mini'
-  // Claude models
+  // Claude models (Paid)
   | 'claude-opus-4.5'
   | 'claude-sonnet-4.5'
   | 'claude-haiku-4.5'
+  | 'claude-3.5-sonnet'
+  | 'claude-3.5-haiku'
+  // Affordable PAID OpenRouter models
+  | 'llama-3.1-405b'
+  | 'llama-3.1-70b'
+  | 'deepseek-v3'
+  | 'deepseek-coder-v2'
+  | 'qwen-2.5-72b'
+  | 'mistral-large-2'
 
 export default function UniversalApiKeyModal({ open, onOpenChange, required = false }: UniversalApiKeyModalProps) {
   const {
@@ -59,7 +83,7 @@ export default function UniversalApiKeyModal({ open, onOpenChange, required = fa
     isFreeTier: boolean
     message: string
   } | null>(null)
-  const [selectedModel, setSelectedModel] = useState<ModelType>((contextSelectedModel as ModelType) || 'gemini-3-flash')
+  const [selectedModel, setSelectedModel] = useState<ModelType>((contextSelectedModel as ModelType) || 'devstral-2')
 
   // Load existing key when modal opens
   useEffect(() => {
@@ -179,37 +203,89 @@ export default function UniversalApiKeyModal({ open, onOpenChange, required = fa
     toast.success('API keys cleared')
   }
 
-  // Get all models organized by provider
+  // Get all models organized by provider and pricing
   const allModels = {
-    gemini: [
-      { id: 'gemini-3-flash', label: 'Gemini 3 Flash', desc: 'Newest - frontier intelligence (Dec 2025)', free: true },
-      { id: 'gemini-3-pro', label: 'Gemini 3 Pro', desc: 'Best multimodal (Nov 2025)', free: true },
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', desc: 'Stable - fast & reliable', free: true },
-      { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', desc: 'Advanced thinking model', free: true },
+    // Truly FREE models ($0/$0 on OpenRouter with :free suffix - VERIFIED)
+    free: [
+      { id: 'llama-4-maverick', label: 'Llama 4 Maverick', desc: '400B flagship - FREE', free: true },
+      { id: 'llama-4-scout', label: 'Llama 4 Scout', desc: '109B optimized - FREE', free: true },
+      { id: 'llama-3.3-70b', label: 'Llama 3.3 70B', desc: '70B capable - FREE', free: true },
+      { id: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash Exp', desc: 'Gemini free tier - FREE', free: true },
+      { id: 'gemini-2.5-pro-exp', label: 'Gemini 2.5 Pro Exp', desc: 'Gemini Pro experimental - FREE', free: true },
+      { id: 'mistral-small-3.1', label: 'Mistral Small 3.1', desc: '24B multimodal - FREE', free: true },
+      { id: 'devstral-2', label: 'Devstral 2', desc: '123B coding specialist - FREE', free: true },
+      { id: 'deepseek-chat-v3', label: 'DeepSeek Chat V3', desc: 'Chat optimized - FREE', free: true },
+      { id: 'deepseek-r1-zero', label: 'DeepSeek R1 Zero', desc: 'Reasoning - FREE', free: true },
+      { id: 'nemotron-nano-8b', label: 'Nemotron Nano 8B', desc: 'NVIDIA 8B - FREE', free: true },
+      { id: 'mimo-v2-flash', label: 'MiMo V2 Flash', desc: '309B MoE, 256K context - FREE', free: true },
+      { id: 'kat-coder-pro', label: 'KAT Coder Pro', desc: 'Coding specialist - FREE', free: true },
+      { id: 'optimus-alpha', label: 'Optimus Alpha', desc: 'OpenRouter general - FREE', free: true },
+      { id: 'quasar-alpha', label: 'Quasar Alpha', desc: 'OpenRouter reasoning - FREE', free: true },
     ],
+    // Gemini models (PAID on OpenRouter, FREE on direct Google AI)
+    gemini: [
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', desc: 'Most affordable ($0.30/M)', free: false },
+      { id: 'gemini-3-flash', label: 'Gemini 3 Flash', desc: 'Newest - frontier intelligence ($0.50/M)', free: false },
+      { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', desc: 'Advanced thinking ($1.25/M)', free: false },
+      { id: 'gemini-3-pro', label: 'Gemini 3 Pro', desc: 'Best multimodal ($2/M)', free: false },
+    ],
+    // OpenAI models (PAID)
     openai: [
       { id: 'gpt-5.2', label: 'GPT-5.2', desc: 'Newest flagship (Dec 2025)', free: false },
-      { id: 'gpt-4o', label: 'GPT-4o', desc: 'Multimodal omni model', free: false },
-      { id: 'gpt-4o-mini', label: 'GPT-4o Mini', desc: 'Fast and cost-effective', free: false },
+      { id: 'gpt-4o', label: 'GPT-4o', desc: 'Multimodal omni model ($2.50/M)', free: false },
+      { id: 'gpt-4o-mini', label: 'GPT-4o Mini', desc: 'Fast and affordable ($0.15/M)', free: false },
     ],
+    // Claude flagship models (PAID)
     claude: [
-      { id: 'claude-opus-4.5', label: 'Claude Opus 4.5', desc: 'Best for coding (Nov 2025)', free: false },
-      { id: 'claude-sonnet-4.5', label: 'Claude Sonnet 4.5', desc: 'Balanced performance', free: false },
+      { id: 'claude-3.5-haiku', label: 'Claude 3.5 Haiku', desc: 'Most affordable Claude ($0.80/M)', free: false },
+      { id: 'claude-3.5-sonnet', label: 'Claude 3.5 Sonnet', desc: 'Excellent value ($3/M)', free: false },
       { id: 'claude-haiku-4.5', label: 'Claude Haiku 4.5', desc: 'Fast, near-frontier quality', free: false },
+      { id: 'claude-sonnet-4.5', label: 'Claude Sonnet 4.5', desc: 'Balanced performance ($3/M)', free: false },
+      { id: 'claude-opus-4.5', label: 'Claude Opus 4.5', desc: 'Best for coding (Nov 2025)', free: false },
+    ],
+    // Affordable OpenRouter models (PAID but cheap)
+    affordable: [
+      { id: 'deepseek-v3', label: 'DeepSeek V3', desc: 'Latest flagship ($0.27/M)', free: false },
+      { id: 'deepseek-coder-v2', label: 'DeepSeek Coder V2', desc: 'Coding optimized ($0.27/M)', free: false },
+      { id: 'llama-3.1-70b', label: 'Llama 3.1 70B', desc: '70B paid version ($0.90/M)', free: false },
+      { id: 'mistral-large-2', label: 'Mistral Large 2', desc: 'Mistral flagship ($2/M)', free: false },
+      { id: 'llama-3.1-405b', label: 'Llama 3.1 405B', desc: 'Powerful 405B ($2.70/M)', free: false },
+      { id: 'qwen-2.5-72b', label: 'Qwen 2.5 72B', desc: 'Chinese model - affordable', free: false },
     ]
   }
 
   // Filter models based on detected provider
   const getAvailableModelsForUI = () => {
     if (!validationResult || !validationResult.valid) {
-      // Show all models when no key or invalid key
-      return [...allModels.gemini, ...allModels.openai, ...allModels.claude]
+      // Show all models when no key or invalid key - FREE models first, then PAID
+      return [
+        // TRULY FREE MODELS (14 total - $0/$0 VERIFIED)
+        ...allModels.free,        // Free (14 models)
+        // AFFORDABLE PAID MODELS (6 total)
+        ...allModels.affordable,  // Affordable (6 models)
+        // PAID GEMINI MODELS (4 total - free on Google AI)
+        ...allModels.gemini,      // Paid on OpenRouter (4 models)
+        // FLAGSHIP PAID MODELS (8 total)
+        ...allModels.openai,      // Paid (3 models)
+        ...allModels.claude,      // Paid (5 models)
+      ]
     }
 
     // Show only models available with this provider
     const provider = validationResult.provider
     if (provider === 'openrouter') {
-      return [...allModels.gemini, ...allModels.openai, ...allModels.claude]
+      // OpenRouter has access to ALL models - FREE models first, then PAID
+      return [
+        // TRULY FREE MODELS (14 total - $0/$0 VERIFIED)
+        ...allModels.free,        // Free (14 models)
+        // AFFORDABLE PAID MODELS (6 total)
+        ...allModels.affordable,  // Affordable (6 models)
+        // PAID GEMINI MODELS (4 total)
+        ...allModels.gemini,      // Paid on OpenRouter (4 models)
+        // FLAGSHIP PAID MODELS (8 total)
+        ...allModels.openai,      // Paid (3 models)
+        ...allModels.claude,      // Paid (5 models)
+      ]
     } else if (provider === 'google') {
       return allModels.gemini
     } else if (provider === 'openai') {

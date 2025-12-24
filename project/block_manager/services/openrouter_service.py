@@ -330,7 +330,8 @@ You cannot modify the workflow in this mode. If users want to make changes, sugg
             # Call OpenRouter API
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=messages
+                messages=messages,
+                max_tokens=4096  # Reasonable limit to work with free tier (16k token budget)
             )
 
             response_text = response.choices[0].message.content
@@ -407,7 +408,8 @@ Format your response as a simple numbered list."""
                 messages=[
                     {"role": "system", "content": "You are a helpful AI assistant specializing in neural network architectures."},
                     {"role": "user", "content": prompt}
-                ]
+                ],
+                max_tokens=1024  # Suggestions don't need many tokens
             )
 
             response_text = response.choices[0].message.content

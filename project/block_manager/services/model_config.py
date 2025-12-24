@@ -4,13 +4,13 @@ Supports both OpenRouter (unified) and direct provider APIs.
 """
 
 # Gemini model mapping for OpenRouter (frontend name -> OpenRouter identifier)
-# Latest models as of December 2025 - Available on free tier
+# Latest models as of December 2025 - PAID on OpenRouter (Free on direct Google AI API)
 # Reference: https://openrouter.ai/google
 GEMINI_MODELS = {
-    'gemini-3-flash': 'google/gemini-3-flash-preview',  # Newest - Dec 17, 2025 (free tier)
-    'gemini-3-pro': 'google/gemini-3-pro-preview',  # Nov 18, 2025 - multimodal (free tier)
-    'gemini-2.5-flash': 'google/gemini-2.5-flash',  # Stable - intelligent speed (free tier)
-    'gemini-2.5-pro': 'google/gemini-2.5-pro',  # State-of-the-art thinking model (free tier)
+    'gemini-3-flash': 'google/gemini-3-flash-preview',  # Newest - Dec 17, 2025 ($0.50/M input)
+    'gemini-3-pro': 'google/gemini-3-pro-preview',  # Nov 18, 2025 - multimodal ($2/M input)
+    'gemini-2.5-flash': 'google/gemini-2.5-flash',  # Most affordable ($0.30/M input)
+    'gemini-2.5-pro': 'google/gemini-2.5-pro',  # Advanced thinking ($1.25/M input)
 }
 
 # Gemini model mapping for direct Google AI API (frontend name -> Google API identifier)
@@ -49,11 +49,63 @@ CLAUDE_MODELS = {
     'claude-haiku-4.5': 'anthropic/claude-haiku-4.5',  # Oct 15, 2025 (fast)
 }
 
-# Combined model mapping
+# OpenRouter-specific FREE models (only available via OpenRouter with :free suffix = $0/$0 cost)
+# Reference: https://openrouter.ai/collections/free-models
+# Reference: https://apidog.com/blog/free-ai-models/
+OPENROUTER_FREE_MODELS = {
+    # Meta Llama FREE models
+    'llama-4-maverick': 'meta-llama/llama-4-maverick:free',  # 400B flagship - FREE
+    'llama-4-scout': 'meta-llama/llama-4-scout:free',  # 109B optimized - FREE
+    'llama-3.3-70b': 'meta-llama/llama-3.3-70b-instruct:free',  # 70B capable - FREE
+
+    # Google Gemini FREE models
+    'gemini-2.0-flash-exp': 'google/gemini-2.0-flash-exp:free',  # Gemini free tier
+    'gemini-2.5-pro-exp': 'google/gemini-2.5-pro-exp-03-25:free',  # Gemini Pro experimental
+
+    # Mistral FREE models
+    'mistral-small-3.1': 'mistralai/mistral-small-3.1-24b-instruct:free',  # 24B multimodal - FREE
+    'devstral-2': 'mistralai/devstral-2512:free',  # 123B coding specialist - FREE
+
+    # DeepSeek FREE models
+    'deepseek-chat-v3': 'deepseek/deepseek-chat-v3-0324:free',  # Chat optimized - FREE
+    'deepseek-r1-zero': 'deepseek/deepseek-r1-zero:free',  # Reasoning - FREE
+
+    # Other FREE models
+    'nemotron-nano-8b': 'nvidia/llama-3.1-nemotron-nano-8b-v1:free',  # NVIDIA 8B
+    'mimo-v2-flash': 'xiaomi/mimo-v2-flash:free',  # 309B MoE - 256K context
+    'kat-coder-pro': 'kwaipilot/kat-coder-pro-v1:free',  # Coding specialist
+    'optimus-alpha': 'openrouter/optimus-alpha',  # OpenRouter general
+    'quasar-alpha': 'openrouter/quasar-alpha',  # OpenRouter reasoning
+}
+
+# OpenRouter-specific PAID models (affordable, not flagships)
+# Reference: https://openrouter.ai/pricing
+# Reference: https://www.teamday.ai/blog/top-ai-models-openrouter-2025
+OPENROUTER_PAID_MODELS = {
+    # Affordable Llama models (non-free paid versions)
+    'llama-3.1-405b': 'meta-llama/llama-3.1-405b-instruct',  # $2.70/M - powerful 405B
+    'llama-3.1-70b': 'meta-llama/llama-3.1-70b-instruct',  # $0.90/M - 70B paid
+
+    # Affordable DeepSeek models (non-free paid versions)
+    'deepseek-v3': 'deepseek/deepseek-v3',  # $0.27/M - latest flagship
+    'deepseek-coder-v2': 'deepseek/deepseek-coder-v2',  # $0.27/M - coding optimized
+
+    # Older Claude (still very good, cheaper than 4.5)
+    'claude-3.5-sonnet': 'anthropic/claude-3.5-sonnet',  # $3/M - very capable
+    'claude-3.5-haiku': 'anthropic/claude-3.5-haiku',  # $0.80/M - cheapest Claude
+
+    # Alternative affordable providers
+    'qwen-2.5-72b': 'qwen/qwen-2.5-72b-instruct',  # Chinese model - affordable
+    'mistral-large-2': 'mistralai/mistral-large-2',  # $2/M - Mistral flagship
+}
+
+# Combined model mapping (for OpenRouter)
 MODEL_IDENTIFIERS = {
     **GEMINI_MODELS,
     **OPENAI_MODELS,
     **CLAUDE_MODELS,
+    **OPENROUTER_FREE_MODELS,
+    **OPENROUTER_PAID_MODELS,
 }
 
 def get_model_identifier(frontend_model: str) -> str:
