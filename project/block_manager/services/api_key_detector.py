@@ -32,22 +32,21 @@ class APIKeyDetector:
             name='openrouter',
             display_name='OpenRouter',
             key_prefix='sk-or-v1-',
-            models_count=32,
-            is_free_tier=True,  # Has 14 truly free models ($0/$0 with :free suffix)
+            models_count=28,
+            is_free_tier=True,  # Has 11 truly free models (VERIFIED WORKING - 404 errors removed)
             models=[
                 # Flagship models via OpenRouter (10 models - all PAID)
                 'gemini-3-flash', 'gemini-3-pro', 'gemini-2.5-flash', 'gemini-2.5-pro',
                 'gpt-5.2', 'gpt-4o', 'gpt-4o-mini',
                 'claude-opus-4.5', 'claude-sonnet-4.5', 'claude-haiku-4.5',
-                # Truly FREE OpenRouter models (14 models - $0/$0 with :free suffix)
-                'llama-4-maverick', 'llama-4-scout', 'llama-3.3-70b',
-                'gemini-2.0-flash-exp', 'gemini-2.5-pro-exp',
-                'mistral-small-3.1', 'devstral-2',
-                'deepseek-chat-v3', 'deepseek-r1-zero',
-                'nemotron-nano-8b', 'mimo-v2-flash', 'kat-coder-pro',
-                'optimus-alpha', 'quasar-alpha',
-                # Affordable PAID models (8 models)
-                'llama-3.1-405b', 'llama-3.1-70b',
+                # Truly FREE OpenRouter models (11 models - VERIFIED WORKING)
+                'llama-3.3-70b', 'llama-3.1-70b', 'llama-3.1-8b',
+                'gemini-2.0-flash', 'gemini-3-flash', 'gemini-2.5-flash',
+                'mistral-nemo',
+                'deepseek-chat-v3', 'deepseek-chat-v3.1', 'deepseek-v3.2',
+                'nemotron-nano-30b',
+                # Affordable PAID models (7 models)
+                'llama-3.1-405b',
                 'deepseek-v3', 'deepseek-coder-v2',
                 'claude-3.5-sonnet', 'claude-3.5-haiku',
                 'qwen-2.5-72b', 'mistral-large-2'

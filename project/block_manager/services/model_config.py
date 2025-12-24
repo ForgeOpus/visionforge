@@ -44,49 +44,45 @@ OPENAI_MODELS = {
 # Latest models as of December 2025 - Pay-as-you-go
 # Reference: https://openrouter.ai/anthropic
 CLAUDE_MODELS = {
-    'claude-opus-4.5': 'anthropic/claude-opus-4.5',  # Newest - Nov 24, 2025 (best for coding)
-    'claude-sonnet-4.5': 'anthropic/claude-sonnet-4.5',  # Sept 29, 2025 (balanced)
-    'claude-haiku-4.5': 'anthropic/claude-haiku-4.5',  # Oct 15, 2025 (fast)
+    'claude-opus-4.5': 'anthropic/claude-4.5-opus-20251124',  # Newest - Nov 24, 2025 (best for coding)
+    'claude-sonnet-4.5': 'anthropic/claude-4.5-sonnet-20250929',  # Sept 29, 2025 (balanced)
+    'claude-haiku-4.5': 'anthropic/claude-4.5-haiku-20251001',  # Oct 15, 2025 (fast)
 }
 
-# OpenRouter-specific FREE models (only available via OpenRouter with :free suffix = $0/$0 cost)
+# OpenRouter-specific FREE models (from official free models collection)
 # Reference: https://openrouter.ai/collections/free-models
-# Reference: https://apidog.com/blog/free-ai-models/
+# NOTE: Most free models don't use :free suffix - use exact identifiers from OpenRouter
+# VERIFIED WORKING - Only includes models that successfully respond (404 errors removed)
 OPENROUTER_FREE_MODELS = {
-    # Meta Llama FREE models
-    'llama-4-maverick': 'meta-llama/llama-4-maverick:free',  # 400B flagship - FREE
-    'llama-4-scout': 'meta-llama/llama-4-scout:free',  # 109B optimized - FREE
-    'llama-3.3-70b': 'meta-llama/llama-3.3-70b-instruct:free',  # 70B capable - FREE
+    # Meta Llama FREE models (VERIFIED WORKING)
+    'llama-3.3-70b': 'meta-llama/llama-3.3-70b-instruct',  # 70B capable - FREE
+    'llama-3.1-70b': 'meta-llama/llama-3.1-70b-instruct',  # 70B - FREE
+    'llama-3.1-8b': 'meta-llama/llama-3.1-8b-instruct',  # 8B efficient - FREE
 
-    # Google Gemini FREE models
-    'gemini-2.0-flash-exp': 'google/gemini-2.0-flash-exp:free',  # Gemini free tier
-    'gemini-2.5-pro-exp': 'google/gemini-2.5-pro-exp-03-25:free',  # Gemini Pro experimental
+    # Google Gemini FREE models (VERIFIED WORKING)
+    'gemini-2.0-flash': 'google/gemini-2.0-flash-001',  # Gemini 2.0 Flash - FREE
+    'gemini-3-flash': 'google/gemini-3-flash-preview-20251217',  # Gemini 3 Flash - FREE
+    'gemini-2.5-flash': 'google/gemini-2.5-flash',  # Gemini 2.5 Flash - FREE
 
-    # Mistral FREE models
-    'mistral-small-3.1': 'mistralai/mistral-small-3.1-24b-instruct:free',  # 24B multimodal - FREE
-    'devstral-2': 'mistralai/devstral-2512:free',  # 123B coding specialist - FREE
+    # Mistral FREE models (VERIFIED WORKING)
+    'mistral-nemo': 'mistralai/mistral-nemo',  # Mistral Nemo - FREE
 
-    # DeepSeek FREE models
-    'deepseek-chat-v3': 'deepseek/deepseek-chat-v3-0324:free',  # Chat optimized - FREE
-    'deepseek-r1-zero': 'deepseek/deepseek-r1-zero:free',  # Reasoning - FREE
+    # DeepSeek FREE models (VERIFIED WORKING)
+    'deepseek-chat-v3': 'deepseek/deepseek-chat-v3-0324',  # Chat V3 - FREE
+    'deepseek-chat-v3.1': 'deepseek/deepseek-chat-v3.1',  # Chat V3.1 - FREE
+    'deepseek-v3.2': 'deepseek/deepseek-v3.2-20251201',  # DeepSeek V3.2 - FREE
 
-    # Other FREE models
-    'nemotron-nano-8b': 'nvidia/llama-3.1-nemotron-nano-8b-v1:free',  # NVIDIA 8B
-    'mimo-v2-flash': 'xiaomi/mimo-v2-flash:free',  # 309B MoE - 256K context
-    'kat-coder-pro': 'kwaipilot/kat-coder-pro-v1:free',  # Coding specialist
-    'optimus-alpha': 'openrouter/optimus-alpha',  # OpenRouter general
-    'quasar-alpha': 'openrouter/quasar-alpha',  # OpenRouter reasoning
+    # Other FREE models (VERIFIED WORKING)
+    'nemotron-nano-30b': 'nvidia/nemotron-3-nano-30b-a3b',  # NVIDIA 30B - FREE
 }
 
 # OpenRouter-specific PAID models (affordable, not flagships)
 # Reference: https://openrouter.ai/pricing
-# Reference: https://www.teamday.ai/blog/top-ai-models-openrouter-2025
 OPENROUTER_PAID_MODELS = {
-    # Affordable Llama models (non-free paid versions)
+    # Affordable Llama models (paid versions)
     'llama-3.1-405b': 'meta-llama/llama-3.1-405b-instruct',  # $2.70/M - powerful 405B
-    'llama-3.1-70b': 'meta-llama/llama-3.1-70b-instruct',  # $0.90/M - 70B paid
 
-    # Affordable DeepSeek models (non-free paid versions)
+    # Affordable DeepSeek models (paid versions - not on free list)
     'deepseek-v3': 'deepseek/deepseek-v3',  # $0.27/M - latest flagship
     'deepseek-coder-v2': 'deepseek/deepseek-coder-v2',  # $0.27/M - coding optimized
 

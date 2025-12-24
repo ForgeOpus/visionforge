@@ -226,6 +226,20 @@ export default function ChatBot() {
     }
   }
 
+  const handleClearChat = () => {
+    setMessages([
+      {
+        id: '1',
+        role: 'assistant',
+        content: 'Hello! I\'m your VisionForge assistant. How can I help you build your neural network today?\n\nToggle **Modification Mode** above to allow me to suggest changes to your workflow.',
+        timestamp: new Date()
+      }
+    ])
+    toast.success('Chat cleared', {
+      description: 'All messages have been cleared'
+    })
+  }
+
   const applyModification = (modification: any) => {
     try {
       const { action, details } = modification
@@ -484,18 +498,33 @@ export default function ChatBot() {
                 : 'AI will only answer questions (no workflow changes)'}
             </p>
 
-            {/* API Key Button - Show when API keys are required */}
-            {requiresApiKey && (
+            {/* Action Buttons */}
+            <div className="flex gap-2 mt-2">
+              {/* API Key Button - Show when API keys are required */}
+              {requiresApiKey && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setShowApiKeyModal(true)}
+                >
+                  <Icons.Key size={16} className="mr-2" />
+                  Edit API Key
+                </Button>
+              )}
+
+              {/* Clear Chat Button */}
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full mt-2"
-                onClick={() => setShowApiKeyModal(true)}
+                className={requiresApiKey ? "flex-1" : "w-full"}
+                onClick={handleClearChat}
+                disabled={messages.length <= 1}
               >
-                <Icons.Key size={16} className="mr-2" />
-                Edit API Key
+                <Icons.Trash size={16} className="mr-2" />
+                Clear Chat
               </Button>
-            )}
+            </div>
           </div>
 
           {/* Messages Area */}
