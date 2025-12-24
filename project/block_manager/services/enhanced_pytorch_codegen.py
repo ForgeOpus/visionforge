@@ -126,7 +126,7 @@ class ClassDefinitionGenerator():
                 - Output: [batch_size, out_channels, H/stride, W/stride]
             """
 
-            def __init__(self, in_channels: int, out_channels:int, kernel_size=3, stride=3, padding=0, dilation=1):
+            def __init__(self, in_channels: int, out_channels:int, kernel_size=3, stride=1, padding=0, dilation=1):
                 """Initialize the convolutional layer."""
                 super(Conv2DBlock, self).__init__()
                 self.conv = nn.Conv2d(
