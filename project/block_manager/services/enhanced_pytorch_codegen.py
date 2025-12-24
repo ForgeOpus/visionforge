@@ -618,6 +618,7 @@ class {group_definition['name']}(nn.Module):
             layer_name = f"self.{node['id'].replace('-','_')}_{class_name}"
             layers.append(layer_name)
             params = node.get('data', {}).get('config', {})
+            params = ', '.join([f"{k}={repr(v)}" for k, v in params.items()])
             init_method += f"\n        {layer_name} = {class_name}({params})"
         block_definition += init_method + "\n"
         forward_method = '''
@@ -799,8 +800,8 @@ class LayerInitializationGenerator():
                 class_name = ClassDefinitionGenerator.node_type_to_class_name(node_type)
                 layer_name = f"self.{node_id}_{class_name}"
                 params = node.get('data', {}).get('config', {})
-
-            layer_initializations += f"\n        {layer_name} = {class_name}({params})"
+            params_str = ', '.join([f"{k}={repr(v)}" for k, v in params.items()])
+            layer_initializations += f"\n        {layer_name} = {class_name}({params_str})"
         return layer_initializations
 
 
@@ -859,7 +860,8 @@ def get_input_variable(incoming: List[str], var_map: Dict[str, str]) -> str:
 def generate_model_file(
     project_name: str,
     layer_classes: str,
-    model_definition: str
+    model_definition: str,
+    test_code: str
 ) -> str:
     """
     Generate the model.py file with just the model architecture.
@@ -890,9 +892,28 @@ from typing import List, Tuple, Optional
 {layer_classes}
 
 {model_definition}
+
+{test_code}
 '''
     return file
 
+def generate_test_model_function(project_name:str, input_shape: Tuple[int, ...]) -> str:
+    """
+    Generate a test function to validate the model architecture.
+
+    Returns:
+        str: Test function code
+    """
+    return f'''if __name__ == "__main__":
+    # Test the model with random input
+    model = {project_name}()
+    model.eval()
+    test_input = torch.randn({input_shape})
+    with torch.no_grad():
+        output = model(test_input)
+    print("Test input shape:", test_input.shape)
+    print("Output shape:", output.shape)
+'''
 
 # ============================================
 # Adaptive Helper Functions for Training, Dataset, and Config
@@ -1464,12 +1485,18 @@ class {project_name}(nn.Module):
     # Generate forward pass with variable tracking
     var_map = {}  # Maps node_id -> variable_name
 
+    input_shape = (1, 3, 224, 224)  # Default input shape
+
     for node in sorted_nodes:
         node_id = node['id'].replace('-', '_')
         node_type = ClassDefinitionGenerator.get_node_type(node)
 
         # Skip input/output nodes
         if node_type in ('input', 'dataloader', 'output'):
+            if node_type == 'input':
+                # Extract input shape
+                config = node.get('data').get('config')
+                input_shape = eval(config.get('shape', '[1, 3, 224, 224]'))
             var_map[node_id] = 'x'
             continue
         elif node_type == 'group':
@@ -1496,7 +1523,8 @@ class {project_name}(nn.Module):
     model_code = generate_model_file(
         project_name=project_name,
         layer_classes=layer_classes,
-        model_definition=model_definition
+        model_definition=model_definition,
+        test_code=generate_test_model_function(project_name, tuple(input_shape))
     )
 
     # Generate adaptive training, dataset, and config files
