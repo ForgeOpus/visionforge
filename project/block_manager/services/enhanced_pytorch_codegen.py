@@ -162,30 +162,30 @@ class ClassDefinitionGenerator():
             str: Definition for an Add block
         """
         return '''
-        class AddBlock(nn.Module):
-            """
-            Addition block
+class AddBlock(nn.Module):
+    """
+    Addition block
 
-            Element-wise addition block for tensors of same shape.
+    Element-wise addition block for tensors of same shape.
 
-            Parameters:
-                - tensor_list: list of input tensors of same shape
-            
-            """
+    Parameters:
+        - tensor_list: list of input tensors of same shape
+    
+    """
 
-            def __init__(self):
-                """
-                Initialize the addition layer (no learnable parameters).
-                """
-                super(AddBlock, self).__init__()
-            
-            def forward(self, tensor_list:List[torch.Tensor]) -> torch.Tensor:
-                """
-                Forward pass through the addition layer.
-                Returns:
-                    Element-wise sum of all input tensors
-                """
-                return torch.stack(tensor_list).sum(dim=0)
+    def __init__(self):
+        """
+        Initialize the addition layer (no learnable parameters).
+        """
+        super(AddBlock, self).__init__()
+    
+    def forward(self, tensor_list:List[torch.Tensor]) -> torch.Tensor:
+        """
+        Forward pass through the addition layer.
+        Returns:
+            Element-wise sum of all input tensors
+        """
+        return torch.stack(tensor_list).sum(dim=0)
         '''
 
     @classmethod 
@@ -197,34 +197,34 @@ class ClassDefinitionGenerator():
             str: Definition for an Add block
         """
         return '''
-        class ConcatBlock(nn.Module):
-            """
-            Concatination Layer
+class ConcatBlock(nn.Module):
+    """
+    Concatination Layer
 
-            Concatenates multiple tensors along a specified dimension.
-            Commonly used to merge feature maps from different paths in the network.
+    Concatenates multiple tensors along a specified dimension.
+    Commonly used to merge feature maps from different paths in the network.
 
-            Parameters:
-                - Concatenation dimension: int
+    Parameters:
+        - Concatenation dimension: int
 
-            Shape:
-                - Input: List of tensors with compatible shapes
-                - Output: Concatenated tensor along dimension dim
-            """
+    Shape:
+        - Input: List of tensors with compatible shapes
+        - Output: Concatenated tensor along dimension dim
+    """
 
-            def __init__(self):
-                """
-                Initialize the concatenation layer (no learnable parameters).
-                """
-                super(ConcatBlock, self).__init__()
-            
-            def forward(self, tensor_list: List[torch.Tensor], concat_dim: int):
-                """
-                Forward pass through the addition layer.
-                Returns:
-                    Element-wise sum of all input tensors
-                """
-                return torch.cat(tensor_list, dim=concat_dim)
+    def __init__(self):
+        """
+        Initialize the concatenation layer (no learnable parameters).
+        """
+        super(ConcatBlock, self).__init__()
+    
+    def forward(self, tensor_list: List[torch.Tensor], concat_dim: int):
+        """
+        Forward pass through the addition layer.
+        Returns:
+            Element-wise sum of all input tensors
+        """
+        return torch.cat(tensor_list, dim=concat_dim)
         '''
 
     @classmethod 
@@ -236,35 +236,35 @@ class ClassDefinitionGenerator():
             str: Definition for a FCL layer
         """
         return '''
-        class LinearLayer(nn.Module):
-            """
-            Applies a linear transformation to the incoming data: y = xA^T + b
+class LinearLayer(nn.Module):
+    """
+    Applies a linear transformation to the incoming data: y = xA^T + b
 
-            Parameters:
-            - Input features: in_features
-            - Output features: out_features
-            - Bias: bias
+    Parameters:
+    - Input features: in_features
+    - Output features: out_features
+    - Bias: bias
 
-            Shape:
-                - Input: [batch_size, in_features]
-                - Output: [batch_size, out_features]
-            """
+    Shape:
+        - Input: [batch_size, in_features]
+        - Output: [batch_size, out_features]
+    """
 
-            def __init__(self, in_features:int, out_features:int, bias:bool =False):
-                super(LinearLayer, self).__init__()
-                self.linear = nn.Linear(in_features, out_features, bias=bias)
-            def forward(self, x:torch.Tensor) -> torch.Tensor:
-                """
-                Forward pass through the linear layer.
+    def __init__(self, in_features:int, out_features:int, bias:bool =False):
+        super(LinearLayer, self).__init__()
+        self.linear = nn.Linear(in_features, out_features, bias=bias)
+    def forward(self, x:torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the linear layer.
 
-                Args:
-                    x: Input tensor of shape [batch, in_features]
+        Args:
+            x: Input tensor of shape [batch, in_features]
 
-                Returns:
-                    Output tensor of shape [batch, out_features]
-                """
-                x = self.linear(x)
-                return x
+        Returns:
+            Output tensor of shape [batch, out_features]
+        """
+        x = self.linear(x)
+        return x
         '''
 
     @classmethod 
@@ -276,44 +276,44 @@ class ClassDefinitionGenerator():
             str: Definition for a 2D maxpooling layer.
         """
         return '''
-        class MaxPoolBlock(nn.Module):
-            """
-            2D Max Pooling Layer
+class MaxPoolBlock(nn.Module):
+    """
+    2D Max Pooling Layer
 
-            Applies a 2D max pooling over an input signal.
-            Reduces spatial dimensions while preserving channel count.
+    Applies a 2D max pooling over an input signal.
+    Reduces spatial dimensions while preserving channel count.
 
-            Parameters:
-                - Kernel size: kernel_sizexkernel_size
-                - Stride: stride
-                - Padding: padding
+    Parameters:
+        - Kernel size: kernel_sizexkernel_size
+        - Stride: stride
+        - Padding: padding
 
-            Shape:
-                - Input: [batch_size, C, H, W]
-                - Output: [batch_size, C, H/stride, W/stride]
-            """
-            def __init__(self, kernel_size: int, stride: int, padding:int):
-                """Initialize the max pooling layer."""
-                super(MaxPoolBlock, self).__init__()
-                self.pool = nn.MaxPool2d(
-                    kernel_size=kernel_size,
-                    stride=stride,
-                    padding=padding
-                )
+    Shape:
+        - Input: [batch_size, C, H, W]
+        - Output: [batch_size, C, H/stride, W/stride]
+    """
+    def __init__(self, kernel_size: int, stride: int, padding:int):
+        """Initialize the max pooling layer."""
+        super(MaxPoolBlock, self).__init__()
+        self.pool = nn.MaxPool2d(
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding
+        )
 
-            def forward(self, x: torch.Tensor) -> torch.Tensor:
-                """
-                Forward pass through the pooling layer.
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the pooling layer.
 
-                Args:
-                    x: Input tensor of shape [batch, C, H, W]
+        Args:
+            x: Input tensor of shape [batch, C, H, W]
 
-                Returns:
-                    Output tensor with reduced spatial dimensions
-                """
-                # Apply max pooling
-                x = self.pool(x)
-                return x 
+        Returns:
+            Output tensor with reduced spatial dimensions
+        """
+        # Apply max pooling
+        x = self.pool(x)
+        return x 
         '''
     
     @classmethod 
@@ -325,36 +325,36 @@ class ClassDefinitionGenerator():
             str: Definition for a flatten class.
         """
         return '''
-        class FlattenLayer(nn.Module):
-            """
-            Flatten Layer
+class FlattenLayer(nn.Module):
+    """
+    Flatten Layer
 
-            Flattens a contiguous range of dimensions into a tensor.
-            Commonly used to transition from convolutional layers to fully connected layers.
+    Flattens a contiguous range of dimensions into a tensor.
+    Commonly used to transition from convolutional layers to fully connected layers.
 
-            Shape:
-                - Input: [batch_size, C, H, W]
-                - Output: [batch_size, C*H*W] = [batch_size, out_features]
-            """
+    Shape:
+        - Input: [batch_size, C, H, W]
+        - Output: [batch_size, C*H*W] = [batch_size, out_features]
+    """
 
-            def __init__(self, start_dim:int = 1):
-                """Initialize the flatten layer."""
-                super(FlattenLayer, self).__init__()
-                self.flatten = nn.Flatten(start_dim=start_dim)
+    def __init__(self, start_dim:int = 1):
+        """Initialize the flatten layer."""
+        super(FlattenLayer, self).__init__()
+        self.flatten = nn.Flatten(start_dim=start_dim)
 
-            def forward(self, x: torch.Tensor) -> torch.Tensor:
-                """
-                Forward pass through the flatten layer.
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the flatten layer.
 
-                Args:
-                    x: Input tensor of shape [batch, C, H, W]
+        Args:
+            x: Input tensor of shape [batch, C, H, W]
 
-                Returns:
-                    Output tensor of shape [batch, C*H*W]
-                """
-                # Flatten spatial and channel dimensions
-                x = self.flatten(x)
-                return x
+        Returns:
+            Output tensor of shape [batch, C*H*W]
+        """
+        # Flatten spatial and channel dimensions
+        x = self.flatten(x)
+        return x
         '''
     
     @classmethod 
@@ -366,38 +366,38 @@ class ClassDefinitionGenerator():
             str: Definition for a ReLU class.
         """
         return '''
-        class ReLUBlock(nn.Module):
-            """
-            ReLU Activation Layer
+class ReLUBlock(nn.Module):
+    """
+    ReLU Activation Layer
 
-            Applies the rectified linear unit function element-wise: ReLU(x) = max(0, x)
-            Introduces non-linearity to the model.
+    Applies the rectified linear unit function element-wise: ReLU(x) = max(0, x)
+    Introduces non-linearity to the model.
 
-            Shape:
-                - Input: [batch_size, *] (any shape)
-                - Output: [batch_size, *] (same shape as input)
-            """
+    Shape:
+        - Input: [batch_size, *] (any shape)
+        - Output: [batch_size, *] (same shape as input)
+    """
 
-            def __init__(self):
-                """Initialize the ReLU activation."""
-                super(ReLUBlock, self).__init__()
-                self.relu = nn.ReLU()
+    def __init__(self):
+        """Initialize the ReLU activation."""
+        super(ReLUBlock, self).__init__()
+        self.relu = nn.ReLU()
 
-            def forward(self, x: torch.Tensor) -> torch.Tensor:
-                """
-                Forward pass through the activation.
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the activation.
 
-                Args:
-                    x: Input tensor
+        Args:
+            x: Input tensor
 
-                Returns:
-                    Output tensor with ReLU applied element-wise
-                """
-                # Apply ReLU activation
-                x = self.relu(x)
-                return x
-        '''
-    
+        Returns:
+            Output tensor with ReLU applied element-wise
+        """
+        # Apply ReLU activation
+        x = self.relu(x)
+        return x
+'''
+
     @classmethod 
     def _create_softmax_class(cls) -> str:
         """
@@ -407,40 +407,40 @@ class ClassDefinitionGenerator():
             str: Definition for a Softmax activation Layer class.
         """
         return '''
-        class SoftmaxBlock(nn.Module):
-            """
-            Softmax Activation Layer
+class SoftmaxBlock(nn.Module):
+    """
+    Softmax Activation Layer
 
-            Applies the softmax function to normalize outputs into a probability distribution.
-            Commonly used in the final layer for classification tasks.
+    Applies the softmax function to normalize outputs into a probability distribution.
+    Commonly used in the final layer for classification tasks.
 
-            Parameters:
-                - Dimension: dim
+    Parameters:
+        - Dimension: dim
 
-            Shape:
-                - Input: [batch_size, num_classes]
-                - Output: [batch_size, num_classes] (sums to 1.0 along dimension {dim})
-            """
+    Shape:
+        - Input: [batch_size, num_classes]
+        - Output: [batch_size, num_classes] (sums to 1.0 along dimension {dim})
+    """
 
-            def __init__(self, dim:int = 1):
-                """Initialize the softmax layer."""
-                super(SoftmaxBlock, self).__init__()
-                self.softmax = nn.Softmax(dim=dim)
+    def __init__(self, dim:int = 1):
+        """Initialize the softmax layer."""
+        super(SoftmaxBlock, self).__init__()
+        self.softmax = nn.Softmax(dim=dim)
 
-            def forward(self, x: torch.Tensor) -> torch.Tensor:
-                """
-                Forward pass through the softmax layer.
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the softmax layer.
 
-                Args:
-                    x: Input tensor
+        Args:
+            x: Input tensor
 
-                Returns:
-                    Probability distribution over dimension dim
-                """
-                # Apply softmax activation
-                x = self.softmax(x)
-                return x
-        '''
+        Returns:
+            Probability distribution over dimension dim
+        """
+        # Apply softmax activation
+        x = self.softmax(x)
+        return x
+'''
 
     @classmethod
     def _create_dropout_class(cls) -> str:
@@ -451,39 +451,39 @@ class ClassDefinitionGenerator():
             str: Definition for a Dropout class.
         """
         return '''
-        class DropoutBlock(nn.Module):
-            """
-            Dropout Regularization Layer
+class DropoutBlock(nn.Module):
+    """
+    Dropout Regularization Layer
 
-            Randomly zeroes some elements of the input tensor with probability p during training.
-            Helps prevent overfitting.
+    Randomly zeroes some elements of the input tensor with probability p during training.
+    Helps prevent overfitting.
 
-            Parameters:
-                - Dropout probability: p
+    Parameters:
+        - Dropout probability: p
 
-            Shape:
-                - Input: [batch_size, *] (any shape)
-                - Output: [batch_size, *] (same shape as input)
-            """
+    Shape:
+        - Input: [batch_size, *] (any shape)
+        - Output: [batch_size, *] (same shape as input)
+    """
 
-            def __init__(self, p):
-                """Initialize the dropout layer."""
-                super(DropoutBlock, self).__init__()
-                self.dropout = nn.Dropout(p=p)
+    def __init__(self, p):
+        """Initialize the dropout layer."""
+        super(DropoutBlock, self).__init__()
+        self.dropout = nn.Dropout(p=p)
 
-            def forward(self, x: torch.Tensor) -> torch.Tensor:
-                """
-                Forward pass through the dropout layer.
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the dropout layer.
 
-                Args:
-                    x: Input tensor
+        Args:
+            x: Input tensor
 
-                Returns:
-                    Output tensor with dropout applied during training
-                """
-                # Apply dropout (only active during training)
-                x = self.dropout(x)
-                return x
+        Returns:
+            Output tensor with dropout applied during training
+        """
+        # Apply dropout (only active during training)
+        x = self.dropout(x)
+        return x
         '''
     
     @classmethod 
@@ -495,47 +495,47 @@ class ClassDefinitionGenerator():
             str: Definition for a Batch Normalization Layer class.
         """
         return '''
-        class BatchNormBlock(nn.Module):
-            """
-            Batch Normalization Layer
+class BatchNormBlock(nn.Module):
+    """
+    Batch Normalization Layer
 
-            Normalizes the input over a mini-batch for each feature channel.
-            Helps stabilize and accelerate training.
+    Normalizes the input over a mini-batch for each feature channel.
+    Helps stabilize and accelerate training.
 
-            Parameters:
-                - Number of features: num_features
-                - Epsilon: eps
-                - Momentum: momentum
-                - Learnable parameters: affine
+    Parameters:
+        - Number of features: num_features
+        - Epsilon: eps
+        - Momentum: momentum
+        - Learnable parameters: affine
 
-            Shape:
-                - Input: [batch_size, num_features, H, W]
-                - Output: [batch_size, num_features, H, W]
-            """
+    Shape:
+        - Input: [batch_size, num_features, H, W]
+        - Output: [batch_size, num_features, H, W]
+    """
 
-            def __init__(self, num_features: int, eps:float = 1e-5, momentum:float = 0.1, affine: bool = True):
-                """Initialize the batch normalization layer."""
-                super(BatchNormBlock, self).__init__()
-                self.bn = nn.BatchNorm2d(
-                    num_features,
-                    eps=eps,
-                    momentum=momentum,
-                    affine=affine
-                )
+    def __init__(self, num_features: int, eps:float = 1e-5, momentum:float = 0.1, affine: bool = True):
+        """Initialize the batch normalization layer."""
+        super(BatchNormBlock, self).__init__()
+        self.bn = nn.BatchNorm2d(
+            num_features,
+            eps=eps,
+            momentum=momentum,
+            affine=affine
+        )
 
-            def forward(self, x: torch.Tensor) -> torch.Tensor:
-                """
-                Forward pass through the batch normalization layer.
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the batch normalization layer.
 
-                Args:
-                    x: Input tensor of shape [batch, num_features, H, W]
+        Args:
+            x: Input tensor of shape [batch, num_features, H, W]
 
-                Returns:
-                    Normalized output tensor of same shape
-                """
-                # Apply batch normalization
-                x = self.bn(x)
-                return x
+        Returns:
+            Normalized output tensor of same shape
+        """
+        # Apply batch normalization
+        x = self.bn(x)
+        return x
         '''
 
     @classmethod 
@@ -547,46 +547,46 @@ class ClassDefinitionGenerator():
             str: Definition for a Multi-Headed Self-Attention Layer class.
         """
         return '''
-        class MultiHeadSelfAttentionBlock(nn.Module):
-            """
-            Multi-Head Self-Attention Layer
+class MultiHeadSelfAttentionBlock(nn.Module):
+    """
+    Multi-Head Self-Attention Layer
 
-            Applies multi-head self-attention mechanism to the input.
-            Allows the model to jointly attend to information from different representation subspaces.
+    Applies multi-head self-attention mechanism to the input.
+    Allows the model to jointly attend to information from different representation subspaces.
 
-            Parameters:
-                - Embedding dimension: embed_dim
-                - Number of heads: num_heads
-                - Dropout: dropout
+    Parameters:
+        - Embedding dimension: embed_dim
+        - Number of heads: num_heads
+        - Dropout: dropout
 
-            Shape:
-                - Input: [batch_size, seq_len, embed_dim]
-                - Output: [batch_size, seq_len, embed_dim]
-            """
+    Shape:
+        - Input: [batch_size, seq_len, embed_dim]
+        - Output: [batch_size, seq_len, embed_dim]
+    """
 
-            def __init__(self, embed_dim:int = 1, num_heads:int = 8, dropout:float = 0.0):
-                """Initialize the multi-head attention layer."""
-                super(MultiHeadSelfAttentionBlock, self).__init__()
-                self.attention = nn.MultiheadAttention(
-                    embed_dim=embed_dim,
-                    num_heads=num_heads,
-                    dropout=dropout,
-                    batch_first=True
-                )
+    def __init__(self, embed_dim:int = 1, num_heads:int = 8, dropout:float = 0.0):
+        """Initialize the multi-head attention layer."""
+        super(MultiHeadSelfAttentionBlock, self).__init__()
+        self.attention = nn.MultiheadAttention(
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            dropout=dropout,
+            batch_first=True
+        )
 
-            def forward(self, x: torch.Tensor) -> torch.Tensor:
-                """
-                Forward pass through the attention layer.
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the attention layer.
 
-                Args:
-                    x: Input tensor of shape [batch, seq_len, embed_dim]
+        Args:
+            x: Input tensor of shape [batch, seq_len, embed_dim]
 
-                Returns:
-                    Output tensor after applying multi-head attention
-                """
-                # Apply self-attention (query, key, value are all the same)
-                x, _ = self.attention(x, x, x)
-                return x
+        Returns:
+            Output tensor after applying multi-head attention
+        """
+        # Apply self-attention (query, key, value are all the same)
+        x, _ = self.attention(x, x, x)
+        return x
         '''
 
     @classmethod
@@ -601,15 +601,15 @@ class ClassDefinitionGenerator():
             str: A class definition for the Pytorch module to reuse in architecture.
         """
         block_definition = f'''
-        class {group_definition['name']}(nn.Module):
-            """
-            Group Block: {group_definition['name']}
-            {group_definition.get('description', 'No description provided.')}
-            """ 
+class {group_definition['name']}(nn.Module):
+    """
+    Group Block: {group_definition['name']}
+    {group_definition.get('description', 'No description provided.')}
+    """ 
         '''
         init_method = '''
-            def __init__(self, **args):
-                super().__init__()
+    def __init__(self, **args):
+        super().__init__()
         '''
         layers = []
         for node in group_definition.get('internal_structure', {}).get('nodes', []):
@@ -621,14 +621,14 @@ class ClassDefinitionGenerator():
             init_method += f"\n        {layer_name} = {class_name}({params})"
         block_definition += init_method + "\n"
         forward_method = '''
-            def forward(self, x: torch.Tensor) -> torch.Tensor:
-                """
-                Forward pass through the group block.
-                Args:
-                    x: Input tensor
-                Returns:
-                    Output tensor after processing through the group block
-                """
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the group block.
+        Args:
+            x: Input tensor
+        Returns:
+            Output tensor after processing through the group block
+        """
         '''
         for layer in layers:
             forward_method += f"\n        x = {layer}(x)"
@@ -662,6 +662,14 @@ class ClassDefinitionGenerator():
             return cls._create_linear_class()
         elif node_type == 'batchnorm':
             return cls._create_batchnorm_class()
+        elif node_type == 'relu':
+            return cls._create_relu_class()
+        elif node_type == 'softmax':
+            return cls._create_softmax_class()
+        elif node_type == 'dropout':
+            return cls._create_dropout_class()
+        elif node_type == 'attention':
+            return cls._create_self_attention_block()
         elif node_type == 'custom':
             pass
     
@@ -687,7 +695,7 @@ class ClassDefinitionGenerator():
             'softmax': 'SoftmaxBlock',
             'dropout': 'DropoutBlock',
             'batchnorm': 'BatchNormBlock',
-            'self_attention': 'MultiHeadSelfAttentionBlock'
+            'attention': 'MultiHeadSelfAttentionBlock'
         }
         return mapping.get(node_type, 'UnknownBlock')
     
@@ -706,23 +714,24 @@ class ClassDefinitionGenerator():
             node_type = cls.get_node_type(node)
             if node_type != 'group':
                 node_types_required.add(node_type)
-        
-        for group in group_definitions or []:
+        print(group_definitions)
+        for group in group_definitions:
             cls.group_class_mapper[group['id']] = group['name']
             group_nodes = group.get('internal_structure', {}).get('nodes', [])
             for node in group_nodes:
                 node_types_required.add(cls.get_node_type(node))
 
+        print(f"Unique node types identified for class generation: {node_types_required}")
+
         class_declarations = '''
-        #==========================
-        #Layer Definitions:
-        #==========================
+#==========================
+#Layer Definitions:
+#==========================
         '''
         for n_type in node_types_required:
-
             defn = cls._create_defintion(n_type)
             class_declarations += f"\n{defn}"
-        for group in group_definitions or []:
+        for group in group_definitions:
             group_defn = cls._create_group_class(group)
             class_declarations += f"\n{group_defn}"
 
@@ -836,7 +845,7 @@ def generate_model_file(
     Returns:
         str: Complete model.py file contents
     """
-    file_header = f'''"""
+    file = f'''"""
 Generated PyTorch Model
 Architecture: {project_name}
 Generated by VisionForge
@@ -849,9 +858,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import List, Tuple, Optional
-'''
+{layer_classes}
 
-    return file_header + "\n" + layer_classes + "\n" + model_definition
+{model_definition}
+'''
+    return file
 
 
 # ============================================
