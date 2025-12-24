@@ -615,7 +615,7 @@ class {group_definition['name']}(nn.Module):
         for node in group_definition.get('internal_structure', {}).get('nodes', []):
             node_type = cls.get_node_type(node)
             class_name = cls.node_type_to_class_name(node_type)
-            layer_name = f"self.{node['id']}_{class_name}"
+            layer_name = f"self.{node['id'].replace('-','_')}_{class_name}"
             layers.append(layer_name)
             params = node.get('data', {}).get('config', {})
             init_method += f"\n        {layer_name} = {class_name}({params})"
@@ -700,6 +700,20 @@ class {group_definition['name']}(nn.Module):
         return mapping.get(node_type, 'UnknownBlock')
     
     @classmethod
+    def group_node_type_to_class_name(cls, definition_id: str) -> str:
+        """
+        Map group definition ID to corresponding class name.
+
+        Args:
+            definition_id (str): Group definition ID used in Architecture
+
+        Returns:
+            str: Corresponding class name
+        """
+        print(cls.group_class_mapper)
+        return cls.group_class_mapper.get(definition_id, 'UnknownGroupBlock')
+    
+    @classmethod
     def create_required_node_classes(cls, nodes: List[Dict[str, Any]], group_definitions: Optional[List[Dict[str, Any]]] = None) -> str:
         """
         Forward declare the required node type classes for reuse in model definition.
@@ -714,14 +728,11 @@ class {group_definition['name']}(nn.Module):
             node_type = cls.get_node_type(node)
             if node_type != 'group':
                 node_types_required.add(node_type)
-        print(group_definitions)
         for group in group_definitions:
-            cls.group_class_mapper[group['id']] = group['name']
+            cls.group_class_mapper[group['id'].replace('-','_')] = group['name']
             group_nodes = group.get('internal_structure', {}).get('nodes', [])
             for node in group_nodes:
                 node_types_required.add(cls.get_node_type(node))
-
-        print(f"Unique node types identified for class generation: {node_types_required}")
 
         class_declarations = '''
 #==========================
@@ -764,10 +775,31 @@ class LayerInitializationGenerator():
         '''
         for node in nodes:
             node_type = ClassDefinitionGenerator.get_node_type(node)
-            class_name = ClassDefinitionGenerator.node_type_to_class_name(node_type)
-            layer_name = f"self.{node['id']}_{class_name}"
-            
-            params = node.get('data', {}).get('parameters', {})
+            node_id = node['id'].replace('-', '_')
+
+            params = {}
+            if node_type in ('input', 'dataloader', 'output'):
+                continue
+            elif node_type == 'group':
+                group_type = node['data'].get('groupDefinitionId', '').replace('-', '_')
+                class_name = ClassDefinitionGenerator.group_node_type_to_class_name(group_type)
+                layer_name = f"self.{node_id}_{class_name}"
+
+                #get params
+                group_definition_id = node['data'].get('groupDefinitionId')
+                group_params = {}
+                for group_def in group_definitions:
+                    if group_def['id'] == group_definition_id:
+                        for node in group_def.get('internal_structure').get('nodes'):
+                            group_params.update(node.get('data').get('config'))
+                    params = group_params
+                    break
+
+            else:
+                # Get layer names
+                class_name = ClassDefinitionGenerator.node_type_to_class_name(node_type)
+                layer_name = f"self.{node_id}_{class_name}"
+                params = node.get('data', {}).get('config', {})
 
             layer_initializations += f"\n        {layer_name} = {class_name}({params})"
         return layer_initializations
@@ -826,8 +858,6 @@ def get_input_variable(incoming: List[str], var_map: Dict[str, str]) -> str:
 # ============================================
 
 def generate_model_file(
-    nodes: List[Dict[str, Any]],
-    edges: List[Dict[str, Any]],
     project_name: str,
     layer_classes: str,
     model_definition: str
@@ -1436,17 +1466,23 @@ class {project_name}(nn.Module):
     var_map = {}  # Maps node_id -> variable_name
 
     for node in sorted_nodes:
-        node_id = node['id']
+        node_id = node['id'].replace('-', '_')
         node_type = ClassDefinitionGenerator.get_node_type(node)
+
+        print(f"Processing node: {node_id} of type {node_type}")
 
         # Skip input/output nodes
         if node_type in ('input', 'dataloader', 'output'):
             var_map[node_id] = 'x'
             continue
-
-        # Get layer names
-        class_name = ClassDefinitionGenerator.node_type_to_class_name(node_type)
-        layer_name = f"self.{node_id}_{class_name}"
+        elif node_type == 'group':
+            group_type = node['data'].get('groupDefinitionId', '').replace('-', '_')
+            class_name = ClassDefinitionGenerator.group_node_type_to_class_name(group_type)
+            layer_name = f"self.{node_id}_{class_name}"
+        else:
+            # Get layer names
+            class_name = ClassDefinitionGenerator.node_type_to_class_name(node_type)
+            layer_name = f"self.{node_id}_{class_name}"
 
         # Determine input variable(s)
         incoming = edge_map.get(node_id, [])
@@ -1461,8 +1497,6 @@ class {project_name}(nn.Module):
 
     # Generate all file components
     model_code = generate_model_file(
-        nodes=nodes,
-        edges=edges,
         project_name=project_name,
         layer_classes=layer_classes,
         model_definition=model_definition
