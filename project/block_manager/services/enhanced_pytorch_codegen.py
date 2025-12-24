@@ -1058,9 +1058,6 @@ def generate_training_script(
     # Analyze architecture to determine task type
     has_softmax = any(ClassDefinitionGenerator.get_node_type(n) == 'softmax' for n in nodes)
 
-    # Count total layers for complexity estimation
-    layer_count = sum(1 for n in nodes if ClassDefinitionGenerator.get_node_type(n) not in ('input', 'output', 'dataloader'))
-
     # Determine appropriate loss function and metrics based on output layer
     if has_softmax:
         loss_function = "nn.CrossEntropyLoss()"
