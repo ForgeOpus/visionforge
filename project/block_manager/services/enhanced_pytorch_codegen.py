@@ -1465,7 +1465,9 @@ def generate_config_file(
             shape = json.loads(shape_str) if isinstance(shape_str, str) else shape_str
             if isinstance(shape, list):
                 input_shape = shape
-        except:
+        except (ValueError, TypeError):
+            # If the shape string is invalid JSON or of an unexpected type,
+            # fall back to the default input_shape defined above.
             pass
 
     # Count layers to estimate model complexity
