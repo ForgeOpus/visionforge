@@ -52,9 +52,8 @@ type ModelType =
   // Affordable PAID OpenRouter models
   | 'llama-3.1-405b'
   | 'deepseek-v3'
-  | 'deepseek-coder-v2'
   | 'qwen-2.5-72b'
-  | 'mistral-large-2'
+  | 'mistral-large-3'
 
 export default function UniversalApiKeyModal({ open, onOpenChange, required = false }: UniversalApiKeyModalProps) {
   const {
@@ -234,11 +233,10 @@ export default function UniversalApiKeyModal({ open, onOpenChange, required = fa
     ],
     // Affordable OpenRouter models (PAID but cheap)
     affordable: [
-      { id: 'deepseek-v3', label: 'DeepSeek V3', desc: 'Latest flagship ($0.27/M)', free: false },
-      { id: 'deepseek-coder-v2', label: 'DeepSeek Coder V2', desc: 'Coding optimized ($0.27/M)', free: false },
-      { id: 'mistral-large-2', label: 'Mistral Large 2', desc: 'Mistral flagship ($2/M)', free: false },
-      { id: 'llama-3.1-405b', label: 'Llama 3.1 405B', desc: 'Powerful 405B ($2.70/M)', free: false },
-      { id: 'qwen-2.5-72b', label: 'Qwen 2.5 72B', desc: 'Chinese model - affordable', free: false },
+      { id: 'deepseek-v3', label: 'DeepSeek V3', desc: 'Latest flagship ($0.30/M)', free: false },
+      { id: 'mistral-large-3', label: 'Mistral Large 3', desc: 'Mistral flagship 2512', free: false },
+      { id: 'llama-3.1-405b', label: 'Llama 3.1 405B', desc: 'Powerful 405B ($3.50/M)', free: false },
+      { id: 'qwen-2.5-72b', label: 'Qwen 2.5 72B', desc: 'Chinese model ($0.12/M)', free: false },
     ]
   }
 
@@ -249,8 +247,8 @@ export default function UniversalApiKeyModal({ open, onOpenChange, required = fa
       return [
         // TRULY FREE MODELS (11 total - VERIFIED WORKING, 404 errors removed)
         ...allModels.free,        // Free (11 models)
-        // AFFORDABLE PAID MODELS (5 total)
-        ...allModels.affordable,  // Affordable (5 models)
+        // AFFORDABLE PAID MODELS (4 total)
+        ...allModels.affordable,  // Affordable (4 models)
         // PAID GEMINI MODELS (2 total - free on Google AI)
         ...allModels.gemini,      // Paid on OpenRouter (2 models)
         // FLAGSHIP PAID MODELS (8 total)
@@ -266,8 +264,8 @@ export default function UniversalApiKeyModal({ open, onOpenChange, required = fa
       return [
         // TRULY FREE MODELS (11 total - VERIFIED WORKING, 404 errors removed)
         ...allModels.free,        // Free (11 models)
-        // AFFORDABLE PAID MODELS (5 total)
-        ...allModels.affordable,  // Affordable (5 models)
+        // AFFORDABLE PAID MODELS (4 total)
+        ...allModels.affordable,  // Affordable (4 models)
         // PAID GEMINI MODELS (2 total)
         ...allModels.gemini,      // Paid on OpenRouter (2 models)
         // FLAGSHIP PAID MODELS (8 total)

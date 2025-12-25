@@ -32,11 +32,11 @@ class APIKeyDetector:
             name='openrouter',
             display_name='OpenRouter',
             key_prefix='sk-or-v1-',
-            models_count=28,
+            models_count=25,
             is_free_tier=True,  # Has 11 truly free models (VERIFIED WORKING - 404 errors removed)
             models=[
-                # Flagship models via OpenRouter (10 models - all PAID)
-                'gemini-3-flash', 'gemini-3-pro', 'gemini-2.5-flash', 'gemini-2.5-pro',
+                # Flagship models via OpenRouter (8 models - all PAID)
+                'gemini-3-pro', 'gemini-2.5-pro',
                 'gpt-5.2', 'gpt-4o', 'gpt-4o-mini',
                 'claude-opus-4.5', 'claude-sonnet-4.5', 'claude-haiku-4.5',
                 # Truly FREE OpenRouter models (11 models - VERIFIED WORKING)
@@ -45,11 +45,11 @@ class APIKeyDetector:
                 'mistral-nemo',
                 'deepseek-chat-v3', 'deepseek-chat-v3.1', 'deepseek-v3.2',
                 'nemotron-nano-30b',
-                # Affordable PAID models (7 models)
+                # Affordable PAID models (6 models)
                 'llama-3.1-405b',
-                'deepseek-v3', 'deepseek-coder-v2',
+                'deepseek-v3',
                 'claude-3.5-sonnet', 'claude-3.5-haiku',
-                'qwen-2.5-72b', 'mistral-large-2'
+                'qwen-2.5-72b', 'mistral-large-3'
             ]
         ),
         'google': ProviderInfo(

@@ -6,10 +6,9 @@ Supports both OpenRouter (unified) and direct provider APIs.
 # Gemini model mapping for OpenRouter (frontend name -> OpenRouter identifier)
 # Latest models as of December 2025 - PAID on OpenRouter (Free on direct Google AI API)
 # Reference: https://openrouter.ai/google
+# NOTE: gemini-3-flash and gemini-2.5-flash are in FREE models list (verified working)
 GEMINI_MODELS = {
-    'gemini-3-flash': 'google/gemini-3-flash-preview',  # Newest - Dec 17, 2025 ($0.50/M input)
-    'gemini-3-pro': 'google/gemini-3-pro-preview',  # Nov 18, 2025 - multimodal ($2/M input)
-    'gemini-2.5-flash': 'google/gemini-2.5-flash',  # Most affordable ($0.30/M input)
+    'gemini-3-pro': 'google/gemini-3-pro-preview-20251117',  # Nov 18, 2025 - multimodal ($2/M input)
     'gemini-2.5-pro': 'google/gemini-2.5-pro',  # Advanced thinking ($1.25/M input)
 }
 
@@ -80,19 +79,18 @@ OPENROUTER_FREE_MODELS = {
 # Reference: https://openrouter.ai/pricing
 OPENROUTER_PAID_MODELS = {
     # Affordable Llama models (paid versions)
-    'llama-3.1-405b': 'meta-llama/llama-3.1-405b-instruct',  # $2.70/M - powerful 405B
+    'llama-3.1-405b': 'meta-llama/llama-3.1-405b-instruct',  # $3.50/M - powerful 405B
 
     # Affordable DeepSeek models (paid versions - not on free list)
-    'deepseek-v3': 'deepseek/deepseek-v3',  # $0.27/M - latest flagship
-    'deepseek-coder-v2': 'deepseek/deepseek-coder-v2',  # $0.27/M - coding optimized
+    'deepseek-v3': 'deepseek/deepseek-chat',  # $0.30/M - latest flagship (DeepSeek V3)
 
     # Older Claude (still very good, cheaper than 4.5)
     'claude-3.5-sonnet': 'anthropic/claude-3.5-sonnet',  # $3/M - very capable
     'claude-3.5-haiku': 'anthropic/claude-3.5-haiku',  # $0.80/M - cheapest Claude
 
     # Alternative affordable providers
-    'qwen-2.5-72b': 'qwen/qwen-2.5-72b-instruct',  # Chinese model - affordable
-    'mistral-large-2': 'mistralai/mistral-large-2',  # $2/M - Mistral flagship
+    'qwen-2.5-72b': 'qwen/qwen-2.5-72b-instruct',  # $0.12/M - Chinese model, affordable
+    'mistral-large-3': 'mistralai/mistral-large-2512',  # Mistral Large 3 2512 - latest flagship
 }
 
 # Combined model mapping (for OpenRouter)
