@@ -22,43 +22,56 @@ def track_export(func: Callable) -> Callable:
     - export.success (counter)
     - export.failure (counter with error_type label)
     - export.duration (histogram)
+
+    Telemetry failures are silent and never block the decorated function.
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
-        metrics = get_metrics()
+        # Initialize telemetry variables
+        metrics = None
         start_time = time.time()
-
-        # Extract format from request if available
-        request = args[0] if args else None
         export_format = "unknown"
-        if request and hasattr(request, 'data'):
-            export_format = request.data.get('format', 'unknown')
 
-        # Track request
-        metrics.export_request_count.add(1, {"format": export_format})
+        # Attempt to get metrics and track request (silent failure)
+        try:
+            metrics = get_metrics()
+            request = args[0] if args else None
+            if request and hasattr(request, 'data'):
+                export_format = request.data.get('format', 'unknown')
+            metrics.export_request_count.add(1, {"format": export_format})
+        except Exception:
+            pass  # Silent failure - telemetry unavailable
 
+        # Execute the actual function
         try:
             result = func(*args, **kwargs)
-            duration = time.time() - start_time
 
-            # Track success
-            metrics.export_success_count.add(1, {"format": export_format})
-            metrics.export_duration.record(duration, {"format": export_format, "status": "success"})
+            # Track success (silent failure)
+            if metrics:
+                try:
+                    duration = time.time() - start_time
+                    metrics.export_success_count.add(1, {"format": export_format})
+                    metrics.export_duration.record(duration, {"format": export_format, "status": "success"})
+                except Exception:
+                    pass  # Silent failure
 
             return result
 
         except Exception as e:
-            duration = time.time() - start_time
+            # Track failure (silent failure)
+            if metrics:
+                try:
+                    duration = time.time() - start_time
+                    error_type = type(e).__name__
+                    metrics.export_failure_count.add(1, {
+                        "format": export_format,
+                        "error_type": error_type,
+                    })
+                    metrics.export_duration.record(duration, {"format": export_format, "status": "failure"})
+                except Exception:
+                    pass  # Silent failure
 
-            # Track failure with error type
-            error_type = type(e).__name__
-            metrics.export_failure_count.add(1, {
-                "format": export_format,
-                "error_type": error_type,
-            })
-            metrics.export_duration.record(duration, {"format": export_format, "status": "failure"})
-
-            # Re-raise the exception
+            # Re-raise the original exception
             raise
 
     return wrapper
@@ -72,41 +85,56 @@ def track_validation(func: Callable) -> Callable:
     - validation.request (counter)
     - validation.error (counter with error_code label)
     - validation.duration (histogram)
+
+    Telemetry failures are silent and never block the decorated function.
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
-        metrics = get_metrics()
+        metrics = None
         start_time = time.time()
 
-        # Track request
-        metrics.validation_request_count.add(1, {})
+        # Attempt to get metrics and track request (silent failure)
+        try:
+            metrics = get_metrics()
+            metrics.validation_request_count.add(1, {})
+        except Exception:
+            pass  # Silent failure
 
+        # Execute the actual function
         try:
             result = func(*args, **kwargs)
-            duration = time.time() - start_time
 
-            # Track validation errors from result
-            # Handle both dict results and Response objects
-            result_data = result
-            if hasattr(result, 'data'):
-                result_data = result.data
+            # Track validation errors (silent failure)
+            if metrics:
+                try:
+                    duration = time.time() - start_time
+                    result_data = result
+                    if hasattr(result, 'data'):
+                        result_data = result.data
 
-            if isinstance(result_data, dict):
-                errors = result_data.get('errors', [])
-                for error in errors:
-                    error_code = error.get('type', 'unknown')
-                    metrics.validation_error_count.add(1, {"error_code": error_code})
+                    if isinstance(result_data, dict):
+                        errors = result_data.get('errors', [])
+                        for error in errors:
+                            error_code = error.get('type', 'unknown')
+                            metrics.validation_error_count.add(1, {"error_code": error_code})
 
-                has_errors = len(errors) > 0
-                metrics.validation_duration.record(duration, {"has_errors": str(has_errors).lower()})
-            else:
-                metrics.validation_duration.record(duration, {"has_errors": "unknown"})
+                        has_errors = len(errors) > 0
+                        metrics.validation_duration.record(duration, {"has_errors": str(has_errors).lower()})
+                    else:
+                        metrics.validation_duration.record(duration, {"has_errors": "unknown"})
+                except Exception:
+                    pass  # Silent failure
 
             return result
 
         except Exception as e:
-            duration = time.time() - start_time
-            metrics.validation_duration.record(duration, {"has_errors": "true"})
+            # Track exception (silent failure)
+            if metrics:
+                try:
+                    duration = time.time() - start_time
+                    metrics.validation_duration.record(duration, {"has_errors": "true"})
+                except Exception:
+                    pass  # Silent failure
             raise
 
     return wrapper
@@ -125,46 +153,57 @@ def track_ai_request(provider: str, operation: str):
     - ai.request.duration (histogram)
     - ai.error (counter with error_class label)
     - ai.tokens.used (counter, if available)
+
+    Telemetry failures are silent and never block the decorated function.
     """
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
-            metrics = get_metrics()
+            metrics = None
             start_time = time.time()
-
             labels = {
                 "provider": provider,
                 "operation": operation,
             }
 
-            # Track request
-            metrics.ai_request_count.add(1, labels)
+            # Attempt to get metrics and track request (silent failure)
+            try:
+                metrics = get_metrics()
+                metrics.ai_request_count.add(1, labels)
+            except Exception:
+                pass  # Silent failure
 
+            # Execute the actual function
             try:
                 result = func(*args, **kwargs)
-                duration = time.time() - start_time
 
-                # Track duration
-                metrics.ai_request_duration.record(duration, {**labels, "status": "success"})
+                # Track success metrics (silent failure)
+                if metrics:
+                    try:
+                        duration = time.time() - start_time
+                        metrics.ai_request_duration.record(duration, {**labels, "status": "success"})
 
-                # Track token usage if available in result
-                if isinstance(result, dict) and 'usage_metadata' in result:
-                    usage = result['usage_metadata']
-                    total_tokens = usage.get('total_token_count', 0)
-                    if total_tokens > 0:
-                        metrics.ai_tokens_used.add(total_tokens, labels)
+                        # Track token usage if available
+                        if isinstance(result, dict) and 'usage_metadata' in result:
+                            usage = result['usage_metadata']
+                            total_tokens = usage.get('total_token_count', 0)
+                            if total_tokens > 0:
+                                metrics.ai_tokens_used.add(total_tokens, labels)
+                    except Exception:
+                        pass  # Silent failure
 
                 return result
 
             except Exception as e:
-                duration = time.time() - start_time
-
-                # Classify error
-                error_class = _classify_ai_error(e)
-
-                # Track error
-                metrics.ai_error_count.add(1, {**labels, "error_class": error_class})
-                metrics.ai_request_duration.record(duration, {**labels, "status": "error"})
+                # Track error metrics (silent failure)
+                if metrics:
+                    try:
+                        duration = time.time() - start_time
+                        error_class = _classify_ai_error(e)
+                        metrics.ai_error_count.add(1, {**labels, "error_class": error_class})
+                        metrics.ai_request_duration.record(duration, {**labels, "status": "error"})
+                    except Exception:
+                        pass  # Silent failure
 
                 raise
 

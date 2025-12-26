@@ -3,6 +3,7 @@
  *
  * Provides metrics collection for user interactions and application behavior.
  * Exports metrics to OTLP HTTP endpoint (backend or collector).
+ * Failures are silent and never visible to users.
  */
 
 import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
@@ -18,13 +19,14 @@ let meter: Meter | null = null;
  * Initialize OpenTelemetry metrics for the frontend.
  *
  * @param endpoint - OTLP HTTP endpoint (e.g., 'http://localhost:4318/v1/metrics')
+ *
+ * Silent failure - never throws or logs to console.
  */
 export function initializeTelemetry(
   endpoint: string = import.meta.env.VITE_OTEL_ENDPOINT || 'http://localhost:4318/v1/metrics'
 ): void {
   if (meterProvider) {
-    console.warn('Telemetry already initialized');
-    return;
+    return; // Already initialized
   }
 
   try {
@@ -58,19 +60,19 @@ export function initializeTelemetry(
 
     metrics.setGlobalMeterProvider(meterProvider);
     meter = metrics.getMeter('visionforge-frontend', '1.0.0');
-
-    console.log('OpenTelemetry metrics initialized:', endpoint);
   } catch (error) {
-    console.error('Failed to initialize telemetry:', error);
+    // Silent failure - telemetry unavailable
   }
 }
 
 /**
  * Get the global meter instance.
+ *
+ * @throws Error if telemetry not initialized (caught by callers)
  */
 export function getMeter(): Meter {
   if (!meter) {
-    throw new Error('Telemetry not initialized. Call initializeTelemetry() first.');
+    throw new Error('Telemetry not initialized');
   }
   return meter;
 }

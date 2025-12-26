@@ -2,19 +2,16 @@
 Django middleware for OpenTelemetry metrics collection.
 
 Automatically tracks HTTP request metrics for all endpoints.
+Telemetry failures are silent and never block requests.
 """
 
 import time
-import logging
 from typing import Callable
 
 from django.http import HttpRequest, HttpResponse
 from django.urls import resolve, Resolver404
 
 from .metrics import get_metrics
-
-
-logger = logging.getLogger(__name__)
 
 
 class MetricsMiddleware:
@@ -24,6 +21,8 @@ class MetricsMiddleware:
     Tracks:
     - Request duration by route and status code
     - Request count by method, route, and status
+
+    Silently degrades if telemetry is unavailable - never blocks requests.
     """
 
     def __init__(self, get_response: Callable):
@@ -35,31 +34,22 @@ class MetricsMiddleware:
         # Get the response
         response = self.get_response(request)
 
-        # Calculate duration
-        duration = time.time() - start_time
-
-        # Extract route pattern
-        route = self._get_route_pattern(request)
-
-        # Record metrics
+        # Record metrics (silent failure - never blocks)
         try:
+            duration = time.time() - start_time
+            route = self._get_route_pattern(request)
             metrics = get_metrics()
 
-            # Labels for metrics (low cardinality)
             labels = {
                 "method": request.method,
                 "route": route,
                 "status": str(response.status_code),
             }
 
-            # Record duration histogram
             metrics.http_request_duration.record(duration, labels)
-
-            # Increment request counter
             metrics.http_request_count.add(1, labels)
-
-        except Exception as e:
-            logger.error(f"Failed to record HTTP metrics: {e}")
+        except Exception:
+            pass  # Silent failure - telemetry unavailable
 
         return response
 

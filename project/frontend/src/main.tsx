@@ -14,13 +14,13 @@ import "./main.css"
 import "./styles/theme.css"
 import "./index.css"
 
-// Initialize OpenTelemetry
+// Initialize OpenTelemetry (silent failure - never blocks app)
 try {
   initializeTelemetry();
   const meter = getMeter();
   initializeMetrics(meter);
 } catch (error) {
-  console.error('Failed to initialize telemetry:', error);
+  // Silent failure - telemetry unavailable but app continues
 }
 
 createRoot(document.getElementById('root')!).render(
