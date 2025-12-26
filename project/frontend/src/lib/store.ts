@@ -4,13 +4,14 @@ import { BlockData, Project, ValidationError, TensorShape, BlockType, GroupBlock
 import { getNodeDefinition, BackendFramework } from './nodes/registry'
 import { arePortsCompatible } from './nodes/ports'
 import { computeGroupBlockShapes, validateGroupBlockShapes } from './groupBlockShapeInference'
-import { 
-  createIdMapping, 
-  rewireEdgesForExpansion, 
-  rewireEdgesForCollapse, 
-  createContainerNode 
+import {
+  createIdMapping,
+  rewireEdgesForExpansion,
+  rewireEdgesForCollapse,
+  createContainerNode
 } from './groupBlockHelpers'
 import { toast } from 'sonner'
+import { trackLayerAdded, trackLayerRemoved, trackNodeConnected, trackParameterEdit } from './storeInstrumentation'
 
 interface HistoryState {
   nodes: Node<BlockData>[]
@@ -132,6 +133,9 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     // Track recently used node
     get().trackRecentlyUsedNode(node.data.blockType as BlockType)
 
+    // Track layer added metric
+    trackLayerAdded(node.data.blockType as BlockType)
+
     // Add node to canvas (project will be created on save)
     set((state) => ({
       nodes: [...state.nodes, node],
@@ -142,21 +146,36 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
   updateNode: (id, data) => {
     const state = get()
     const historyUpdate = saveHistory(state)
-    
+
+    // Track parameter edit (sampled)
+    const node = state.nodes.find(n => n.id === id)
+    if (node && data.config) {
+      const paramName = Object.keys(data.config)[0]
+      if (paramName) {
+        trackParameterEdit(node.data.blockType as BlockType, paramName)
+      }
+    }
+
     set((state) => ({
       nodes: state.nodes.map((node) =>
         node.id === id ? { ...node, data: { ...node.data, ...data } } : node
       ),
       ...historyUpdate
     }))
-    
+
     get().inferDimensions()
   },
 
   removeNode: (id) => {
     const state = get()
     const historyUpdate = saveHistory(state)
-    
+
+    // Track layer removed metric
+    const node = state.nodes.find(n => n.id === id)
+    if (node) {
+      trackLayerRemoved(node.data.blockType as BlockType)
+    }
+
     set((state) => ({
       nodes: state.nodes.filter((node) => node.id !== id),
       edges: state.edges.filter((edge) => edge.source !== id && edge.target !== id),
@@ -168,15 +187,23 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
   addEdge: (edge) => {
     const state = get()
     const historyUpdate = saveHistory(state)
-    
+
     set((state) => ({
       edges: [...state.edges, edge],
       ...historyUpdate
     }))
-    
+
     const { nodes, edges } = get()
     const targetNode = nodes.find((n) => n.id === edge.target)
     const sourceNode = nodes.find((n) => n.id === edge.source)
+
+    // Track node connection metric
+    if (sourceNode && targetNode) {
+      trackNodeConnected(
+        sourceNode.data.blockType as BlockType,
+        targetNode.data.blockType as BlockType
+      )
+    }
     
     if (targetNode && sourceNode?.data.outputShape) {
       const targetNodeDef = getNodeDefinition(

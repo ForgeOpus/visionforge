@@ -5,6 +5,15 @@
 
 import type { NodeSpec, NodeDefinitionsResponse, RenderCodeResponse } from './nodeSpec.types'
 import { getAuthHeaders } from './auth'
+import {
+  trackExportClick,
+  trackExportSuccess,
+  trackExportFailure,
+  trackAIQuerySent,
+  trackAIQuerySuccess,
+  trackAIQueryFailure,
+  classifyError,
+} from './apiInstrumentation'
 
 // API configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
@@ -111,6 +120,11 @@ export async function sendChatMessage(
   response: string
   modifications?: any[]
 }>> {
+  const startTime = performance.now();
+
+  // Track AI query sent
+  trackAIQuerySent();
+
   // If there's a file, use FormData
   if (file) {
     const formData = new FormData()
@@ -128,20 +142,27 @@ export async function sendChatMessage(
       })
 
       const data = await response.json()
+      const durationSeconds = (performance.now() - startTime) / 1000;
 
       if (!response.ok) {
+        const errorType = classifyError(data.error || data.message);
+        trackAIQueryFailure(durationSeconds, errorType);
         return {
           success: false,
           error: data.error || data.message || 'An error occurred',
         }
       }
 
+      trackAIQuerySuccess(durationSeconds);
       return {
         success: true,
         data,
       }
     } catch (error) {
       console.error('API Error:', error)
+      const durationSeconds = (performance.now() - startTime) / 1000;
+      const errorType = classifyError(error);
+      trackAIQueryFailure(durationSeconds, errorType);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Network error occurred',
@@ -150,15 +171,33 @@ export async function sendChatMessage(
   }
 
   // No file - use regular JSON
-  return apiFetch('/chat', {
-    method: 'POST',
-    body: JSON.stringify({
-      message,
-      history: history || [],
-      modificationMode: modificationMode || false,
-      workflowState: workflowState || null
-    }),
-  }, apiKeys)
+  try {
+    const result = await apiFetch('/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        message,
+        history: history || [],
+        modificationMode: modificationMode || false,
+        workflowState: workflowState || null
+      }),
+    }, apiKeys)
+
+    const durationSeconds = (performance.now() - startTime) / 1000;
+
+    if (result.success) {
+      trackAIQuerySuccess(durationSeconds);
+    } else {
+      const errorType = classifyError(result.error);
+      trackAIQueryFailure(durationSeconds, errorType);
+    }
+
+    return result;
+  } catch (error) {
+    const durationSeconds = (performance.now() - startTime) / 1000;
+    const errorType = classifyError(error);
+    trackAIQueryFailure(durationSeconds, errorType);
+    throw error;
+  }
 }
 
 /**
@@ -183,17 +222,42 @@ export async function exportModel(modelData: {
   zip: string  // Base64 encoded zip file
   filename: string
 }>> {
-  // Get auth headers for Firebase authentication
-  const authHeaders = await getAuthHeaders()
+  const startTime = performance.now();
+  const format = modelData.format;
 
-  return apiFetch('/export', {
-    method: 'POST',
-    headers: authHeaders,
-    body: JSON.stringify({
-      ...modelData,
-      groupDefinitions: modelData.groupDefinitions || []
-    }),
-  })
+  // Track export button click
+  trackExportClick(format);
+
+  try {
+    // Get auth headers for Firebase authentication
+    const authHeaders = await getAuthHeaders()
+
+    const result = await apiFetch('/export', {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({
+        ...modelData,
+        groupDefinitions: modelData.groupDefinitions || []
+      }),
+    })
+
+    const durationSeconds = (performance.now() - startTime) / 1000;
+
+    // Track export success/failure
+    if (result.success) {
+      trackExportSuccess(format, durationSeconds);
+    } else {
+      const errorType = classifyError(result.error);
+      trackExportFailure(format, durationSeconds, errorType);
+    }
+
+    return result;
+  } catch (error) {
+    const durationSeconds = (performance.now() - startTime) / 1000;
+    const errorType = classifyError(error);
+    trackExportFailure(format, durationSeconds, errorType);
+    throw error;
+  }
 }
 
 /**

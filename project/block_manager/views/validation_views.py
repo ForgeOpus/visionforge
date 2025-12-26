@@ -6,9 +6,11 @@ import traceback
 from block_manager.serializers import SaveArchitectureSerializer
 from block_manager.services.validation import validate_architecture
 from block_manager.services.inference import infer_dimensions
+from observability.decorators import track_validation
 
 
 @api_view(['POST'])
+@track_validation
 def validate_model(request):
     """
     Validate model architecture
@@ -16,7 +18,7 @@ def validate_model(request):
     """
     try:
         serializer = SaveArchitectureSerializer(data=request.data)
-        
+
         if not serializer.is_valid():
             return Response(
                 {
@@ -25,11 +27,11 @@ def validate_model(request):
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         nodes = serializer.validated_data['nodes']
         edges = serializer.validated_data['edges']
-        
-        # Use validation service
+
+        # Use validation service with metrics
         result = validate_architecture(nodes, edges)
         
         # Add dimension inference

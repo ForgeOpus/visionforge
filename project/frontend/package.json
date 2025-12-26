@@ -82,7 +82,12 @@
         "tw-animate-css": "^1.2.4",
         "uuid": "^11.1.0",
         "vaul": "^1.1.2",
-        "zod": "^3.25.76"
+        "zod": "^3.25.76",
+        "@opentelemetry/api": "^1.9.0",
+        "@opentelemetry/sdk-metrics": "^1.28.0",
+        "@opentelemetry/exporter-metrics-otlp-http": "^0.57.0",
+        "@opentelemetry/resources": "^1.28.0",
+        "@opentelemetry/semantic-conventions": "^1.28.0"
     },
     "devDependencies": {
         "@eslint/js": "^9.21.0",

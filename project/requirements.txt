@@ -33,3 +33,11 @@ django-ratelimit>=4.1.0
 
 # Production WSGI Server
 gunicorn>=21.2.0
+
+# Observability & Metrics
+opentelemetry-api>=1.21.0
+opentelemetry-sdk>=1.21.0
+opentelemetry-instrumentation-django>=0.42b0
+opentelemetry-instrumentation-requests>=0.42b0
+opentelemetry-exporter-prometheus>=0.42b0
+opentelemetry-exporter-otlp>=1.21.0

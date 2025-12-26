@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'block_manager',
     'authentication',
+    'observability',
 ]
 
 MIDDLEWARE = [
@@ -83,6 +84,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'authentication.middleware.FirebaseAuthenticationMiddleware',
+    'observability.middleware.MetricsMiddleware',
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -295,3 +297,20 @@ WHITENOISE_ROOT = BASE_DIR / 'frontend' / 'dist' / 'root'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ==========================================
+# OBSERVABILITY & METRICS CONFIGURATION
+# ==========================================
+
+# OpenTelemetry Configuration
+OTEL_SERVICE_NAME = os.getenv('OTEL_SERVICE_NAME', 'visionforge-backend')
+OTEL_SERVICE_VERSION = os.getenv('OTEL_SERVICE_VERSION', '1.0.0')
+
+# Enable Prometheus exporter (default: True)
+OTEL_ENABLE_PROMETHEUS = os.getenv('OTEL_ENABLE_PROMETHEUS', 'True') == 'True'
+
+# Enable OTLP exporter (default: False, enable for production)
+OTEL_ENABLE_OTLP = os.getenv('OTEL_ENABLE_OTLP', 'False') == 'True'
+
+# OTLP collector endpoint (e.g., 'localhost:4317')
+OTEL_EXPORTER_OTLP_ENDPOINT = os.getenv('OTEL_EXPORTER_OTLP_ENDPOINT', None)

@@ -8,6 +8,7 @@ import tempfile
 from typing import List, Dict, Any, Optional
 from django.conf import settings
 from django.core.files.uploadedfile import UploadedFile
+from observability.decorators import track_ai_request
 
 
 class GeminiChatService:
@@ -342,6 +343,7 @@ You cannot modify the workflow in this mode. If users want to make changes, sugg
 
         return formatted_history
 
+    @track_ai_request(provider="gemini", operation="file_upload")
     def upload_file_to_gemini(self, uploaded_file: UploadedFile) -> Optional[Any]:
         """
         Upload a file to Gemini's File API.
@@ -377,6 +379,7 @@ You cannot modify the workflow in this mode. If users want to make changes, sugg
                     pass
             return None
 
+    @track_ai_request(provider="gemini", operation="file_analysis")
     def analyze_file_for_architecture(
         self,
         gemini_file: Any,
@@ -469,6 +472,7 @@ Provide each node as a separate JSON block with appropriate configurations using
                 'modifications': None
             }
 
+    @track_ai_request(provider="gemini", operation="chat")
     def chat(
         self,
         message: str,
@@ -558,6 +562,7 @@ Provide each node as a separate JSON block with appropriate configurations using
         except Exception:
             return None
 
+    @track_ai_request(provider="gemini", operation="suggestions")
     def generate_suggestions(
         self,
         workflow_state: Dict[str, Any]

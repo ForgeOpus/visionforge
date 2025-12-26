@@ -7,6 +7,7 @@ import { useModelBuilderStore } from './lib/store'
 import { fetchProject, loadArchitecture, convertToFrontendProject } from './lib/projectApi'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { useAuth } from './contexts/AuthContext'
+import { useSessionTracking, useCanvasTimeTracking } from './hooks/useSessionTracking'
 
 // Lazy load heavy components for better performance
 const Canvas = lazy(() => import('./components/Canvas'))
@@ -34,6 +35,9 @@ function ProjectCanvas() {
   const [draggedType, setDraggedType] = useState<string | null>(null)
   const { selectedNodeId } = useModelBuilderStore()
   const addNodeFromPaletteRef = useRef<((blockType: string) => void) | null>(null)
+
+  // Track canvas time
+  useCanvasTimeTracking()
 
   // Load project from URL parameter
   useEffect(() => {
@@ -149,6 +153,9 @@ function ProjectCanvas() {
 }
 
 function App() {
+  // Track user session metrics
+  useSessionTracking();
+
   return (
     <Suspense fallback={<LoadingSpinner />}>
       <Routes>
