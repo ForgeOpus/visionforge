@@ -1,4 +1,5 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 import logging
@@ -8,9 +9,17 @@ from block_manager.services.ai_service_factory import AIServiceFactory
 
 logger = logging.getLogger(__name__)
 
+ALLOWED_FILE_TYPES = [
+    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+    'application/pdf',
+    'text/plain', 'text/csv',
+]
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
 
 @api_view(['POST'])
-@ratelimit(key='user_or_ip', rate='20/m', method='POST', block=True)
+@permission_classes([AllowAny])
+@ratelimit(key='user_or_ip', rate='10/m', method='POST', block=True)
 def chat_message(request):
     """
     Handle chat messages with AI integration supporting both BYOK and server-side keys.
@@ -55,6 +64,28 @@ def chat_message(request):
     uploaded_file = request.FILES.get('file', None)
 
     if uploaded_file:
+        # Validate file type
+        if uploaded_file.content_type not in ALLOWED_FILE_TYPES:
+            return Response(
+                {
+                    'error': 'Invalid file type',
+                    'response': f'Only the following file types are allowed: {", ".join(ALLOWED_FILE_TYPES)}'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate file size
+        if uploaded_file.size > MAX_FILE_SIZE:
+            return Response(
+                {
+                    'error': 'File too large',
+                    'response': f'Maximum file size is {MAX_FILE_SIZE / (1024 * 1024)}MB'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        logger.info(f"File upload validation passed: {uploaded_file.name} ({uploaded_file.content_type}, {uploaded_file.size} bytes)")
+
         # Parse FormData parameters
         message = request.POST.get('message', '')
         try:
@@ -161,19 +192,19 @@ def chat_message(request):
             )
 
     except Exception as e:
-        # Other errors
         logger.error(f"Error in chat_message: {e}", exc_info=True)
-        return Response(
-            {
-                'error': str(e),
-                'response': 'An error occurred while processing your message. Please try again.'
-            },
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        response = {
+            'error': 'Server error',
+            'response': 'An error occurred while processing your message. Please try again.'
+        }
+        if settings.DEBUG:
+            response['traceback'] = str(e)
+        return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
-@ratelimit(key='user_or_ip', rate='15/m', method='POST', block=True)
+@permission_classes([AllowAny])
+@ratelimit(key='user_or_ip', rate='10/m', method='POST', block=True)
 def get_suggestions(request):
     """
     Get model architecture suggestions based on current workflow.
@@ -249,6 +280,7 @@ def get_suggestions(request):
 
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def get_environment_info(request):
     """
     Get environment configuration information.
