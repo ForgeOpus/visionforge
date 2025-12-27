@@ -1,7 +1,7 @@
 """PyTorch MaxPool2D Node Definition"""
 
 from typing import Dict, List, Optional, Any
-from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework
+from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework, LayerCodeSpec
 
 
 class MaxPool2DNode(NodeDefinition):
@@ -98,4 +98,40 @@ class MaxPool2DNode(NodeDefinition):
             source_output_shape,
             4,
             "[batch, channels, height, width]"
+        )
+
+    def get_pytorch_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """Generate PyTorch code specification for MaxPool2D layer"""
+        kernel_size = config.get('kernel_size', 2)
+        stride = config.get('stride', 2)
+        padding = config.get('padding', 0)
+
+        sanitized_id = node_id.replace('-', '_')
+        class_name = 'MaxPoolBlock'
+        layer_var = f'{sanitized_id}_MaxPoolBlock'
+
+        return LayerCodeSpec(
+            class_name=class_name,
+            layer_variable_name=layer_var,
+            node_type='maxpool',
+            node_id=node_id,
+            init_params={
+                'kernel_size': kernel_size,
+                'stride': stride,
+                'padding': padding
+            },
+            config_params=config,
+            input_shape_info={'dims': input_shape.dims if input_shape else []},
+            output_shape_info={'dims': output_shape.dims if output_shape else []},
+            template_context={
+                'kernel_size': kernel_size,
+                'stride': stride,
+                'padding': padding
+            }
         )
