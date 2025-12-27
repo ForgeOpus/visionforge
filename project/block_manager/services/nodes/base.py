@@ -6,12 +6,34 @@ Provides abstract interfaces and shared functionality for all node types.
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any, Tuple
 from enum import Enum
+from dataclasses import dataclass, field
 
 
 class Framework(str, Enum):
     """Supported backend frameworks"""
     PYTORCH = "pytorch"
     TENSORFLOW = "tensorflow"
+
+
+@dataclass
+class LayerCodeSpec:
+    """
+    Structured specification for generating layer code.
+    Contains all information needed to render a layer's code template.
+    """
+    class_name: str
+    layer_variable_name: str
+    node_type: str
+    node_id: str
+    init_params: Dict[str, Any] = field(default_factory=dict)
+    config_params: Dict[str, Any] = field(default_factory=dict)
+    input_shape_info: Dict[str, Any] = field(default_factory=dict)
+    output_shape_info: Dict[str, Any] = field(default_factory=dict)
+    template_context: Dict[str, Any] = field(default_factory=dict)
+
+    def get_template_path(self, framework: Framework) -> str:
+        """Get the template path for this layer type"""
+        return f"{framework.value}/layers/{self.node_type}.py.jinja2"
 
 
 class TensorShape:
@@ -277,6 +299,52 @@ class NodeDefinition(ABC, ShapeComputerMixin, ValidatorMixin):
             "metadata": self.metadata.to_dict(),
             "configSchema": [field.to_dict() for field in self.config_schema]
         }
+
+    def get_pytorch_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """
+        Generate specification for PyTorch code generation.
+
+        Args:
+            node_id: Unique identifier for this node instance
+            config: Configuration parameters for this node
+            input_shape: Input tensor shape
+            output_shape: Output tensor shape
+
+        Returns:
+            LayerCodeSpec with all information needed to render PyTorch code
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement get_pytorch_code_spec()"
+        )
+
+    def get_tensorflow_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """
+        Generate specification for TensorFlow code generation.
+
+        Args:
+            node_id: Unique identifier for this node instance
+            config: Configuration parameters for this node
+            input_shape: Input tensor shape (NHWC format)
+            output_shape: Output tensor shape (NHWC format)
+
+        Returns:
+            LayerCodeSpec with all information needed to render TensorFlow code
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement get_tensorflow_code_spec()"
+        )
 
 
 class SourceNodeDefinition(NodeDefinition):

@@ -1,0 +1,39 @@
+class {{ class_name }}(nn.Module):
+    """
+    {{ docstring }}
+    {% if parameters %}
+
+    Parameters:
+    {% for param_name, param_desc in parameters.items() %}
+        - {{ param_desc }}
+    {% endfor %}
+    {% endif %}
+    {% if shape_info %}
+
+    Shape:
+        - Input: {{ shape_info.input }}
+        - Output: {{ shape_info.output }}
+    {% endif %}
+    """
+
+    def __init__(self{% if init_signature %}, {{ init_signature }}{% endif %}):
+        """Initialize the {{ layer_type }} layer."""
+        super({{ class_name }}, self).__init__()
+        {% block init_body %}
+        # Layer initialization
+        pass
+        {% endblock %}
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the {{ layer_type }} layer.
+
+        Args:
+            x: Input tensor{% if input_shape_desc %} of shape {{ input_shape_desc }}{% endif %}
+
+        Returns:
+            Output tensor{% if output_shape_desc %} of shape {{ output_shape_desc }}{% endif %}
+        """
+        {% block forward_body %}
+        return x
+        {% endblock %}
