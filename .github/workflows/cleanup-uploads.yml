@@ -1,13 +1,13 @@
 # GitHub Actions workflow to clean up uploaded files on Render
-# This runs every 2 hours as a workaround for Render free tier lacking cron jobs
-# The workflow calls the cleanup API endpoint which is protected by a secret token
+# This runs every 5 hours
+# The workflow calls the cleanup API endpoint
 
 name: Cleanup Uploaded Files
 
 on:
   schedule:
-    # Run every 2 hours
-    - cron: '0 */2 * * *'
+    # Run every 5 hours
+    - cron: '0 */5 * * *'
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
