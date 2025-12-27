@@ -1,7 +1,8 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.request import Request
+from rest_framework.permissions import AllowAny
 from django.http import HttpResponse
 from django.conf import settings
 from django_ratelimit.decorators import ratelimit
@@ -9,7 +10,6 @@ import logging
 
 from block_manager.serializers import ExportRequestSerializer
 from block_manager.services.tensorflow_codegen import generate_tensorflow_code
-from block_manager.services.pytorch_codegen import generate_pytorch_code
 from block_manager.services.enhanced_pytorch_codegen import generate_pytorch_code
 from authentication.middleware import require_authentication
 
@@ -20,8 +20,9 @@ logger = logging.getLogger(__name__)
 
 
 @api_view(['POST'])
+@permission_classes([AllowAny])
 @require_authentication
-@ratelimit(key='user', rate='5/m', method='POST', block=True)
+@ratelimit(key='user_or_ip', rate='5/m', method='POST', block=True)
 def export_model(request: Request) -> Response:
     """
     Export model code with professional class-based structure.

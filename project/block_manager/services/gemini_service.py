@@ -1,7 +1,7 @@
 """
 Gemini AI Service for chat functionality and workflow modifications.
 """
-import google.generativeai as genai
+from google import genai
 import json
 import os
 import tempfile
@@ -29,10 +29,10 @@ class GeminiChatService:
             if not final_api_key:
                 raise ValueError("GEMINI_API_KEY environment variable is not set")
 
-        genai.configure(api_key=final_api_key)
-        # Use gemini-2.0-flash-lite - best free tier availability in 2025
-        # (gemini-1.5-* deprecated April 2025, gemini-2.5-* severely limited)
-        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
+        # Create client with API key (new unified SDK)
+        self.client = genai.Client(api_key=final_api_key)
+        # Use gemini-2.0-flash-exp - experimental 2.0 model (or use gemini-1.5-flash for stable)
+        self.model_name = 'gemini-2.5-flash-lite'
 
     def _format_workflow_context(self, workflow_state: Optional[Dict[str, Any]]) -> str:
         """Format workflow state into a readable context for the AI."""
@@ -325,7 +325,7 @@ You cannot modify the workflow in this mode. If users want to make changes, sugg
         return f"{base_prompt}\n{mode_prompt}\n{workflow_context}"
 
     def _format_chat_history(self, history: List[Dict[str, str]]) -> List[Dict[str, Any]]:
-        """Convert chat history to Gemini format."""
+        """Convert chat history to Gemini format for new SDK."""
         formatted_history = []
 
         for message in history:
@@ -335,9 +335,10 @@ You cannot modify the workflow in this mode. If users want to make changes, sugg
             # Gemini uses 'user' and 'model' roles
             gemini_role = 'model' if role == 'assistant' else 'user'
 
+            # New SDK expects parts to be text objects, not plain strings
             formatted_history.append({
                 'role': gemini_role,
-                'parts': [content]
+                'parts': [{'text': content}]
             })
 
         return formatted_history
@@ -359,8 +360,8 @@ You cannot modify the workflow in this mode. If users want to make changes, sugg
                     temp_file.write(chunk)
                 temp_path = temp_file.name
 
-            # Upload to Gemini
-            gemini_file = genai.upload_file(temp_path, display_name=uploaded_file.name)
+            # Upload to Gemini using new SDK
+            gemini_file = self.client.files.upload(path=temp_path)
 
             # Clean up temporary file
             os.unlink(temp_path)
@@ -451,8 +452,11 @@ EXAMPLE ARCHITECTURE for an image classifier (with LOWERCASE node types):
 Provide each node as a separate JSON block with appropriate configurations using lowercase nodeType values.
 """
 
-            # Generate content with the file
-            response = self.model.generate_content([analysis_prompt, gemini_file])
+            # Generate content with the file using new SDK
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=[analysis_prompt, gemini_file]
+            )
             response_text = response.text
 
             # Extract modifications
@@ -512,8 +516,11 @@ Provide each node as a separate JSON block with appropriate configurations using
             # This ensures the AI always knows the current state and formatting requirements
             full_message = f"{system_prompt}\n\nUser: {message}"
 
-            # Create chat session with history
-            chat = self.model.start_chat(history=formatted_history)
+            # Create chat session with history using new SDK
+            chat = self.client.chats.create(
+                model=self.model_name,
+                history=formatted_history
+            )
 
             # Send message and get response
             response = chat.send_message(full_message)
@@ -586,7 +593,10 @@ Provide suggestions as a numbered list. Focus on:
 
 Format your response as a simple numbered list."""
 
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt
+            )
             response_text = response.text
 
             # Parse suggestions from numbered list
