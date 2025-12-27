@@ -1,7 +1,7 @@
 """PyTorch Concat Node Definition"""
 
 from typing import Dict, List, Optional, Any
-from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework
+from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework, LayerCodeSpec
 
 
 class ConcatNode(NodeDefinition):
@@ -63,3 +63,29 @@ class ConcatNode(NodeDefinition):
     def allows_multiple_inputs(self) -> bool:
         """Concat nodes accept multiple input connections"""
         return True
+
+    def get_pytorch_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """Generate PyTorch code specification for Concat layer"""
+        dim = config.get('dim', 1)
+
+        sanitized_id = node_id.replace('-', '_')
+        class_name = 'ConcatBlock'
+        layer_var = f'{sanitized_id}_ConcatBlock'
+
+        return LayerCodeSpec(
+            class_name=class_name,
+            layer_variable_name=layer_var,
+            node_type='concat',
+            node_id=node_id,
+            init_params={},
+            config_params=config,
+            input_shape_info={'dims': input_shape.dims if input_shape else []},
+            output_shape_info={'dims': output_shape.dims if output_shape else []},
+            template_context={'dim': dim}
+        )
