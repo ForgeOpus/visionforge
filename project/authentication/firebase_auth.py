@@ -2,11 +2,12 @@
 Firebase Admin SDK initialization and authentication utilities.
 """
 import os
+import logging
 import firebase_admin
 from firebase_admin import credentials, auth
 from dotenv import load_dotenv
 
-# Load environment variables
+logger = logging.getLogger('authentication')
 load_dotenv()
 
 
@@ -53,8 +54,17 @@ def verify_firebase_token(id_token):
         initialize_firebase()
         decoded_token = auth.verify_id_token(id_token)
         return decoded_token
+    except auth.InvalidIdTokenError as e:
+        logger.warning(f"Invalid Firebase ID token: {str(e)}")
+        return None
+    except auth.ExpiredIdTokenError as e:
+        logger.warning(f"Expired Firebase ID token: {str(e)}")
+        return None
+    except auth.RevokedIdTokenError as e:
+        logger.warning(f"Revoked Firebase ID token: {str(e)}")
+        return None
     except Exception as e:
-        print(f"Firebase token verification error: {str(e)}")
+        logger.error(f"Unexpected Firebase token verification error: {str(e)}", exc_info=True)
         return None
 
 
