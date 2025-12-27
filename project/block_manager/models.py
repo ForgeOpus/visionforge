@@ -1,6 +1,12 @@
 from django.db import models
 import uuid
 import json
+from .validators import (
+    validate_canvas_state,
+    validate_block_config,
+    validate_group_internal_structure,
+    validate_shape_data,
+)
 
 
 class Project(models.Model):
@@ -39,7 +45,7 @@ class ModelArchitecture(models.Model):
         on_delete=models.CASCADE,
         related_name='architecture'
     )
-    canvas_state = models.JSONField(default=dict, blank=True)
+    canvas_state = models.JSONField(default=dict, blank=True, validators=[validate_canvas_state])
     is_valid = models.BooleanField(default=False)
     validation_errors = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -63,7 +69,7 @@ class GroupBlockDefinition(models.Model):
     color = models.CharField(max_length=50, default='#9333ea')
 
     # Serialized structure: {nodes, edges, portMappings}
-    internal_structure = models.JSONField(default=dict, blank=True)
+    internal_structure = models.JSONField(default=dict, blank=True, validators=[validate_group_internal_structure])
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -89,9 +95,9 @@ class Block(models.Model):
     block_type = models.CharField(max_length=50)
     position_x = models.FloatField(default=0)
     position_y = models.FloatField(default=0)
-    config = models.JSONField(default=dict, blank=True)
-    input_shape = models.JSONField(null=True, blank=True)
-    output_shape = models.JSONField(null=True, blank=True)
+    config = models.JSONField(default=dict, blank=True, validators=[validate_block_config])
+    input_shape = models.JSONField(null=True, blank=True, validators=[validate_shape_data])
+    output_shape = models.JSONField(null=True, blank=True, validators=[validate_shape_data])
 
     # Group block fields
     group_definition = models.ForeignKey(

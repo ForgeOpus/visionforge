@@ -1,0 +1,23 @@
+# GitHub Actions workflow to clean up uploaded files on Render
+# This runs every 5 hours
+# The workflow calls the cleanup API endpoint
+
+name: Cleanup Uploaded Files
+
+on:
+  schedule:
+    # Run every 5 hours
+    - cron: '0 */5 * * *'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger cleanup endpoint
+        run: |
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            "${{ secrets.CLEANUP_ENDPOINT_URL }}" \
+            -d '{"secret": "${{ secrets.CLEANUP_SECRET }}"}'
