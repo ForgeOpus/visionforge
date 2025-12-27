@@ -1,0 +1,36 @@
+class {{ class_name }}(tf.keras.layers.Layer):
+    """
+    Batch Normalization Layer
+
+    Normalizes the input over a mini-batch.
+    Helps stabilize and accelerate training.
+
+    Parameters:
+        - Epsilon: {{ epsilon }}
+        - Momentum: {{ momentum }}
+
+    Shape:
+        - Input: [batch_size, H, W, C] (NHWC format)
+        - Output: [batch_size, H, W, C]
+    """
+
+    def __init__(self, epsilon={{ epsilon }}, momentum={{ momentum }}):
+        """Initialize the batch normalization layer."""
+        super({{ class_name }}, self).__init__()
+        self.bn = tf.keras.layers.BatchNormalization(
+            epsilon=epsilon,
+            momentum=momentum
+        )
+
+    def call(self, inputs, training=None):
+        """
+        Forward pass through the batch normalization layer.
+
+        Args:
+            inputs: Input tensor of shape [batch, H, W, C]
+            training: Whether in training mode
+
+        Returns:
+            Normalized output tensor of same shape
+        """
+        return self.bn(inputs, training=training)

@@ -1,0 +1,29 @@
+class {{ class_name }}(tf.keras.layers.Layer):
+    """
+    Flatten Layer
+
+    Flattens the input tensor to 1D (preserving batch dimension).
+    Commonly used to transition from convolutional layers to fully connected layers.
+
+    Shape:
+        - Input: [batch_size, H, W, C]
+        - Output: [batch_size, H*W*C]{% if out_features %} = [batch_size, {{ out_features }}]{% endif %}
+    """
+
+    def __init__(self):
+        """Initialize the flatten layer."""
+        super({{ class_name }}, self).__init__()
+        self.flatten = tf.keras.layers.Flatten()
+
+    def call(self, inputs, training=None):
+        """
+        Forward pass through the flatten layer.
+
+        Args:
+            inputs: Input tensor of shape [batch, H, W, C]
+            training: Whether in training mode
+
+        Returns:
+            Output tensor of shape [batch, H*W*C]
+        """
+        return self.flatten(inputs, training=training)

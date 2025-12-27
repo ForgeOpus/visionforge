@@ -1,0 +1,32 @@
+class {{ class_name }}(tf.keras.layers.Layer):
+    """
+    Concatenation Layer
+
+    Concatenates multiple tensors along a specified axis.
+    Commonly used to merge feature maps from different paths in the network.
+
+    Parameters:
+        - Concatenation axis: {{ axis }}
+
+    Shape:
+        - Input: List of tensors with compatible shapes
+        - Output: Concatenated tensor along axis {{ axis }}
+    """
+
+    def __init__(self, axis={{ axis }}):
+        """Initialize the concatenation layer."""
+        super({{ class_name }}, self).__init__()
+        self.concat = tf.keras.layers.Concatenate(axis=axis)
+
+    def call(self, inputs, training=None):
+        """
+        Forward pass through the concatenation layer.
+
+        Args:
+            inputs: List of input tensors
+            training: Whether in training mode
+
+        Returns:
+            Concatenated tensor along axis {{ axis }}
+        """
+        return self.concat(inputs)

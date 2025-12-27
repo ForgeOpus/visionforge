@@ -1,0 +1,40 @@
+class {{ class_name }}(tf.keras.layers.Layer):
+    """
+    2D Convolutional Layer
+
+    Applies a 2D convolution over an input signal composed of several input channels.
+
+    Parameters:
+        - Input channels: {{ in_channels }}
+        - Output channels: {{ out_channels }}
+        - Kernel size: {{ kernel_size }}x{{ kernel_size }}
+        - Strides: {{ strides }}
+        - Padding: {{ padding }}
+
+    Shape:
+        - Input: [batch_size, H, W, {{ in_channels }}] (NHWC format)
+        - Output: [batch_size, H_out, W_out, {{ out_channels }}]
+    """
+
+    def __init__(self, filters={{ out_channels }}, kernel_size={{ kernel_size }}, strides={{ strides }}, padding='{{ padding }}'):
+        """Initialize the convolutional layer."""
+        super({{ class_name }}, self).__init__()
+        self.conv = tf.keras.layers.Conv2D(
+            filters=filters,
+            kernel_size=kernel_size,
+            strides=strides,
+            padding=padding
+        )
+
+    def call(self, inputs, training=None):
+        """
+        Forward pass through the convolutional layer.
+
+        Args:
+            inputs: Input tensor of shape [batch, H, W, {{ in_channels }}]
+            training: Whether in training mode
+
+        Returns:
+            Output tensor of shape [batch, H_out, W_out, {{ out_channels }}]
+        """
+        return self.conv(inputs, training=training)
