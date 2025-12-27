@@ -1,6 +1,6 @@
 # GitHub Actions workflow to clean up uploaded files on Render
 # This runs every 2 hours as a workaround for Render free tier lacking cron jobs
-# The workflow calls the Django management command via Render's API
+# The workflow calls the cleanup API endpoint which is protected by a secret token
 
 name: Cleanup Uploaded Files
 
@@ -15,20 +15,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Trigger cleanup via Render shell
-        env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+      - name: Trigger cleanup endpoint
         run: |
-          # Option 1: Use render.com API to run command (if available)
-          # curl -X POST \
-          #   -H "Authorization: Bearer $RENDER_API_KEY" \
-          #   -H "Content-Type: application/json" \
-          #   "https://api.render.com/v1/services/$RENDER_SERVICE_ID/shell" \
-          #   -d '{"command": "cd project && python manage.py cleanup_uploaded_files"}'
-
-          # Option 2: Call a dedicated cleanup endpoint (recommended)
-          # You'll need to create this endpoint in your Django app
           curl -X POST \
             -H "Content-Type: application/json" \
             "${{ secrets.CLEANUP_ENDPOINT_URL }}" \
