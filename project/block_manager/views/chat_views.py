@@ -6,6 +6,7 @@ import logging
 from django_ratelimit.decorators import ratelimit
 
 from block_manager.services.ai_service_factory import AIServiceFactory
+from block_manager.utils.file_cleanup import save_uploaded_file_temporarily, cleanup_file_after_processing
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,7 @@ def chat_message(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    saved_file_path = None
     try:
         # Initialize AI service with appropriate API keys based on mode
         ai_service = AIServiceFactory.create_service(
@@ -127,6 +129,12 @@ def chat_message(request):
         file_content = None
         if uploaded_file:
             logger.info(f"Processing file with {provider_name}: {uploaded_file.name}")
+
+            # Save file temporarily for tracking and cleanup
+            try:
+                saved_file_path = save_uploaded_file_temporarily(uploaded_file)
+            except Exception as e:
+                logger.error(f"Failed to save uploaded file: {str(e)}")
 
             # For Gemini, upload file to Gemini API
             if provider_name == 'Gemini':
@@ -161,6 +169,10 @@ def chat_message(request):
             workflow_state=workflow_state,
             **({'gemini_file': file_content} if provider_name == 'Gemini' else {'file_content': file_content})
         )
+
+        # Clean up the saved file immediately after processing
+        if saved_file_path:
+            cleanup_file_after_processing(saved_file_path)
 
         return Response(result)
 
@@ -200,6 +212,10 @@ def chat_message(request):
         if settings.DEBUG:
             response['traceback'] = str(e)
         return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    finally:
+        # Ensure file cleanup even if an error occurs
+        if saved_file_path:
+            cleanup_file_after_processing(saved_file_path)
 
 
 @api_view(['POST'])

@@ -1,0 +1,48 @@
+# Render configuration for VisionForge deployment
+# https://render.com/docs/yaml-spec
+
+services:
+  # Django backend service
+  - type: web
+    name: visionforge-backend
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: |
+      cd project
+      pip install -r requirements.txt
+      python manage.py collectstatic --noinput
+    startCommand: |
+      cd project
+      gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: False
+      - key: ENVIRONMENT
+        value: PROD
+      - key: PYTHON_VERSION
+        value: 3.11.0
+
+# Cron jobs for file cleanup
+# Note: Free tier on Render doesn't support cron jobs directly
+# You'll need to use an external service like cron-job.org or GitHub Actions
+# Or upgrade to a paid plan to use Render's native cron jobs
+
+# Example cron job configuration (requires paid plan):
+# - type: cron
+#   name: cleanup-files
+#   env: python
+#   schedule: "0 */2 * * *"  # Run every 2 hours
+#   buildCommand: |
+#     cd project
+#     pip install -r requirements.txt
+#   command: |
+#     cd project
+#     python manage.py cleanup_uploaded_files
+#   envVars:
+#     - fromService:
+#         type: web
+#         name: visionforge-backend
+#         envVarKey: DJANGO_SECRET_KEY

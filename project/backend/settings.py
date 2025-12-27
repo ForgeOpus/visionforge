@@ -313,3 +313,12 @@ WHITENOISE_ROOT = BASE_DIR / 'frontend' / 'dist' / 'root'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ==========================================
+# FILE UPLOAD CONFIGURATION
+# ==========================================
+TEMP_UPLOAD_DIR = BASE_DIR / 'temp_uploads'
+UPLOAD_RETENTION_HOURS = 2  # Delete files older than 2 hours
+
+# Create upload directory if it doesn't exist
+TEMP_UPLOAD_DIR.mkdir(exist_ok=True)
