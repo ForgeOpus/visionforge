@@ -126,7 +126,7 @@ class ClassDefinitionGenerator():
                 - Output: [batch_size, out_channels, H/stride, W/stride]
             """
 
-            def __init__(self, in_channels: int, out_channels:int, kernel_size=3, stride=3, padding=0, dilation=1):
+            def __init__(self, in_channels: int, out_channels:int, kernel_size=3, stride=1, padding=0, dilation=1):
                 """Initialize the convolutional layer."""
                 super(Conv2DBlock, self).__init__()
                 self.conv = nn.Conv2d(
@@ -380,7 +380,7 @@ class ReLUBlock(nn.Module):
 
     def __init__(self, inplace: bool = False):
         """Initialize the ReLU activation."""
-        super(ReLUBlock, self,).__init__()
+        super(ReLUBlock, self).__init__()
         self.relu = nn.ReLU(inplace=inplace)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -1058,9 +1058,6 @@ def generate_training_script(
     # Analyze architecture to determine task type
     has_softmax = any(ClassDefinitionGenerator.get_node_type(n) == 'softmax' for n in nodes)
 
-    # Count total layers for complexity estimation
-    layer_count = sum(1 for n in nodes if ClassDefinitionGenerator.get_node_type(n) not in ('input', 'output', 'dataloader'))
-
     # Determine appropriate loss function and metrics based on output layer
     if has_softmax:
         loss_function = "nn.CrossEntropyLoss()"
@@ -1468,7 +1465,9 @@ def generate_config_file(
             shape = json.loads(shape_str) if isinstance(shape_str, str) else shape_str
             if isinstance(shape, list):
                 input_shape = shape
-        except:
+        except (ValueError, TypeError):
+            # If the shape string is invalid JSON or of an unexpected type,
+            # fall back to the default input_shape defined above.
             pass
 
     # Count layers to estimate model complexity

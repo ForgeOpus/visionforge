@@ -128,8 +128,8 @@ CORS_ALLOW_HEADERS = [
 csrf_origins = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:3000,http://localhost:5173,http://localhost:5000')
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_origins.split(',')]
 
-# Exempt API endpoints from CSRF (using token-based auth instead)
-CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript to read CSRF cookie if needed
+# CSRF configuration: keep cookie HTTP-only; frontend should use X-CSRFToken header pattern
+CSRF_COOKIE_HTTPONLY = True
 CSRF_USE_SESSIONS = False  # Use cookie-based CSRF tokens
 
 # Environment mode configuration
