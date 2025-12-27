@@ -1,7 +1,7 @@
 """TensorFlow MaxPooling2D Node Definition"""
 
 from typing import Dict, List, Optional, Any
-from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework
+from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework, LayerCodeSpec
 
 
 class MaxPool2DNode(NodeDefinition):
@@ -95,3 +95,31 @@ class MaxPool2DNode(NodeDefinition):
             4,
             "[batch, height, width, channels]"
         )
+    def get_tensorflow_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """Generate TensorFlow code specification for MaxPooling2D layer"""
+        pool_size = config.get('pool_size', 2)
+        strides = config.get('strides', 2)
+        padding = config.get('padding', 'valid')
+
+        sanitized_id = node_id.replace('-', '_')
+        class_name = 'MaxPoolBlock'
+        layer_var = f'{sanitized_id}_MaxPoolBlock'
+
+        return LayerCodeSpec(
+            class_name=class_name,
+            layer_variable_name=layer_var,
+            node_type='maxpool',
+            node_id=node_id,
+            init_params={'pool_size': pool_size, 'strides': strides, 'padding': padding},
+            config_params=config,
+            input_shape_info={},
+            output_shape_info={},
+            template_context={'pool_size': pool_size, 'strides': strides, 'padding': padding}
+        )
+

@@ -1,7 +1,7 @@
 """TensorFlow BatchNormalization Node Definition"""
 
 from typing import Dict, List, Optional, Any
-from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework
+from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework, LayerCodeSpec
 
 
 class BatchNorm2DNode(NodeDefinition):
@@ -70,3 +70,30 @@ class BatchNorm2DNode(NodeDefinition):
             return "BatchNormalization requires input with at least 2 dimensions"
         
         return None
+    def get_tensorflow_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """Generate TensorFlow code specification for BatchNormalization layer"""
+        epsilon = config.get('epsilon', 1e-5)
+        momentum = config.get('momentum', 0.99)
+
+        sanitized_id = node_id.replace('-', '_')
+        class_name = 'BatchNormBlock'
+        layer_var = f'{sanitized_id}_BatchNormBlock'
+
+        return LayerCodeSpec(
+            class_name=class_name,
+            layer_variable_name=layer_var,
+            node_type='batchnorm',
+            node_id=node_id,
+            init_params={'epsilon': epsilon, 'momentum': momentum},
+            config_params=config,
+            input_shape_info={},
+            output_shape_info={},
+            template_context={'epsilon': epsilon, 'momentum': momentum}
+        )
+
