@@ -1,11 +1,12 @@
 """
-TensorFlow Code Generation Orchestrator
-Coordinates the generation of complete TensorFlow/Keras project files
+Base Code Generation Orchestrator
+Shared functionality between PyTorch and TensorFlow orchestrators
 """
 
 from typing import List, Dict, Any, Optional, Tuple, Set
 from collections import defaultdict
 import json
+from abc import ABC, abstractmethod
 
 from .base import topological_sort, get_input_variable, get_node_type, get_node_config
 from ..nodes.registry import get_node_definition
@@ -18,14 +19,41 @@ class UnsupportedNodeTypeError(Exception):
     pass
 
 
-class TensorFlowCodeOrchestrator:
+class BaseCodeOrchestrator(ABC):
     """
-    Orchestrator for TensorFlow/Keras code generation.
-    Delegates code generation to individual node classes and assembles the final output.
+    Base orchestrator for code generation.
+    Provides common functionality for both PyTorch and TensorFlow.
     """
 
     def __init__(self):
         self.template_manager = TemplateManager()
+
+    @property
+    @abstractmethod
+    def framework(self) -> Framework:
+        """Return the framework this orchestrator targets"""
+        pass
+
+    @abstractmethod
+    def _get_code_spec_method_name(self) -> str:
+        """Return the method name for getting code specs (e.g., 'get_pytorch_code_spec')"""
+        pass
+
+    @abstractmethod
+    def _generate_layer_call(
+        self,
+        layer_var: str,
+        input_var: str,
+        node_type: str,
+        spec: LayerCodeSpec
+    ) -> str:
+        """Generate the code for calling a layer (framework-specific)"""
+        pass
+
+    @abstractmethod
+    def _get_default_input_shape(self) -> Tuple[int, ...]:
+        """Get default input shape for this framework"""
+        pass
 
     def generate(
         self,
@@ -35,61 +63,38 @@ class TensorFlowCodeOrchestrator:
         group_definitions: Optional[List[Dict[str, Any]]] = None
     ) -> Tuple[Dict[str, str], List[Exception]]:
         """
-        Generate complete TensorFlow/Keras project files.
+        Generate complete project files.
 
         Args:
             nodes: List of node definitions from the frontend
             edges: List of edge definitions
             project_name: Name for the generated model class
-            group_definitions: Optional group definitions (not yet implemented)
+            group_definitions: Optional group definitions
 
         Returns:
             Tuple of (files dict, errors list)
-            files dict contains: {'model': str, 'train': str, 'dataset': str, 'config': str}
         """
         errors = []
 
         try:
-            # Sort nodes topologically
             sorted_nodes = topological_sort(nodes, edges)
-
-            # Build edge map for quick lookups
             edge_map = self._build_edge_map(edges)
-
-            # Generate code specifications for each node
             code_specs, spec_errors = self._generate_code_specs(sorted_nodes, edge_map)
             errors.extend(spec_errors)
 
-            # Render layer classes from templates
             layer_classes = self._render_layer_classes(code_specs)
-
-            # Generate model class definition
             model_definition = self._generate_model_definition(
-                project_name,
-                code_specs,
-                sorted_nodes,
-                edge_map
+                project_name, code_specs, sorted_nodes, edge_map
             )
 
-            # Generate test code
             input_shape = self._extract_input_shape(nodes)
             test_code = self._generate_test_code(project_name, input_shape)
-
-            # Render complete model file
             model_code = self._render_model_file(
-                project_name,
-                layer_classes,
-                model_definition,
-                test_code
+                project_name, layer_classes, model_definition, test_code
             )
 
-            # Generate training script
             train_code = self._generate_training_script(project_name, nodes)
-
-            # Generate dataset script
             dataset_code = self._generate_dataset_script(nodes)
-
-            # Generate config file
             config_code = self._generate_config_file(nodes)
 
             return {
@@ -133,14 +138,16 @@ class TensorFlowCodeOrchestrator:
                 node_type = get_node_type(node)
                 config = get_node_config(node)
 
-                node_def = get_node_definition(node_type, Framework.TENSORFLOW)
+                node_def = get_node_definition(node_type, self.framework)
 
                 if not node_def:
                     raise UnsupportedNodeTypeError(
-                        f"Node type '{node_type}' (id: {node_id}) is not supported for TensorFlow"
+                        f"Node type '{node_type}' (id: {node_id}) is not supported for {self.framework.value}"
                     )
 
-                code_spec = node_def.get_tensorflow_code_spec(
+                # Call the appropriate method dynamically
+                method = getattr(node_def, self._get_code_spec_method_name())
+                code_spec = method(
                     node_id=node_id,
                     config=config,
                     input_shape=None,
@@ -161,7 +168,7 @@ class TensorFlowCodeOrchestrator:
         for spec in code_specs:
             if spec.node_type not in unique_classes:
                 try:
-                    template_path = spec.get_template_path(Framework.TENSORFLOW)
+                    template_path = spec.get_template_path(self.framework)
                     rendered = self.template_manager.render(
                         template_path,
                         spec.template_context
@@ -171,62 +178,6 @@ class TensorFlowCodeOrchestrator:
                     pass
 
         return '\n\n'.join(unique_classes.values())
-
-    def _generate_model_definition(
-        self,
-        project_name: str,
-        code_specs: List[LayerCodeSpec],
-        sorted_nodes: List[Dict[str, Any]],
-        edge_map: Dict[str, List[str]]
-    ) -> str:
-        """Generate the main model class definition"""
-        # Generate layer initializations
-        layer_inits = []
-        for spec in code_specs:
-            params_str = ', '.join(
-                f"{k}={repr(v)}" for k, v in spec.init_params.items()
-            )
-            layer_inits.append(
-                f"self.{spec.layer_variable_name} = {spec.class_name}({params_str})"
-            )
-
-        # Generate forward pass logic
-        forward_lines, _ = self._generate_forward_pass(
-            sorted_nodes,
-            edge_map,
-            code_specs
-        )
-
-        model_class = f'''class {project_name}(keras.Model):
-    """
-    TensorFlow/Keras Model for {project_name}
-
-    This model is auto-generated from the VisionForge architecture.
-    """
-
-    def __init__(self):
-        super({project_name}, self).__init__()
-        #==========================
-        #Layer Initializations:
-        #==========================
-{chr(10).join("        " + line for line in layer_inits)}
-
-    def call(self, inputs, training=None):
-        """
-        Forward pass through the model.
-
-        Args:
-            inputs: Input tensor (NHWC format)
-            training: Whether in training mode
-
-        Returns:
-            Output tensor after processing through the model
-        """
-        x = inputs
-{chr(10).join("        " + line for line in forward_lines)}
-        return x
-'''
-        return model_class
 
     def _generate_forward_pass(
         self,
@@ -262,15 +213,14 @@ class TensorFlowCodeOrchestrator:
 
             output_var = f"x_{node_id.replace('-', '_')}"
 
-            # Handle multi-input nodes
-            if node_type in ('add', 'concat'):
-                forward_lines.append(
-                    f"{output_var} = self.{spec.layer_variable_name}({input_var}, training=training)"
-                )
-            else:
-                forward_lines.append(
-                    f"{output_var} = self.{spec.layer_variable_name}({input_var}, training=training)"
-                )
+            # Generate the layer call (framework-specific)
+            layer_call = self._generate_layer_call(
+                spec.layer_variable_name,
+                input_var,
+                node_type,
+                spec
+            )
+            forward_lines.append(f"{output_var} = {layer_call}")
 
             var_map[node_id] = output_var
 
@@ -292,7 +242,7 @@ class TensorFlowCodeOrchestrator:
 
         if input_node:
             config = get_node_config(input_node)
-            shape_str = config.get('shape', '[1, 224, 224, 3]')
+            shape_str = config.get('shape', '')
             try:
                 shape = json.loads(shape_str) if isinstance(shape_str, str) else shape_str
                 if isinstance(shape, list):
@@ -300,112 +250,42 @@ class TensorFlowCodeOrchestrator:
             except (ValueError, TypeError):
                 pass
 
-        return (1, 224, 224, 3)  # NHWC format default
-
-    def _generate_test_code(self, project_name: str, input_shape: Tuple[int, ...]) -> str:
-        """Generate test code for model validation"""
-        return f'''if __name__ == "__main__":
-    # Test the model with random input
-    model = {project_name}()
-    test_input = tf.random.normal({input_shape})
-    print(f"Input shape: {{test_input.shape}}")
-    output = model(test_input, training=False)
-    print(f"Output shape: {{output.shape}}")
-    print(f"Model has {{model.count_params():,}} parameters")
-'''
-
-    def _render_model_file(
-        self,
-        project_name: str,
-        layer_classes: str,
-        model_definition: str,
-        test_code: str
-    ) -> str:
-        """Render the complete model.py file"""
-        return f'''"""
-Generated TensorFlow/Keras Model
-Architecture: {project_name}
-Generated by VisionForge
-
-This file contains the model architecture with separate layer classes.
-Each layer is implemented as a reusable class for clarity and maintainability.
-"""
-
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-from typing import List, Tuple, Optional
-
-
-#==========================
-#Layer Definitions:
-#==========================
-{layer_classes}
-
-{model_definition}
-
-{test_code}
-'''
+        return self._get_default_input_shape()
 
     def _generate_training_script(self, project_name: str, nodes: List[Dict[str, Any]]) -> str:
         """Generate training script using template"""
         has_softmax = any(get_node_type(n) == 'softmax' for n in nodes)
         is_classification = has_softmax
 
-        context = {
-            'project_name': project_name,
-            'model_class_name': project_name,
-            'task_type': 'classification' if is_classification else 'regression',
-            'is_classification': is_classification,
-            'loss_function': 'keras.losses.SparseCategoricalCrossentropy()' if is_classification else 'keras.losses.MeanSquaredError()',
-            'metric_name': 'accuracy' if is_classification else 'mse'
-        }
-
-        return self.template_manager.render('tensorflow/files/train.py.jinja2', context)
+        context = self._get_training_context(project_name, is_classification)
+        template_path = f"{self.framework.value}/files/train.py.jinja2"
+        return self.template_manager.render(template_path, context)
 
     def _generate_dataset_script(self, nodes: List[Dict[str, Any]]) -> str:
         """Generate dataset script using template"""
         input_shape = self._extract_input_shape(nodes)
-
-        context = {
-            'data_type': 'image',
-            'input_shape': input_shape,
-            'input_height': input_shape[1] if len(input_shape) > 1 else 224,
-            'input_width': input_shape[2] if len(input_shape) > 2 else 224,
-            'input_channels': input_shape[3] if len(input_shape) > 3 else 3,
-            'channel_type': 'RGB' if input_shape[3] == 3 else 'Grayscale' if input_shape[3] == 1 else f'{input_shape[3]}-channel'
-        }
-
-        return self.template_manager.render('tensorflow/files/dataset.py.jinja2', context)
+        context = self._get_dataset_context(input_shape)
+        template_path = f"{self.framework.value}/files/dataset.py.jinja2"
+        return self.template_manager.render(template_path, context)
 
     def _generate_config_file(self, nodes: List[Dict[str, Any]]) -> str:
         """Generate config file using template"""
         input_shape = self._extract_input_shape(nodes)
-
         layer_count = sum(
             1 for n in nodes
             if get_node_type(n) not in ('input', 'output', 'dataloader')
         )
 
         if layer_count > 20:
-            batch_size = 16
-            learning_rate = 1e-4
-            epochs = 100
-            complexity = "Deep"
+            batch_size, learning_rate, epochs, complexity = 16, 1e-4, 100, "Deep"
         elif layer_count > 10:
-            batch_size = 32
-            learning_rate = 1e-3
-            epochs = 50
-            complexity = "Medium"
+            batch_size, learning_rate, epochs, complexity = 32, 1e-3, 50, "Medium"
         else:
-            batch_size = 64
-            learning_rate = 1e-3
-            epochs = 30
-            complexity = "Shallow"
+            batch_size, learning_rate, epochs, complexity = 64, 1e-3, 30, "Shallow"
 
         has_attention = any(get_node_type(n) in ('self_attention', 'attention') for n in nodes)
         if has_attention:
-            learning_rate = learning_rate * 0.1
+            learning_rate *= 0.1
             batch_size = max(8, batch_size // 2)
 
         context = {
@@ -418,4 +298,42 @@ from typing import List, Tuple, Optional
             'has_attention': has_attention
         }
 
-        return self.template_manager.render('tensorflow/files/config.py.jinja2', context)
+        template_path = f"{self.framework.value}/files/config.py.jinja2"
+        return self.template_manager.render(template_path, context)
+
+    @abstractmethod
+    def _generate_model_definition(
+        self,
+        project_name: str,
+        code_specs: List[LayerCodeSpec],
+        sorted_nodes: List[Dict[str, Any]],
+        edge_map: Dict[str, List[str]]
+    ) -> str:
+        """Generate the main model class definition (framework-specific)"""
+        pass
+
+    @abstractmethod
+    def _generate_test_code(self, project_name: str, input_shape: Tuple[int, ...]) -> str:
+        """Generate test code (framework-specific)"""
+        pass
+
+    @abstractmethod
+    def _render_model_file(
+        self,
+        project_name: str,
+        layer_classes: str,
+        model_definition: str,
+        test_code: str
+    ) -> str:
+        """Render the complete model file (framework-specific)"""
+        pass
+
+    @abstractmethod
+    def _get_training_context(self, project_name: str, is_classification: bool) -> Dict[str, Any]:
+        """Get template context for training script (framework-specific)"""
+        pass
+
+    @abstractmethod
+    def _get_dataset_context(self, input_shape: Tuple[int, ...]) -> Dict[str, Any]:
+        """Get template context for dataset script (framework-specific)"""
+        pass

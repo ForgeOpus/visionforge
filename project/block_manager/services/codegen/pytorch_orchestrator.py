@@ -296,16 +296,16 @@ class PyTorchCodeOrchestrator:
                 if node_type == 'concat':
                     dim = spec.template_context.get('dim', 1)
                     forward_lines.append(
-                        f"{output_var} = self.{spec.layer_variable_name}.forward({input_var}, concat_dim={dim})"
+                        f"{output_var} = self.{spec.layer_variable_name}({input_var}, concat_dim={dim})"
                     )
                 else:
                     forward_lines.append(
-                        f"{output_var} = self.{spec.layer_variable_name}.forward({input_var})"
+                        f"{output_var} = self.{spec.layer_variable_name}({input_var})"
                     )
             else:
                 # Regular single-input node
                 forward_lines.append(
-                    f"{output_var} = self.{spec.layer_variable_name}.forward({input_var})"
+                    f"{output_var} = self.{spec.layer_variable_name}({input_var})"
                 )
 
             # Update variable map
