@@ -4,103 +4,98 @@ This guide explains how to set up automatic cleanup of uploaded files on Render'
 
 ## Overview
 
-The file cleanup system prevents disk space issues by automatically deleting old uploaded files. Since Render's free tier doesn't support cron jobs, we provide multiple options for scheduling cleanup.
-
-## Components
-
-1. **Django Management Command**: `python manage.py cleanup_uploaded_files`
-2. **Maintenance API Endpoints**: Remote triggers for cleanup
-3. **Automated Scheduling**: GitHub Actions or external cron service
+The file cleanup system prevents disk space issues by automatically deleting old uploaded files. Files are cleaned up immediately after processing, with a scheduled cleanup every 2 hours to catch any orphaned files.
 
 ## Configuration
 
-### 1. Environment Variables
+### Environment Variables
 
-Add to your `.env` file or Render environment variables:
-
-```bash
-# File cleanup settings
-CLEANUP_SECRET_TOKEN=your-random-secret-token-here  # Generate: python -c 'import secrets; print(secrets.token_urlsafe(32))'
-```
-
-### 2. Manual Cleanup (SSH into Render)
+Add to your Render environment variables:
 
 ```bash
-# SSH into your Render instance
-render ssh <your-service-name>
-
-# Run cleanup
-cd project
-python manage.py cleanup_uploaded_files
-
-# Dry run (see what would be deleted)
-python manage.py cleanup_uploaded_files --dry-run
-
-# Custom retention period
-python manage.py cleanup_uploaded_files --retention-hours 1
+CLEANUP_SECRET_TOKEN=your-random-secret-token-here
 ```
 
-## Automated Cleanup Options
+**Generate a secure token**:
+```bash
+python -c 'import secrets; print(secrets.token_urlsafe(32))'
+```
 
-### Option 1: GitHub Actions (Recommended for Free Tier)
+## How It Works
 
-1. **Add GitHub Secrets** in your repository:
+1. **Immediate Cleanup**: Files are deleted right after AI processing
+2. **Scheduled Cleanup**: Runs every 2 hours via automated triggers
+3. **Retention**: Files older than 2 hours are automatically deleted
+
+## Setup Options
+
+### Option 1: GitHub Actions (Recommended)
+
+GitHub Actions is free and runs automatically every 2 hours.
+
+**Setup Steps**:
+
+1. **Add GitHub Secrets** to your repository (Settings → Secrets and variables → Actions):
    - `CLEANUP_ENDPOINT_URL`: `https://your-app.onrender.com/api/v1/maintenance/cleanup-files`
    - `CLEANUP_SECRET`: Your `CLEANUP_SECRET_TOKEN` value
 
-2. **Enable GitHub Actions**:
-   - The workflow file is already created at `.github/workflows/cleanup_files.yml`
-   - It runs every 2 hours automatically
-   - You can also trigger it manually from the Actions tab
+2. **Workflow is Ready**: The workflow file already exists at `.github/workflows/cleanup_files.yml`
 
-3. **Manual Trigger**:
-   - Go to your GitHub repo → Actions tab
-   - Select "Cleanup Uploaded Files"
-   - Click "Run workflow"
+3. **Enable and Test**:
+   - Push your code to GitHub
+   - Go to Actions tab → "Cleanup Uploaded Files"
+   - Click "Run workflow" to test manually
+   - It will run automatically every 2 hours
 
 ### Option 2: External Cron Service (cron-job.org)
+
+Free alternative if you don't want to use GitHub Actions.
+
+**Setup Steps**:
 
 1. **Sign up** at https://cron-job.org (free)
 
 2. **Create a cron job**:
-   - URL: `https://your-app.onrender.com/api/v1/maintenance/cleanup-files`
-   - Method: `POST`
-   - Schedule: Every 2 hours (`0 */2 * * *`)
-   - Request Body:
+   - **URL**: `https://your-app.onrender.com/api/v1/maintenance/cleanup-files`
+   - **Method**: `POST`
+   - **Schedule**: Every 2 hours (`0 */2 * * *`)
+   - **Request Headers**:
+     ```
+     Content-Type: application/json
+     ```
+   - **Request Body**:
      ```json
      {
        "secret": "your-cleanup-secret-token"
      }
      ```
-   - Headers:
-     ```
-     Content-Type: application/json
-     ```
 
-### Option 3: Render Paid Plan (Native Cron Jobs)
+3. **Test**: Click "Test execution" to verify it works
 
-If you upgrade to a paid Render plan, you can use native cron jobs:
+### Option 3: UptimeRobot Webhook
 
-1. **Update `render.yaml`**:
-   ```yaml
-   - type: cron
-     name: cleanup-files
-     schedule: "0 */2 * * *"  # Every 2 hours
-     buildCommand: |
-       cd project
-       pip install -r requirements.txt
-     command: |
-       cd project
-       python manage.py cleanup_uploaded_files
-   ```
+Use UptimeRobot's free HTTP(S) monitoring to trigger cleanup.
+
+**Setup Steps**:
+
+1. **Sign up** at https://uptimerobot.com (free)
+
+2. **Create Monitor**:
+   - Type: HTTP(S)
+   - URL: `https://your-app.onrender.com/api/v1/maintenance/cleanup-files`
+   - Monitoring Interval: 120 minutes (2 hours)
+
+3. **Configure Request**:
+   - Method: POST
+   - Headers: `Content-Type: application/json`
+   - Body: `{"secret": "your-cleanup-secret-token"}`
 
 ## Monitoring
 
 ### Check Upload Statistics
 
-**Via API** (protected endpoint):
 ```bash
-curl "https://your-app.onrender.com/api/v1/maintenance/upload-stats?secret=your-cleanup-secret"
+curl "https://your-app.onrender.com/api/v1/maintenance/upload-stats?secret=your-secret-token"
 ```
 
 **Response**:
@@ -125,54 +120,82 @@ curl -X POST https://your-app.onrender.com/api/v1/maintenance/cleanup-files \
   -d '{"secret": "your-cleanup-secret"}'
 ```
 
-## How It Works
+**Response**:
+```json
+{
+  "success": true,
+  "message": "File cleanup completed",
+  "stats": {
+    "deleted_count": 12,
+    "deleted_size_mb": 3.45,
+    "error_count": 0,
+    "retention_hours": 2
+  }
+}
+```
 
-1. **File Upload**: When users upload files to chat, they're saved to `temp_uploads/` with a timestamp
-2. **Immediate Cleanup**: Files are deleted immediately after AI processing
-3. **Scheduled Cleanup**: Runs every 2 hours to catch any orphaned files
-4. **Retention**: Files older than 2 hours are automatically deleted
+## Deployment Configuration
 
-## Retention Period
-
-Default: **2 hours**
-
-To change, update `UPLOAD_RETENTION_HOURS` in `settings.py` or add to environment variables.
+The `render.yaml` file is configured for easy deployment. For Render's free tier, the automated cleanup via GitHub Actions or external cron services is required.
 
 ## Security
 
-- Cleanup endpoints are protected by `CLEANUP_SECRET_TOKEN`
-- Unauthorized attempts are logged
-- Token should be kept secret and never committed to git
+- All endpoints are protected by `CLEANUP_SECRET_TOKEN`
+- Unauthorized attempts are logged with IP addresses
+- Never commit the secret token to git
+- Rotate the token periodically for security
 
 ## Troubleshooting
 
-### Files Not Being Deleted
+### Cleanup Not Running
 
-1. Check GitHub Actions logs for errors
-2. Verify `CLEANUP_SECRET_TOKEN` matches in all locations
-3. Check Render logs: `render logs <service-name>`
-4. Run manual cleanup to test
+1. **Check logs**: View your service logs on Render dashboard
+2. **Verify secret**: Ensure token matches in all locations
+3. **Test manually**: Use curl command above to test
+4. **Check GitHub Actions**: View workflow runs in Actions tab
 
 ### Disk Space Issues
 
-```bash
-# Check current usage
-python manage.py cleanup_uploaded_files --dry-run
+If disk space is critically low, trigger manual cleanup immediately:
 
-# Force cleanup with shorter retention
-python manage.py cleanup_uploaded_files --retention-hours 0
+```bash
+# Trigger cleanup now
+curl -X POST https://your-app.onrender.com/api/v1/maintenance/cleanup-files \
+  -H "Content-Type: application/json" \
+  -d '{"secret": "your-cleanup-secret"}'
 ```
 
 ### GitHub Actions Not Running
 
-1. Ensure Actions are enabled in your repository settings
-2. Check workflow file permissions
-3. Verify secrets are correctly configured
+1. Ensure Actions are enabled: Repo Settings → Actions → Allow all actions
+2. Check workflow file syntax
+3. Verify secrets are set correctly
+4. Look for error messages in Actions tab
 
 ## Best Practices
 
-1. **Monitor regularly**: Check upload stats weekly
-2. **Adjust retention**: Lower if disk space is limited
-3. **Test cleanup**: Run dry-run before production
-4. **Keep secrets secure**: Rotate `CLEANUP_SECRET_TOKEN` periodically
-5. **Check logs**: Review cleanup output for errors
+1. **Monitor weekly**: Check upload stats to ensure cleanup is working
+2. **Secure your token**: Use a strong, random token and keep it secret
+3. **Test after deployment**: Trigger manual cleanup to verify it works
+4. **Set up alerts**: Use UptimeRobot to alert if cleanup fails
+
+## Configuration Options
+
+You can adjust the retention period by setting in `settings.py`:
+
+```python
+UPLOAD_RETENTION_HOURS = 2  # Delete files older than 2 hours
+```
+
+For shorter retention (if disk space is limited):
+```python
+UPLOAD_RETENTION_HOURS = 1  # Delete files older than 1 hour
+```
+
+## Support
+
+If you encounter issues:
+1. Check Render logs for errors
+2. Verify environment variables are set
+3. Test endpoints manually with curl
+4. Ensure secret token is correctly configured

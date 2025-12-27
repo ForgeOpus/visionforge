@@ -24,25 +24,9 @@ services:
         value: PROD
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: CLEANUP_SECRET_TOKEN
+        generateValue: true
 
-# Cron jobs for file cleanup
-# Note: Free tier on Render doesn't support cron jobs directly
-# You'll need to use an external service like cron-job.org or GitHub Actions
-# Or upgrade to a paid plan to use Render's native cron jobs
-
-# Example cron job configuration (requires paid plan):
-# - type: cron
-#   name: cleanup-files
-#   env: python
-#   schedule: "0 */2 * * *"  # Run every 2 hours
-#   buildCommand: |
-#     cd project
-#     pip install -r requirements.txt
-#   command: |
-#     cd project
-#     python manage.py cleanup_uploaded_files
-#   envVars:
-#     - fromService:
-#         type: web
-#         name: visionforge-backend
-#         envVarKey: DJANGO_SECRET_KEY
+# Note: Render's free tier doesn't support native cron jobs
+# Use GitHub Actions or external services (cron-job.org) for scheduled cleanup
+# See CLEANUP_SETUP.md for configuration instructions
