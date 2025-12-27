@@ -1,7 +1,7 @@
 """PyTorch Linear Layer Node Definition"""
 
 from typing import Dict, List, Optional, Any
-from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework
+from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework, LayerCodeSpec
 
 
 class LinearNode(NodeDefinition):
@@ -74,4 +74,47 @@ class LinearNode(NodeDefinition):
             source_output_shape,
             2,
             "[batch, features]"
+        )
+
+    def get_pytorch_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """Generate PyTorch code specification for Linear layer"""
+        out_features = config.get('out_features', 128)
+        bias = config.get('bias', True)
+
+        in_features = input_shape.dims[1] if input_shape and len(input_shape.dims) >= 2 else 512
+
+        sanitized_id = node_id.replace('-', '_')
+        class_name = 'LinearLayer'
+        layer_var = f'{sanitized_id}_LinearLayer'
+
+        return LayerCodeSpec(
+            class_name=class_name,
+            layer_variable_name=layer_var,
+            node_type='linear',
+            node_id=node_id,
+            init_params={
+                'in_features': in_features,
+                'out_features': out_features,
+                'bias': bias
+            },
+            config_params=config,
+            input_shape_info={
+                'in_features': in_features,
+                'dims': input_shape.dims if input_shape else []
+            },
+            output_shape_info={
+                'out_features': out_features,
+                'dims': output_shape.dims if output_shape else []
+            },
+            template_context={
+                'in_features': in_features,
+                'out_features': out_features,
+                'bias': bias
+            }
         )
