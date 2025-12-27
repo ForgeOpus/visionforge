@@ -1,7 +1,7 @@
 """PyTorch Conv2D Layer Node Definition"""
 
 from typing import Dict, List, Optional, Any
-from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework
+from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework, LayerCodeSpec
 
 
 class Conv2DNode(NodeDefinition):
@@ -109,4 +109,59 @@ class Conv2DNode(NodeDefinition):
             source_output_shape,
             4,
             "[batch, channels, height, width]"
+        )
+
+    def get_pytorch_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """Generate PyTorch code specification for Conv2D layer"""
+        # Extract parameters from config
+        out_channels = config.get('out_channels', 64)
+        kernel_size = config.get('kernel_size', 3)
+        stride = config.get('stride', 1)
+        padding = config.get('padding', 0)
+        dilation = config.get('dilation', 1)
+
+        # Extract input channels from shape
+        in_channels = input_shape.dims[1] if input_shape and len(input_shape.dims) >= 2 else 3
+
+        # Generate unique class and variable names
+        sanitized_id = node_id.replace('-', '_')
+        class_name = 'Conv2DBlock'
+        layer_var = f'{sanitized_id}_Conv2DBlock'
+
+        return LayerCodeSpec(
+            class_name=class_name,
+            layer_variable_name=layer_var,
+            node_type='conv2d',
+            node_id=node_id,
+            init_params={
+                'in_channels': in_channels,
+                'out_channels': out_channels,
+                'kernel_size': kernel_size,
+                'stride': stride,
+                'padding': padding,
+                'dilation': dilation
+            },
+            config_params=config,
+            input_shape_info={
+                'in_channels': in_channels,
+                'dims': input_shape.dims if input_shape else []
+            },
+            output_shape_info={
+                'out_channels': out_channels,
+                'dims': output_shape.dims if output_shape else []
+            },
+            template_context={
+                'in_channels': in_channels,
+                'out_channels': out_channels,
+                'kernel_size': kernel_size,
+                'stride': stride,
+                'padding': padding,
+                'dilation': dilation
+            }
         )
