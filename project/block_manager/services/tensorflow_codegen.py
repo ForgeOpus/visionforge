@@ -7,6 +7,9 @@ from typing import List, Dict, Any, Optional, Tuple
 from collections import deque
 import logging
 
+# New template-based code generation
+from .codegen.tensorflow_orchestrator import TensorFlowCodeOrchestrator
+
 # Import shared utilities and exceptions from PyTorch codegen (framework-agnostic)
 from .pytorch_codegen import (
     GroupBlockShapeComputer,
@@ -481,7 +484,16 @@ def generate_tensorflow_code(
     Returns:
         Tuple of (dictionary with keys: 'model', 'train', 'dataset', 'config', list of errors)
     """
-    # Topologically sort nodes
+    # Delegate to new template-based orchestrator
+    orchestrator = TensorFlowCodeOrchestrator()
+    return orchestrator.generate(nodes, edges, project_name, group_definitions)
+
+    # ==================== LEGACY CODE (PRESERVED FOR REFERENCE) ====================
+    # The code below is no longer executed but preserved for reference.
+    # All code generation now happens through the TensorFlowCodeOrchestrator.
+    # ================================================================================
+
+    # OLD: Topologically sort nodes
     sorted_nodes = topological_sort(nodes, edges)
 
     # Convert group_definitions list to dict for shape inference
