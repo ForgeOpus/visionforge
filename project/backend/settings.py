@@ -25,10 +25,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-oy%j%4%)w%7#sx@e!h+m-hai9zvl*)-5$5uz%wlro4ry1*4vc-')
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError("DJANGO_SECRET_KEY environment variable must be set")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True'
+DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
 
 # Environment Variable Validation (Production Only)
 REQUIRED_ENV_VARS = [
@@ -106,7 +108,12 @@ TEMPLATES = [
 ]
 
 # CORS configuration - read from environment variable for production
-cors_origins = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5173,http://localhost:5000')
+if DEBUG:
+    cors_origins = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5173,http://localhost:5000')
+else:
+    cors_origins = os.getenv('CORS_ALLOWED_ORIGINS')
+    if not cors_origins:
+        raise ValueError("CORS_ALLOWED_ORIGINS environment variable must be set in production")
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins.split(',')]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -125,12 +132,19 @@ CORS_ALLOW_HEADERS = [
     'x-firebase-token',
 ]
 
-csrf_origins = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:3000,http://localhost:5173,http://localhost:5000')
+if DEBUG:
+    csrf_origins = os.getenv('CSRF_TRUSTED_ORIGINS', 'http://localhost:3000,http://localhost:5173,http://localhost:5000')
+else:
+    csrf_origins = os.getenv('CSRF_TRUSTED_ORIGINS')
+    if not csrf_origins:
+        raise ValueError("CSRF_TRUSTED_ORIGINS environment variable must be set in production")
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in csrf_origins.split(',')]
 
-# Exempt API endpoints from CSRF (using token-based auth instead)
-CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript to read CSRF cookie if needed
-CSRF_USE_SESSIONS = False  # Use cookie-based CSRF tokens
+# CSRF Protection
+CSRF_COOKIE_HTTPONLY = True
+CSRF_USE_SESSIONS = False
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_HEADER_NAME = 'HTTP_X_CSRFTOKEN'
 
 # Environment mode configuration
 # Controls API key behavior: PROD/missing = BYOK, DEV/LOCAL = server keys
@@ -139,18 +153,16 @@ IS_PRODUCTION = ENVIRONMENT == 'PROD'
 REQUIRES_USER_API_KEY = IS_PRODUCTION
 
 REST_FRAMEWORK = {
-    # For local dev only: allow unauthenticated access to endpoints
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.AllowAny",
+        "rest_framework.permissions.IsAuthenticatedOrReadOnly",
     ],
-    # Rate limiting via DRF throttling (global fallback)
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
-        "anon": "100/hour",
-        "user": "1000/hour",
+        "anon": "60/hour",
+        "user": "600/hour",
     },
 }
 
@@ -260,10 +272,16 @@ if not DEBUG:
     # https://github.com/firebase/firebase-js-sdk/issues/8541
     SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
 
-    # Content Security Policy (basic - customize as needed)
-    # CSP_DEFAULT_SRC = ("'self'",)
-    # CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'")  # Adjust based on your needs
-    # CSP_STYLE_SRC = ("'self'", "'unsafe-inline'")
+    # Content Security Policy
+    CSP_DEFAULT_SRC = ("'self'",)
+    CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", "'unsafe-eval'", "https://www.gstatic.com", "https://apis.google.com")
+    CSP_STYLE_SRC = ("'self'", "'unsafe-inline'", "https://fonts.googleapis.com")
+    CSP_IMG_SRC = ("'self'", "data:", "https:", "blob:")
+    CSP_FONT_SRC = ("'self'", "https://fonts.gstatic.com", "data:")
+    CSP_CONNECT_SRC = ("'self'", "https://firebasestorage.googleapis.com", "https://identitytoolkit.googleapis.com", "https://securetoken.googleapis.com", "https://*.googleapis.com")
+    CSP_FRAME_SRC = ("https://accounts.google.com", "https://github.com")
+    CSP_OBJECT_SRC = ("'none'",)
+    CSP_BASE_URI = ("'self'",)
 
 else:
     # Development settings - less strict

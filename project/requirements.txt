@@ -30,6 +30,8 @@ numpy>=2.2.0
 
 # Security & Rate Limiting
 django-ratelimit>=4.1.0
+django-csp>=3.8
+python-json-logger>=2.0.7
 
 # Production WSGI Server
 gunicorn>=21.2.0
