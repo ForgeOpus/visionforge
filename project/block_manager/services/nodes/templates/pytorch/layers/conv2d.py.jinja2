@@ -1,0 +1,43 @@
+class {{ class_name }}(nn.Module):
+    """
+    2D Convolutional Layer
+
+    Applies a 2D convolution over an input signal composed of several input channels.
+
+    Parameters:
+        - Input channels: {{ in_channels }}
+        - Output channels: {{ out_channels }}
+        - Kernel size: {{ kernel_size }}x{{ kernel_size }}
+        - Stride: {{ stride }}
+        - Padding: {{ padding }}
+        - Dilation: {{ dilation }}
+
+    Shape:
+        - Input: [batch_size, {{ in_channels }}, H, W]
+        - Output: [batch_size, {{ out_channels }}, H_out, W_out]
+    """
+
+    def __init__(self, in_channels: int, out_channels: int, kernel_size={{ kernel_size }}, stride={{ stride }}, padding={{ padding }}, dilation={{ dilation }}):
+        """Initialize the convolutional layer."""
+        super({{ class_name }}, self).__init__()
+        self.conv = nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the convolutional layer.
+
+        Args:
+            x: Input tensor of shape [batch, {{ in_channels }}, H, W]
+
+        Returns:
+            Output tensor of shape [batch, {{ out_channels }}, H_out, W_out]
+        """
+        x = self.conv(x)
+        return x

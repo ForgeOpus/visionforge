@@ -1,0 +1,31 @@
+class {{ class_name }}(nn.Module):
+    """
+    Concatenation Layer
+
+    Concatenates multiple tensors along a specified dimension.
+    Commonly used to merge feature maps from different paths in the network.
+
+    Parameters:
+        - Concatenation dimension: {{ dim }}
+
+    Shape:
+        - Input: List of tensors with compatible shapes
+        - Output: Concatenated tensor along dimension {{ dim }}
+    """
+
+    def __init__(self):
+        """Initialize the concatenation layer (no learnable parameters)."""
+        super({{ class_name }}, self).__init__()
+
+    def forward(self, tensor_list: List[torch.Tensor], concat_dim: int = {{ dim }}):
+        """
+        Forward pass through the concatenation layer.
+
+        Args:
+            tensor_list: List of input tensors
+            concat_dim: Dimension along which to concatenate
+
+        Returns:
+            Concatenated tensor along dimension concat_dim
+        """
+        return torch.cat(tensor_list, dim=concat_dim)

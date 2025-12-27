@@ -1,0 +1,32 @@
+class {{ class_name }}(nn.Module):
+    """
+    Softmax Activation Layer
+
+    Applies the softmax function to normalize outputs into a probability distribution.
+    Commonly used in the final layer for classification tasks.
+
+    Parameters:
+        - Dimension: {{ dim }}
+
+    Shape:
+        - Input: [batch_size, num_classes]
+        - Output: [batch_size, num_classes] (sums to 1.0 along dimension {{ dim }})
+    """
+
+    def __init__(self, dim: int = {{ dim }}):
+        """Initialize the softmax layer."""
+        super({{ class_name }}, self).__init__()
+        self.softmax = nn.Softmax(dim=dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the softmax layer.
+
+        Args:
+            x: Input tensor
+
+        Returns:
+            Probability distribution over dimension {{ dim }}
+        """
+        x = self.softmax(x)
+        return x

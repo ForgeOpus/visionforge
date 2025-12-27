@@ -1,0 +1,33 @@
+class {{ class_name }}(nn.Module):
+    """
+    Fully Connected Linear Layer
+
+    Applies a linear transformation to the incoming data: y = xA^T + b
+
+    Parameters:
+        - Input features: {{ in_features }}
+        - Output features: {{ out_features }}
+        - Bias: {{ bias }}
+
+    Shape:
+        - Input: [batch_size, {{ in_features }}]
+        - Output: [batch_size, {{ out_features }}]
+    """
+
+    def __init__(self, in_features: int, out_features: int, bias: bool = {{ bias }}):
+        """Initialize the linear layer."""
+        super({{ class_name }}, self).__init__()
+        self.linear = nn.Linear(in_features, out_features, bias=bias)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the linear layer.
+
+        Args:
+            x: Input tensor of shape [batch, {{ in_features }}]
+
+        Returns:
+            Output tensor of shape [batch, {{ out_features }}]
+        """
+        x = self.linear(x)
+        return x
