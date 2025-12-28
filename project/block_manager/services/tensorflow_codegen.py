@@ -10,17 +10,11 @@ import logging
 # New template-based code generation
 from .codegen.tensorflow_orchestrator import TensorFlowCodeOrchestrator
 
-# Import shared utilities and exceptions from enhanced_pytorch_codegen (framework-agnostic)
-from .enhanced_pytorch_codegen import (
-    GroupBlockShapeComputer,
-    GroupDefinitionNotFoundError,
-    ShapeMismatchError,
-    CyclicDependencyError,
-    UnsupportedNodeTypeError,
-    ShapeInferenceError,
-    MissingShapeDataError,
-    safe_get_shape_data
-)
+# NOTE: Legacy imports removed - all code generation now delegated to TensorFlowCodeOrchestrator
+# The classes below were only used in legacy code that no longer executes:
+# - GroupBlockShapeComputer, GroupDefinitionNotFoundError, ShapeMismatchError
+# - CyclicDependencyError, UnsupportedNodeTypeError, ShapeInferenceError
+# - MissingShapeDataError, safe_get_shape_data
 
 # Configure logging
 logger = logging.getLogger(__name__)
