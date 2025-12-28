@@ -24,10 +24,12 @@ def save_uploaded_file_temporarily(uploaded_file):
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     # Sanitize filename to prevent path traversal attacks
-    # Extract only the basename and remove any path components
+    # Extract only the basename to remove any path components
     original_name = os.path.basename(uploaded_file.name)
-    # Remove any potentially dangerous characters and path separators
-    safe_name = original_name.replace('..', '').replace('/', '').replace('\\', '')
+    # Remove path separators that might have been missed (defense in depth)
+    safe_name = original_name.replace('/', '_').replace('\\', '_')
+    # Remove null bytes which can cause issues
+    safe_name = safe_name.replace('\x00', '')
     
     timestamp = int(time.time())
     safe_filename = f"{timestamp}_{safe_name}"
