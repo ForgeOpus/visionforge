@@ -45,7 +45,9 @@ function ChartContainer({
   >["children"]
 }) {
   const uniqueId = useId()
-  const chartId = `chart-${id || uniqueId.replace(/:/g, "")}`
+  // Sanitize ID to prevent XSS - only allow alphanumeric, hyphens, and underscores
+  const baseId = (id || uniqueId).replace(/[^a-zA-Z0-9-_]/g, '')
+  const chartId = `chart-${baseId}`
 
   return (
     <ChartContext.Provider value={{ config }}>
@@ -76,19 +78,26 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
     return null
   }
 
+  // Sanitize id to prevent CSS injection - only allow alphanumeric, hyphens, and underscores
+  const sanitizedId = id.replace(/[^a-zA-Z0-9-_]/g, '')
+
   return (
     <style
       dangerouslySetInnerHTML={{
         __html: Object.entries(THEMES)
           .map(
             ([theme, prefix]) => `
-${prefix} [data-chart=${id}] {
+${prefix} [data-chart=${sanitizedId}] {
 ${colorConfig
   .map(([key, itemConfig]) => {
+    // Sanitize key to prevent CSS injection
+    const sanitizedKey = key.replace(/[^a-zA-Z0-9-_]/g, '')
     const color =
       itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
       itemConfig.color
-    return color ? `  --color-${key}: ${color};` : null
+    // Sanitize color value to prevent CSS injection
+    const sanitizedColor = color?.replace(/[<>'"]/g, '')
+    return sanitizedColor ? `  --color-${sanitizedKey}: ${sanitizedColor};` : null
   })
   .join("\n")}
 }

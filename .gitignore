@@ -73,6 +73,7 @@ sqlnet.ora
 # Django staticfiles and media
   staticfiles/
   media/
+  temp_uploads/
 
   # Python build artifacts
   *.egg-info/

@@ -7,20 +7,181 @@ from typing import List, Dict, Any, Optional, Tuple
 from collections import deque
 import logging
 
-# Import shared utilities and exceptions from PyTorch codegen (framework-agnostic)
-from .pytorch_codegen import (
-    GroupBlockShapeComputer,
+# Import shared exceptions from PyTorch codegen (framework-agnostic)
+from .enhanced_pytorch_codegen import (
     GroupDefinitionNotFoundError,
     ShapeMismatchError,
     CyclicDependencyError,
     UnsupportedNodeTypeError,
     ShapeInferenceError,
-    MissingShapeDataError,
-    safe_get_shape_data
+    MissingShapeDataError
 )
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+
+# ============================================
+# Helper Functions for Shape Inference
+# ============================================
+
+def safe_get_shape_data(
+    shape_map: Dict[str, Dict[str, Any]],
+    node_id: str,
+    upstream_node_id: str,
+    required_keys: List[str],
+    default_values: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Safely retrieve shape data from upstream node with proper error handling.
+    
+    Args:
+        shape_map: Dictionary mapping node IDs to shape information
+        node_id: ID of the current node requesting shape data
+        upstream_node_id: ID of the upstream node to get shape from
+        required_keys: List of required keys in the shape data
+        default_values: Optional default values to use if keys are missing
+        
+    Returns:
+        Dictionary with shape data
+        
+    Raises:
+        MissingShapeDataError: If required keys are missing and no defaults provided
+    """
+    if upstream_node_id not in shape_map:
+        if default_values:
+            return default_values
+        raise MissingShapeDataError(
+            node_id=node_id,
+            upstream_node_id=upstream_node_id,
+            missing_keys=required_keys
+        )
+    
+    upstream_shape = shape_map[upstream_node_id]
+    missing_keys = [key for key in required_keys if key not in upstream_shape]
+    
+    if missing_keys:
+        if default_values:
+            # Use defaults for missing keys but keep existing values
+            result = upstream_shape.copy()
+            for key in missing_keys:
+                if key in default_values:
+                    result[key] = default_values[key]
+            return result
+        raise MissingShapeDataError(
+            node_id=node_id,
+            upstream_node_id=upstream_node_id,
+            missing_keys=missing_keys
+        )
+    
+    return upstream_shape
+
+
+class GroupBlockShapeComputer:
+    """
+    Computes shapes for group blocks by analyzing their internal structure.
+    TensorFlow version using NHWC format (batch, height, width, channels).
+    """
+    
+    def __init__(self, group_definitions: Dict[str, Any]):
+        """
+        Initialize the shape computer.
+        
+        Args:
+            group_definitions: Dictionary mapping definition IDs to group definitions
+        """
+        self.group_definitions = group_definitions
+        
+    def compute_output_shape(
+        self,
+        group_def_id: str,
+        input_shape: Dict[str, Any]
+    ) -> Tuple[Dict[str, Any], List[Exception]]:
+        """
+        Compute the output shape of a group block given its input shape.
+        
+        Args:
+            group_def_id: ID of the group definition
+            input_shape: Input shape dictionary
+            
+        Returns:
+            Tuple of (output shape dictionary, list of errors)
+        """
+        if group_def_id not in self.group_definitions:
+            error = GroupDefinitionNotFoundError(
+                node_id=f"group_block_{group_def_id}",
+                definition_id=group_def_id
+            )
+            return {}, [error]
+        
+        definition = self.group_definitions[group_def_id]
+        internal_structure = definition.get('internal_structure', {})
+        internal_nodes = internal_structure.get('nodes', [])
+        internal_edges = internal_structure.get('edges', [])
+        port_mappings = internal_structure.get('portMappings', [])
+        
+        # Compute internal shapes
+        internal_shape_map, errors = self.compute_internal_shapes(
+            internal_nodes,
+            internal_edges,
+            port_mappings,
+            input_shape,
+            definition.get('name', 'UnnamedBlock')
+        )
+        
+        # Find output port and return its shape
+        output_ports = [pm for pm in port_mappings if pm['type'] == 'output']
+        if output_ports:
+            output_node_id = output_ports[0]['internalNodeId']
+            if output_node_id in internal_shape_map:
+                return internal_shape_map[output_node_id], errors
+        
+        # Fallback: return input shape
+        return input_shape.copy(), errors
+    
+    def compute_internal_shapes(
+        self,
+        internal_nodes: List[Dict[str, Any]],
+        internal_edges: List[Dict[str, Any]],
+        port_mappings: List[Dict[str, Any]],
+        input_shape: Dict[str, Any],
+        block_name: str
+    ) -> Tuple[Dict[str, Dict[str, Any]], List[Exception]]:
+        """
+        Compute shapes for all internal nodes in a group block.
+        
+        Args:
+            internal_nodes: List of internal node definitions
+            internal_edges: List of internal edges
+            port_mappings: Port mappings (input/output)
+            input_shape: Input shape for the block
+            block_name: Name of the block for error messages
+            
+        Returns:
+            Tuple of (shape map for internal nodes, list of errors)
+        """
+        # Sort nodes topologically
+        sorted_nodes = topological_sort(internal_nodes, internal_edges)
+        
+        # Initialize shape map with input port shapes
+        shape_map = {}
+        input_ports = [pm for pm in port_mappings if pm['type'] == 'input']
+        for port in input_ports:
+            internal_node_id = port['internalNodeId']
+            shape_map[internal_node_id] = input_shape.copy()
+        
+        # Use the main infer_shapes function but pass None for group_definitions
+        # to avoid recursive group block resolution
+        internal_shape_map, errors = infer_shapes(sorted_nodes, internal_edges, None)
+        
+        # Merge input port shapes
+        for node_id, shape in shape_map.items():
+            if node_id in internal_shape_map:
+                internal_shape_map[node_id].update(shape)
+            else:
+                internal_shape_map[node_id] = shape
+        
+        return internal_shape_map, errors
 
 
 class TensorFlowBlockGenerator:

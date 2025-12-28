@@ -1,14 +1,18 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
-import traceback
+from rest_framework.permissions import AllowAny
+import logging
 
 from block_manager.serializers import SaveArchitectureSerializer
 from block_manager.services.validation import validate_architecture
 from block_manager.services.inference import infer_dimensions
 
+logger = logging.getLogger(__name__)
+
 
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def validate_model(request):
     """
     Validate model architecture
@@ -41,13 +45,12 @@ def validate_model(request):
         
     except Exception as e:
         # Log the error for debugging
-        print(f"Validation error: {str(e)}")
-        traceback.print_exc()
+        logger.error(f"Validation error: {str(e)}", exc_info=True)
         
         return Response(
             {
                 'isValid': False,
-                'errors': [{'message': f'Server error: {str(e)}', 'type': 'error'}],
+                'errors': [{'message': 'Server error during validation', 'type': 'error'}],
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

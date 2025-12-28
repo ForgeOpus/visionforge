@@ -1,9 +1,12 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.request import Request
+from rest_framework.permissions import AllowAny
 from django.http import HttpResponse
+from django.conf import settings
 from django_ratelimit.decorators import ratelimit
+import logging
 
 from block_manager.serializers import ExportRequestSerializer
 from block_manager.services.tensorflow_codegen import generate_tensorflow_code
@@ -13,10 +16,13 @@ from authentication.middleware import require_authentication
 import zipfile
 import io
 
+logger = logging.getLogger(__name__)
+
 
 @api_view(['POST'])
-@require_authentication  # Require authentication for export
-@ratelimit(key='user', rate='30/h', method='POST', block=True)
+@permission_classes([AllowAny])
+@require_authentication
+@ratelimit(key='user_or_ip', rate='5/m', method='POST', block=True)
 def export_model(request: Request) -> Response:
     """
     Export model code with professional class-based structure.
@@ -173,15 +179,10 @@ Generated with VisionForge
         })
 
     except Exception as e:
-        # Pass detailed error messages to frontend
         import traceback
-        traceback.print_exc()  # Log to console for debugging
-        return Response(
-            {
-                'error': f'Code generation failed: {str(e)}',
-                'details': str(e),
-                'traceback': traceback.format_exc()
-            },
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        logger.error(f"Error in export_model: {str(e)}", exc_info=True)
+        response = {
+            'error': 'Code generation failed'
+        }
+        return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

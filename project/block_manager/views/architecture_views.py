@@ -399,10 +399,9 @@ def render_node_code(request):
             'format': 'class'
         })
     except Exception as e:
-        import traceback
-        traceback.print_exc()  # Log to console for debugging
+        logger.error(f"Error generating node code: {str(e)}", exc_info=True)
         return Response(
-            {'success': False, 'error': f'Error generating node code: {str(e)}'},
+            {'success': False, 'error': 'Error generating node code'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 

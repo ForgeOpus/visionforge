@@ -19,6 +19,7 @@ urlpatterns = [
     # API endpoints - these must come BEFORE the catch-all route
     path('api/v1/', include('block_manager.urls')),
     path('api/v1/auth/', include('authentication.urls')),
+    path('api/v1/maintenance/', include('block_manager.maintenance_urls')),
 ]
 
 # Serve static files in development
