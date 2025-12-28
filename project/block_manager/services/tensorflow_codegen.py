@@ -10,8 +10,8 @@ import logging
 # New template-based code generation
 from .codegen.tensorflow_orchestrator import TensorFlowCodeOrchestrator
 
-# Import shared utilities and exceptions from PyTorch codegen (framework-agnostic)
-from .pytorch_codegen import (
+# Import shared utilities and exceptions from enhanced_pytorch_codegen (framework-agnostic)
+from .enhanced_pytorch_codegen import (
     GroupBlockShapeComputer,
     GroupDefinitionNotFoundError,
     ShapeMismatchError,
