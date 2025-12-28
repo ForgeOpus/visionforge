@@ -96,6 +96,7 @@ class PyTorchCodeOrchestrator:
                 project_name,
                 code_specs,
                 sorted_nodes,
+                edges,
                 edge_map
             )
 
@@ -140,6 +141,21 @@ class PyTorchCodeOrchestrator:
             if target and source:
                 edge_map[target].append(source)
         return dict(edge_map)
+
+    def _build_outgoing_edge_map(self, edges: List[Dict[str, Any]]) -> Dict[str, List[str]]:
+        """
+        Build a map of outgoing edges from each node.
+
+        Returns:
+            Dict mapping source_node_id -> [target_node_ids]
+        """
+        outgoing_map = defaultdict(list)
+        for edge in edges:
+            source = edge.get('source')
+            target = edge.get('target')
+            if source and target:
+                outgoing_map[source].append(target)
+        return dict(outgoing_map)
 
     def _compute_shape_map(
         self,
@@ -556,6 +572,7 @@ class PyTorchCodeOrchestrator:
         project_name: str,
         code_specs: List[LayerCodeSpec],
         sorted_nodes: List[Dict[str, Any]],
+        edges: List[Dict[str, Any]],
         edge_map: Dict[str, List[str]]
     ) -> str:
         """Generate the main model class definition"""
@@ -572,6 +589,7 @@ class PyTorchCodeOrchestrator:
         # Generate forward pass logic with skip connection support
         forward_lines, skip_connections = self._generate_forward_pass(
             sorted_nodes,
+            edges,
             edge_map,
             code_specs
         )
@@ -605,14 +623,61 @@ class PyTorchCodeOrchestrator:
 '''
         return model_class
 
+    def _needs_named_variable(
+        self,
+        node_id: str,
+        node_type: str,
+        outgoing_edge_map: Dict[str, List[str]],
+        num_outputs: int
+    ) -> bool:
+        """
+        Determine if a node's output requires a named variable.
+
+        A named variable is needed when:
+        1. Node has multiple outgoing edges (output used multiple times - skip connections)
+        2. Node has multiple outputs (e.g., group blocks)
+        3. Node is a merge operation (add, concat) - for readability
+
+        Args:
+            node_id: Node identifier
+            node_type: Type of node (e.g., 'conv2d', 'add')
+            outgoing_edge_map: Map of node_id -> list of target node IDs
+            num_outputs: Number of outputs for this node
+
+        Returns:
+            True if a named variable should be created
+        """
+        # Multi-output nodes always need named variables
+        if num_outputs > 1:
+            return True
+
+        # Nodes with multiple outgoing edges need named variables (skip connections)
+        outgoing_edges = outgoing_edge_map.get(node_id, [])
+        if len(outgoing_edges) > 1:
+            return True
+
+        # Merge operations benefit from named variables for readability
+        if node_type in ('add', 'concat'):
+            return True
+
+        return False
+
     def _generate_forward_pass(
         self,
         sorted_nodes: List[Dict[str, Any]],
+        edges: List[Dict[str, Any]],
         edge_map: Dict[str, List[str]],
         code_specs: List[LayerCodeSpec]
     ) -> Tuple[List[str], Set[str]]:
         """
-        Generate forward pass logic, handling skip connections properly.
+        Generate forward pass logic with optimized variable usage.
+
+        Only creates named variables when needed:
+        - Skip connections (nodes with multiple outgoing edges)
+        - Multi-output nodes (group blocks)
+        - Merge operations (add, concat)
+
+        Otherwise reuses 'x' variable for memory efficiency.
 
         Returns:
             Tuple of (forward pass lines, set of skip connection var names)
@@ -621,6 +686,9 @@ class PyTorchCodeOrchestrator:
         var_map = {}  # Maps node_id to variable name
         skip_connections = set()
         spec_map = {spec.node_id: spec for spec in code_specs}
+
+        # Build outgoing edge map to detect skip connections
+        outgoing_edge_map = self._build_outgoing_edge_map(edges)
 
         # Process nodes in topological order
         processable_nodes = [
@@ -648,9 +716,6 @@ class PyTorchCodeOrchestrator:
             if not spec:
                 continue
 
-            # Generate forward pass line
-            output_var = f"x_{node_id.replace('-', '_')}"
-
             # Handle group blocks with multiple outputs
             if node_type == 'group' and spec.template_context.get('has_multi_output'):
                 num_outputs = spec.template_context.get('num_outputs', 1)
@@ -663,33 +728,45 @@ class PyTorchCodeOrchestrator:
                 )
                 # Map first output as primary variable for this node
                 var_map[node_id] = output_vars[0]
-
-            # Handle multi-input nodes (add, concat)
-            elif node_type in ('add', 'concat'):
-                if node_type == 'concat':
-                    dim = spec.template_context.get('dim', 1)
-                    forward_lines.append(
-                        f"{output_var} = self.{spec.layer_variable_name}({input_var}, concat_dim={dim})"
-                    )
-                else:
-                    forward_lines.append(
-                        f"{output_var} = self.{spec.layer_variable_name}({input_var})"
-                    )
-                # Update variable map
-                var_map[node_id] = output_var
+                skip_connections.add(output_vars[0])
 
             else:
-                # Regular single-input, single-output node
-                forward_lines.append(
-                    f"{output_var} = self.{spec.layer_variable_name}({input_var})"
+                # Determine if this node needs a named variable
+                num_outputs = 1
+                needs_named_var = self._needs_named_variable(
+                    node_id,
+                    node_type,
+                    outgoing_edge_map,
+                    num_outputs
                 )
-                # Update variable map
-                var_map[node_id] = output_var
 
-            # Track skip connections (nodes with multiple outgoing edges)
-            # This helps identify which variables need to be preserved
-            if len(incoming) > 1:
-                skip_connections.add(output_var)
+                if needs_named_var:
+                    # Create named variable for skip connections, merge ops, etc.
+                    output_var = f"x_{node_id.replace('-', '_')}"
+
+                    # Handle concat with dimension parameter
+                    if node_type == 'concat':
+                        dim = spec.template_context.get('dim', 1)
+                        forward_lines.append(
+                            f"{output_var} = self.{spec.layer_variable_name}({input_var}, concat_dim={dim})"
+                        )
+                    else:
+                        forward_lines.append(
+                            f"{output_var} = self.{spec.layer_variable_name}({input_var})"
+                        )
+
+                    var_map[node_id] = output_var
+
+                    # Track if this is a skip connection source
+                    if len(outgoing_edge_map.get(node_id, [])) > 1:
+                        skip_connections.add(output_var)
+
+                else:
+                    # Reuse 'x' variable for linear chains (memory efficient)
+                    forward_lines.append(
+                        f"x = self.{spec.layer_variable_name}({input_var})"
+                    )
+                    var_map[node_id] = 'x'
 
         # Ensure final output is assigned to 'x' for return statement
         if processable_nodes:
