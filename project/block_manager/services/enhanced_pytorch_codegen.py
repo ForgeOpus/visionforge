@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional, Tuple
 from collections import deque
+import json
 
 # New template-based code generation
 from .codegen.pytorch_orchestrator import PyTorchCodeOrchestrator
@@ -1641,9 +1642,23 @@ class {project_name}(nn.Module):
         # Skip input/output nodes but track input in var_map
         if node_type in ('input', 'dataloader', 'output'):
             if node_type == 'input':
-                # Extract input shape
-                config = node.get('data').get('config')
-                input_shape = eval(config.get('shape', '[1, 3, 224, 224]'))
+                # Extract input shape safely without using eval
+                config = node.get('data').get('config') or {}
+                raw_shape = config.get('shape', [1, 3, 224, 224])
+                parsed_shape = (1, 3, 224, 224)
+                try:
+                    # If shape is a string, try to parse it as JSON (e.g. "[1, 3, 224, 224]")
+                    if isinstance(raw_shape, str):
+                        loaded = json.loads(raw_shape)
+                    else:
+                        loaded = raw_shape
+                    # Accept list/tuple of ints
+                    if isinstance(loaded, (list, tuple)) and all(isinstance(d, int) for d in loaded):
+                        parsed_shape = tuple(loaded)
+                except (ValueError, TypeError, json.JSONDecodeError):
+                    # Fall back to the default shape on any parsing/validation error
+                    parsed_shape = (1, 3, 224, 224)
+                input_shape = parsed_shape
                 var_map[(node_id, 'default')] = 'x'
             elif node_type == 'output':
                 var_map[(node_id, 'default')] = 'x'

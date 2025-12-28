@@ -1,10 +1,13 @@
 """
 Firebase authentication middleware for Django.
 """
+import logging
 from django.utils.deprecation import MiddlewareMixin
 from django.http import JsonResponse
 from .firebase_auth import verify_firebase_token, get_user_info_from_token
 from .models import User
+
+logger = logging.getLogger('authentication')
 
 
 class FirebaseAuthenticationMiddleware(MiddlewareMixin):
@@ -25,7 +28,8 @@ class FirebaseAuthenticationMiddleware(MiddlewareMixin):
         # Skip authentication for certain paths
         exempt_paths = [
             '/admin/',
-            '/api/auth/verify-token',  # Allow token verification endpoint
+            '/api/auth/verify-token',
+            '/api/auth/csrf',
         ]
 
         if any(request.path.startswith(path) for path in exempt_paths):
@@ -63,7 +67,7 @@ class FirebaseAuthenticationMiddleware(MiddlewareMixin):
             else:
                 request.firebase_user = None
         except Exception as e:
-            print(f"Firebase authentication error: {str(e)}")
+            logger.error(f"Firebase authentication error: {str(e)}", exc_info=True)
             request.firebase_user = None
 
         return None
@@ -81,6 +85,7 @@ def require_authentication(view_func):
     """
     def wrapper(request, *args, **kwargs):
         if not hasattr(request, 'firebase_user') or request.firebase_user is None:
+            logger.warning(f"Unauthorized access attempt to {request.path} from IP {request.META.get('REMOTE_ADDR')}")
             return JsonResponse({
                 'error': 'Authentication required',
                 'message': 'You must be logged in to access this endpoint'

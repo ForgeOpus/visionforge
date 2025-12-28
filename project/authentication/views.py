@@ -2,21 +2,40 @@
 Authentication API views for Firebase integration.
 """
 from django.http import JsonResponse, HttpRequest
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
+from django.conf import settings
 from django_ratelimit.decorators import ratelimit
 import json
 import traceback
+import logging
 
 from .firebase_auth import verify_firebase_token, get_user_info_from_token
 from .models import User
 from .middleware import require_authentication
 
+logger = logging.getLogger('authentication')
+
+
+@require_http_methods(["GET"])
+@ensure_csrf_cookie
+def get_csrf_token(request: HttpRequest) -> JsonResponse:
+    """
+    Get CSRF token for subsequent requests.
+
+    GET /api/auth/csrf
+
+    Returns:
+        200: CSRF token in response header and body
+    """
+    response = JsonResponse({'success': True, 'detail': 'CSRF cookie set'})
+    return response
+
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@ratelimit(key='ip', rate='30/m', method='POST', block=True)
+@ratelimit(key='ip', rate='10/m', method='POST', block=True)
 def verify_token(request: HttpRequest) -> JsonResponse:
     """
     Verify Firebase ID token and create/update user in database.
@@ -44,6 +63,7 @@ def verify_token(request: HttpRequest) -> JsonResponse:
         # Verify token
         decoded_token = verify_firebase_token(token)
         if not decoded_token:
+            logger.warning(f"Failed token verification from IP {request.META.get('REMOTE_ADDR')}")
             return JsonResponse({
                 'error': 'Invalid token',
                 'message': 'Failed to verify Firebase token'
@@ -114,11 +134,14 @@ def verify_token(request: HttpRequest) -> JsonResponse:
             'message': 'Request body must be valid JSON'
         }, status=400)
     except Exception as e:
-        traceback.print_exc()  # Print full traceback to console for debugging
-        return JsonResponse({
+        logger.error(f"Unexpected error in verify_token: {str(e)}", exc_info=True)
+        response = {
             'error': 'Server error',
             'message': 'An unexpected error occurred. Please try again later.'
-        }, status=500)
+        }
+        if settings.DEBUG:
+            response['traceback'] = traceback.format_exc()
+        return JsonResponse(response, status=500)
 
 
 @csrf_exempt
@@ -161,7 +184,7 @@ def get_current_user(request: HttpRequest) -> JsonResponse:
 @csrf_exempt
 @require_http_methods(["POST"])
 @require_authentication
-@ratelimit(key='user_or_ip', rate='120/h', method='POST', block=True)
+@ratelimit(key='user_or_ip', rate='60/h', method='POST', block=True)
 def update_session(request):
     """
     Update session information (increment session count, add time spent).
@@ -204,11 +227,14 @@ def update_session(request):
             'message': 'Request body must be valid JSON'
         }, status=400)
     except Exception as e:
-        traceback.print_exc()  # Print full traceback to console for debugging
-        return JsonResponse({
+        logger.error(f"Error in update_session: {str(e)}", exc_info=True)
+        response = {
             'error': 'Server error',
             'message': 'An unexpected error occurred. Please try again later.'
-        }, status=500)
+        }
+        if settings.DEBUG:
+            response['traceback'] = traceback.format_exc()
+        return JsonResponse(response, status=500)
 
 
 @csrf_exempt
@@ -235,17 +261,20 @@ def logout(request):
         }, status=200)
 
     except Exception as e:
-        traceback.print_exc()  # Print full traceback to console for debugging
-        return JsonResponse({
+        logger.error(f"Error in logout: {str(e)}", exc_info=True)
+        response = {
             'error': 'Server error',
             'message': 'An unexpected error occurred. Please try again later.'
-        }, status=500)
+        }
+        if settings.DEBUG:
+            response['traceback'] = traceback.format_exc()
+        return JsonResponse(response, status=500)
 
 
 @csrf_exempt
 @require_http_methods(["POST"])
 @require_authentication
-@ratelimit(key='user_or_ip', rate='60/h', method='POST', block=True)
+@ratelimit(key='user_or_ip', rate='30/h', method='POST', block=True)
 def mark_milestone(request):
     """
     Mark user milestones (first model created, first export).
@@ -293,8 +322,11 @@ def mark_milestone(request):
             'message': 'Request body must be valid JSON'
         }, status=400)
     except Exception as e:
-        traceback.print_exc()  # Print full traceback to console for debugging
-        return JsonResponse({
+        logger.error(f"Error in mark_milestone: {str(e)}", exc_info=True)
+        response = {
             'error': 'Server error',
             'message': 'An unexpected error occurred. Please try again later.'
-        }, status=500)
+        }
+        if settings.DEBUG:
+            response['traceback'] = traceback.format_exc()
+        return JsonResponse(response, status=500)

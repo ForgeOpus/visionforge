@@ -14,7 +14,7 @@ oracledb>=2.0.0
 
 # AI & ML
 anthropic>=0.39.0
-google-generativeai>=0.8.3
+google-genai>=0.1.0
 
 # Firebase
 firebase-admin>=6.0.0
@@ -30,6 +30,8 @@ numpy>=2.2.0
 
 # Security & Rate Limiting
 django-ratelimit>=4.1.0
+django-csp>=3.8
+python-json-logger>=2.0.7
 
 # Production WSGI Server
 gunicorn>=21.2.0
