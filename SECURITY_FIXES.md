@@ -1,7 +1,7 @@
 # Security Fixes - CodeQL Alerts Resolution
 
 ## Summary
-This document describes the security vulnerabilities that were identified and fixed in the VisionForge repository to resolve CodeQL security alerts.
+This document describes the security vulnerabilities that were identified and fixed in the VisionForge repository to resolve CodeQL security alerts and additional security issues discovered during comprehensive code review.
 
 ## Vulnerabilities Fixed
 
@@ -65,6 +65,61 @@ const sanitizedColor = color?.replace(/[<>'"]/g, '')
 
 **Impact:** Prevents attackers from injecting malicious JavaScript or CSS through chart configuration.
 
+### 3. Timing Attack Vulnerability (CWE-208)
+**Location:** `project/block_manager/views/maintenance_views.py`
+
+**Issue:** Secret token comparison was vulnerable to timing attacks, allowing attackers to potentially discover valid secret tokens through statistical timing analysis.
+
+**Fix Applied:**
+- Import `hmac` module for constant-time comparison
+- Replace string equality check (`!=`) with `hmac.compare_digest()`
+- Applied to both `trigger_file_cleanup` and `get_upload_stats` endpoints
+
+**Code Changes:**
+```python
+# Before:
+if not expected_secret or provided_secret != expected_secret:
+    # Unauthorized
+
+# After:
+import hmac
+if not expected_secret or not hmac.compare_digest(provided_secret, expected_secret):
+    # Unauthorized
+```
+
+**Impact:** Prevents timing-based attacks on secret token validation, protecting maintenance endpoints.
+
+### 4. Information Disclosure (CWE-209)
+**Locations:** 
+- `project/block_manager/views/validation_views.py`
+- `project/block_manager/views/architecture_views.py`
+
+**Issue:** Error handling code was exposing detailed traceback information and error messages to users, which could reveal sensitive implementation details about the system architecture, file paths, and internal logic.
+
+**Fix Applied:**
+- Removed `traceback.print_exc()` calls that printed to console
+- Removed `print()` statements with error details
+- Replaced with proper logging using `logger.error()` with `exc_info=True`
+- Changed detailed error messages to generic messages
+
+**Code Changes:**
+```python
+# Before:
+print(f"Validation error: {str(e)}")
+traceback.print_exc()
+return Response({
+    'errors': [{'message': f'Server error: {str(e)}', 'type': 'error'}]
+})
+
+# After:
+logger.error(f"Validation error: {str(e)}", exc_info=True)
+return Response({
+    'errors': [{'message': 'Server error during validation', 'type': 'error'}]
+})
+```
+
+**Impact:** Prevents information leakage that could aid attackers in crafting targeted exploits.
+
 ## Verification
 
 ### CodeQL Analysis Results
@@ -95,11 +150,41 @@ A comprehensive test suite was created to verify the security fixes:
 
 2. **Input Validation:** All user inputs are sanitized before use
 
-3. **Principle of Least Privilege:** File operations are restricted to designated directories
+3. **Constant-Time Comparisons:** Use `hmac.compare_digest()` for secret comparisons to prevent timing attacks
 
-4. **Fail-Safe Defaults:** Security checks raise exceptions when violations are detected
+4. **Principle of Least Privilege:** File operations are restricted to designated directories
 
-5. **Clear Error Messages:** Security violations are logged with appropriate context
+5. **Fail-Safe Defaults:** Security checks raise exceptions when violations are detected
+
+6. **Information Hiding:** Generic error messages prevent information disclosure
+
+7. **Proper Logging:** Security events logged for monitoring without exposing details to users
+
+## Additional Security Measures Already in Place
+
+### Authentication & Authorization
+- Firebase authentication for user identity
+- Token-based API authentication
+- REST Framework permission classes
+- Rate limiting (60/hour anon, 600/hour authenticated)
+
+### Network Security
+- CORS properly configured with origin whitelist
+- CSRF protection enabled (HttpOnly cookies, SameSite=Lax)
+- HTTPS enforcement in production (SECURE_SSL_REDIRECT)
+- HSTS headers (1 year max-age)
+
+### Input Validation
+- File upload type validation
+- File size limits
+- JSON schema validation via Django REST Framework serializers
+
+### Security Headers (Production)
+- X-Frame-Options: DENY
+- X-Content-Type-Options: nosniff
+- X-XSS-Protection: 1; mode=block
+- Referrer-Policy: strict-origin-when-cross-origin
+- Content Security Policy configured
 
 ## Recommendations for Future Development
 
@@ -107,12 +192,19 @@ A comprehensive test suite was created to verify the security fixes:
 2. Always use `os.path.basename()` when handling user-supplied filenames
 3. Verify resolved paths stay within intended directories
 4. Avoid `dangerouslySetInnerHTML` when possible; when necessary, always sanitize inputs
-5. Run CodeQL regularly to catch new security issues early
-6. Consider adding automated security tests to CI/CD pipeline
+5. Use `hmac.compare_digest()` for all secret/token comparisons
+6. Never expose detailed error messages or tracebacks to users in production
+7. Run CodeQL regularly to catch new security issues early
+8. Consider adding automated security tests to CI/CD pipeline
+9. Regular security audits and penetration testing
+10. Keep dependencies updated to patch known vulnerabilities
 
 ## References
 
 - CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')
 - CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')
+- CWE-208: Observable Timing Discrepancy
+- CWE-209: Generation of Error Message Containing Sensitive Information
 - OWASP Top 10 2021: A03:2021 – Injection
 - OWASP Top 10 2021: A01:2021 – Broken Access Control
+- OWASP Top 10 2021: A04:2021 – Insecure Design
