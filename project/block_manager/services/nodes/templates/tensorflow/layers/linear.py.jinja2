@@ -1,0 +1,33 @@
+class {{ class_name }}(tf.keras.layers.Layer):
+    """
+    Dense/Fully Connected Layer
+
+    Applies a linear transformation to the incoming data.
+
+    Parameters:
+        - Input features: {{ in_features }}
+        - Output features: {{ out_features }}
+        - Use bias: {{ use_bias }}
+
+    Shape:
+        - Input: [batch_size, {{ in_features }}]
+        - Output: [batch_size, {{ out_features }}]
+    """
+
+    def __init__(self, units={{ out_features }}, use_bias={{ use_bias }}):
+        """Initialize the dense layer."""
+        super({{ class_name }}, self).__init__()
+        self.dense = tf.keras.layers.Dense(units=units, use_bias=use_bias)
+
+    def call(self, inputs, training=None):
+        """
+        Forward pass through the dense layer.
+
+        Args:
+            inputs: Input tensor of shape [batch, {{ in_features }}]
+            training: Whether in training mode
+
+        Returns:
+            Output tensor of shape [batch, {{ out_features }}]
+        """
+        return self.dense(inputs, training=training)

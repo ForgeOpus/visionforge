@@ -1,0 +1,29 @@
+class {{ class_name }}(nn.Module):
+    """
+    ReLU Activation Layer
+
+    Applies the rectified linear unit function element-wise: ReLU(x) = max(0, x)
+    Introduces non-linearity to the model.
+
+    Shape:
+        - Input: [batch_size, *] (any shape)
+        - Output: [batch_size, *] (same shape as input)
+    """
+
+    def __init__(self, inplace: bool = False):
+        """Initialize the ReLU activation."""
+        super({{ class_name }}, self).__init__()
+        self.relu = nn.ReLU(inplace=inplace)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the activation.
+
+        Args:
+            x: Input tensor
+
+        Returns:
+            Output tensor with ReLU applied element-wise
+        """
+        x = self.relu(x)
+        return x

@@ -1,7 +1,7 @@
 """PyTorch BatchNorm2D Node Definition"""
 
 from typing import Dict, List, Optional, Any
-from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework
+from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework, LayerCodeSpec
 
 
 class BatchNorm2DNode(NodeDefinition):
@@ -94,4 +94,43 @@ class BatchNorm2DNode(NodeDefinition):
             source_output_shape,
             4,
             "[batch, channels, height, width]"
+        )
+
+    def get_pytorch_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """Generate PyTorch code specification for BatchNorm2D layer"""
+        num_features = config.get('num_features') or (input_shape.dims[1] if input_shape and len(input_shape.dims) >= 2 else 64)
+        eps = config.get('eps', 1e-5)
+        momentum = config.get('momentum', 0.1)
+        affine = config.get('affine', True)
+
+        sanitized_id = node_id.replace('-', '_')
+        class_name = 'BatchNormBlock'
+        layer_var = f'{sanitized_id}_BatchNormBlock'
+
+        return LayerCodeSpec(
+            class_name=class_name,
+            layer_variable_name=layer_var,
+            node_type='batchnorm',
+            node_id=node_id,
+            init_params={
+                'num_features': num_features,
+                'eps': eps,
+                'momentum': momentum,
+                'affine': affine
+            },
+            config_params=config,
+            input_shape_info={'dims': input_shape.dims if input_shape else []},
+            output_shape_info={'dims': output_shape.dims if output_shape else []},
+            template_context={
+                'num_features': num_features,
+                'eps': eps,
+                'momentum': momentum,
+                'affine': affine
+            }
         )

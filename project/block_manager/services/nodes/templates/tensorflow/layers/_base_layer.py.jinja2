@@ -1,0 +1,40 @@
+class {{ class_name }}(layers.Layer):
+    """
+    {{ docstring }}
+    {% if parameters %}
+
+    Parameters:
+    {% for param_name, param_desc in parameters.items() %}
+        - {{ param_desc }}
+    {% endfor %}
+    {% endif %}
+    {% if shape_info %}
+
+    Shape:
+        - Input: {{ shape_info.input }} (NHWC format)
+        - Output: {{ shape_info.output }} (NHWC format)
+    {% endif %}
+    """
+
+    def __init__(self):
+        """Initialize the {{ layer_type }} layer."""
+        super({{ class_name }}, self).__init__()
+        {% block init_body %}
+        # Layer initialization
+        pass
+        {% endblock %}
+
+    def call(self, inputs: tf.Tensor, training: Optional[bool] = None) -> tf.Tensor:
+        """
+        Forward pass through the {{ layer_type }} layer.
+
+        Args:
+            inputs: Input tensor{% if input_shape_desc %} of shape {{ input_shape_desc }}{% endif %}
+            training: Whether in training mode
+
+        Returns:
+            Output tensor{% if output_shape_desc %} of shape {{ output_shape_desc }}{% endif %}
+        """
+        {% block forward_body %}
+        return inputs
+        {% endblock %}

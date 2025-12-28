@@ -1,0 +1,40 @@
+class {{ class_name }}(nn.Module):
+    """
+    Batch Normalization Layer
+
+    Normalizes the input over a mini-batch for each feature channel.
+    Helps stabilize and accelerate training.
+
+    Parameters:
+        - Number of features: {{ num_features }}
+        - Epsilon: {{ eps }}
+        - Momentum: {{ momentum }}
+        - Learnable parameters: {{ affine }}
+
+    Shape:
+        - Input: [batch_size, {{ num_features }}, H, W]
+        - Output: [batch_size, {{ num_features }}, H, W]
+    """
+
+    def __init__(self, num_features: int, eps: float = {{ eps }}, momentum: float = {{ momentum }}, affine: bool = {{ affine }}):
+        """Initialize the batch normalization layer."""
+        super({{ class_name }}, self).__init__()
+        self.bn = nn.BatchNorm2d(
+            num_features,
+            eps=eps,
+            momentum=momentum,
+            affine=affine
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the batch normalization layer.
+
+        Args:
+            x: Input tensor of shape [batch, {{ num_features }}, H, W]
+
+        Returns:
+            Normalized output tensor of same shape
+        """
+        x = self.bn(x)
+        return x

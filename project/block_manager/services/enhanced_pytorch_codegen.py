@@ -2,6 +2,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from collections import deque
 import json
 
+# New template-based code generation
+from .codegen.pytorch_orchestrator import PyTorchCodeOrchestrator
+
 # ============================================
 # Custom Exception Classes
 # ============================================
@@ -1553,7 +1556,16 @@ def generate_pytorch_code(
         code files (with keys: 'model', 'train', 'dataset', 'config') and a list of shape
         errors encountered during generation.
     """
-    # Generate layer class definitions
+    # Delegate to new template-based orchestrator
+    orchestrator = PyTorchCodeOrchestrator()
+    return orchestrator.generate(nodes, edges, project_name, group_definitions)
+
+    # ==================== LEGACY CODE (PRESERVED FOR REFERENCE) ====================
+    # The code below is no longer executed but preserved for reference.
+    # All code generation now happens through the PyTorchCodeOrchestrator.
+    # ================================================================================
+
+    # OLD: Generate layer class definitions
     layer_classes = ClassDefinitionGenerator.create_required_node_classes(nodes, group_definitions)
 
     # Generate layer initializations

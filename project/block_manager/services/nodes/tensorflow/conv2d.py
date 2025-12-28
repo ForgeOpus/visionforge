@@ -1,7 +1,7 @@
 """TensorFlow Conv2D Layer Node Definition"""
 
 from typing import Dict, List, Optional, Any
-from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework
+from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework, LayerCodeSpec
 
 
 class Conv2DNode(NodeDefinition):
@@ -121,4 +121,47 @@ class Conv2DNode(NodeDefinition):
             source_output_shape,
             4,
             "[batch, height, width, channels]"
+        )
+
+    def get_tensorflow_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """Generate TensorFlow code specification for Conv2D layer"""
+        out_channels = config.get('filters', 64)
+        kernel_size = config.get('kernel_size', 3)
+        strides = config.get('strides', 1)
+        padding = config.get('padding', 'valid')
+
+        # TensorFlow uses NHWC format
+        in_channels = input_shape.dims[3] if input_shape and len(input_shape.dims) >= 4 else 3
+
+        sanitized_id = node_id.replace('-', '_')
+        class_name = 'Conv2DBlock'
+        layer_var = f'{sanitized_id}_Conv2DBlock'
+
+        return LayerCodeSpec(
+            class_name=class_name,
+            layer_variable_name=layer_var,
+            node_type='conv2d',
+            node_id=node_id,
+            init_params={
+                'filters': out_channels,
+                'kernel_size': kernel_size,
+                'strides': strides,
+                'padding': padding
+            },
+            config_params=config,
+            input_shape_info={'in_channels': in_channels},
+            output_shape_info={'out_channels': out_channels},
+            template_context={
+                'in_channels': in_channels,
+                'out_channels': out_channels,
+                'kernel_size': kernel_size,
+                'strides': strides,
+                'padding': padding
+            }
         )

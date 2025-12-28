@@ -1,0 +1,31 @@
+class {{ class_name }}(tf.keras.layers.Layer):
+    """
+    Addition Layer
+
+    Element-wise addition of multiple tensors.
+
+    Parameters:
+        - Input tensors: List of tensors with same shape
+
+    Shape:
+        - Input: List of tensors [batch_size, *]
+        - Output: [batch_size, *] (same shape as inputs)
+    """
+
+    def __init__(self):
+        """Initialize the addition layer."""
+        super({{ class_name }}, self).__init__()
+        self.add = tf.keras.layers.Add()
+
+    def call(self, inputs, training=None):
+        """
+        Forward pass through the addition layer.
+
+        Args:
+            inputs: List of input tensors
+            training: Whether in training mode
+
+        Returns:
+            Element-wise sum of all input tensors
+        """
+        return self.add(inputs)

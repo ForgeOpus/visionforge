@@ -1,7 +1,7 @@
 """TensorFlow Dense (Linear) Layer Node Definition"""
 
 from typing import Dict, List, Optional, Any
-from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework
+from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework, LayerCodeSpec
 
 
 class LinearNode(NodeDefinition):
@@ -92,3 +92,35 @@ class LinearNode(NodeDefinition):
             return "Dense layer requires input with at least 2 dimensions [batch, features, ...]"
         
         return None
+    def get_tensorflow_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """Generate TensorFlow code specification for Dense/Linear layer"""
+        out_features = config.get('units', 128)
+        use_bias = config.get('use_bias', True)
+        in_features = input_shape.dims[1] if input_shape and len(input_shape.dims) >= 2 else 512
+
+        sanitized_id = node_id.replace('-', '_')
+        class_name = 'DenseLayer'
+        layer_var = f'{sanitized_id}_DenseLayer'
+
+        return LayerCodeSpec(
+            class_name=class_name,
+            layer_variable_name=layer_var,
+            node_type='linear',
+            node_id=node_id,
+            init_params={'units': out_features, 'use_bias': use_bias},
+            config_params=config,
+            input_shape_info={'in_features': in_features},
+            output_shape_info={'out_features': out_features},
+            template_context={
+                'in_features': in_features,
+                'out_features': out_features,
+                'use_bias': use_bias
+            }
+        )
+
