@@ -1,7 +1,7 @@
 """TensorFlow Add Node Definition"""
 
 from typing import Dict, List, Optional, Any
-from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework
+from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework, LayerCodeSpec
 
 
 class AddNode(NodeDefinition):
@@ -51,3 +51,27 @@ class AddNode(NodeDefinition):
     def allows_multiple_inputs(self) -> bool:
         """Add nodes accept multiple input connections"""
         return True
+    def get_tensorflow_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """Generate TensorFlow code specification for Add layer"""
+        sanitized_id = node_id.replace('-', '_')
+        class_name = 'AddBlock'
+        layer_var = f'{sanitized_id}_AddBlock'
+
+        return LayerCodeSpec(
+            class_name=class_name,
+            layer_variable_name=layer_var,
+            node_type='add',
+            node_id=node_id,
+            init_params={},
+            config_params=config,
+            input_shape_info={},
+            output_shape_info={},
+            template_context={}
+        )
+

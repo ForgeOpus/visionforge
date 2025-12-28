@@ -1,7 +1,7 @@
 """TensorFlow Dropout Node Definition"""
 
 from typing import Dict, List, Optional, Any
-from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework
+from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework, LayerCodeSpec
 
 
 class DropoutNode(NodeDefinition):
@@ -55,3 +55,29 @@ class DropoutNode(NodeDefinition):
     ) -> Optional[str]:
         # Dropout accepts any input
         return None
+    def get_tensorflow_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """Generate TensorFlow code specification for Dropout layer"""
+        rate = config.get('rate', 0.5)
+
+        sanitized_id = node_id.replace('-', '_')
+        class_name = 'DropoutLayer'
+        layer_var = f'{sanitized_id}_DropoutLayer'
+
+        return LayerCodeSpec(
+            class_name=class_name,
+            layer_variable_name=layer_var,
+            node_type='dropout',
+            node_id=node_id,
+            init_params={'rate': rate},
+            config_params=config,
+            input_shape_info={},
+            output_shape_info={},
+            template_context={'rate': rate}
+        )
+

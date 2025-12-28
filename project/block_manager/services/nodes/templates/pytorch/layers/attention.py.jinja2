@@ -1,0 +1,40 @@
+class {{ class_name }}(nn.Module):
+    """
+    Multi-Head Self-Attention Layer
+
+    Applies multi-head self-attention mechanism to the input.
+    Allows the model to jointly attend to information from different representation subspaces.
+
+    Parameters:
+        - Embedding dimension: {{ embed_dim }}
+        - Number of heads: {{ num_heads }}
+        - Dropout: {{ dropout }}
+
+    Shape:
+        - Input: [batch_size, seq_len, {{ embed_dim }}]
+        - Output: [batch_size, seq_len, {{ embed_dim }}]
+    """
+
+    def __init__(self, embed_dim: int = {{ embed_dim }}, num_heads: int = {{ num_heads }}, dropout: float = {{ dropout }}, bias: bool = True):
+        """Initialize the multi-head attention layer."""
+        super({{ class_name }}, self).__init__()
+        self.attention = nn.MultiheadAttention(
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            dropout=dropout,
+            batch_first=True,
+            bias=bias
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the attention layer.
+
+        Args:
+            x: Input tensor of shape [batch, seq_len, {{ embed_dim }}]
+
+        Returns:
+            Output tensor after applying multi-head attention
+        """
+        x, _ = self.attention(x, x, x)
+        return x

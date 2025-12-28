@@ -1,0 +1,38 @@
+class {{ class_name }}(tf.keras.layers.Layer):
+    """
+    2D Max Pooling Layer
+
+    Applies a 2D max pooling over an input signal.
+    Reduces spatial dimensions while preserving channel count.
+
+    Parameters:
+        - Pool size: {{ pool_size }}x{{ pool_size }}
+        - Strides: {{ strides }}
+        - Padding: {{ padding }}
+
+    Shape:
+        - Input: [batch_size, H, W, C] (NHWC format)
+        - Output: [batch_size, H/stride, W/stride, C]
+    """
+
+    def __init__(self, pool_size={{ pool_size }}, strides={{ strides }}, padding='{{ padding }}'):
+        """Initialize the max pooling layer."""
+        super({{ class_name }}, self).__init__()
+        self.pool = tf.keras.layers.MaxPooling2D(
+            pool_size=pool_size,
+            strides=strides,
+            padding=padding
+        )
+
+    def call(self, inputs, training=None):
+        """
+        Forward pass through the pooling layer.
+
+        Args:
+            inputs: Input tensor of shape [batch, H, W, C]
+            training: Whether in training mode
+
+        Returns:
+            Output tensor with reduced spatial dimensions
+        """
+        return self.pool(inputs, training=training)

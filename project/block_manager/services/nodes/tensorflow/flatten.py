@@ -1,7 +1,7 @@
 """TensorFlow Flatten Node Definition"""
 
 from typing import Dict, List, Optional, Any
-from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework
+from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework, LayerCodeSpec
 
 
 class FlattenNode(NodeDefinition):
@@ -58,3 +58,27 @@ class FlattenNode(NodeDefinition):
             return "Flatten requires input with at least 2 dimensions"
         
         return None
+    def get_tensorflow_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """Generate TensorFlow code specification for Flatten layer"""
+        sanitized_id = node_id.replace('-', '_')
+        class_name = 'FlattenLayer'
+        layer_var = f'{sanitized_id}_FlattenLayer'
+
+        return LayerCodeSpec(
+            class_name=class_name,
+            layer_variable_name=layer_var,
+            node_type='flatten',
+            node_id=node_id,
+            init_params={},
+            config_params=config,
+            input_shape_info={},
+            output_shape_info={},
+            template_context={}
+        )
+

@@ -1,0 +1,29 @@
+class {{ class_name }}(nn.Module):
+    """
+    Flatten Layer
+
+    Flattens a contiguous range of dimensions into a tensor.
+    Commonly used to transition from convolutional layers to fully connected layers.
+
+    Shape:
+        - Input: [batch_size, C, H, W]
+        - Output: [batch_size, C*H*W]{% if out_features %} = [batch_size, {{ out_features }}]{% endif %}
+    """
+
+    def __init__(self, start_dim: int = 1):
+        """Initialize the flatten layer."""
+        super({{ class_name }}, self).__init__()
+        self.flatten = nn.Flatten(start_dim=start_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the flatten layer.
+
+        Args:
+            x: Input tensor of shape [batch, C, H, W]
+
+        Returns:
+            Output tensor of shape [batch, C*H*W]
+        """
+        x = self.flatten(x)
+        return x

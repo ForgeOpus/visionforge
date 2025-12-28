@@ -1,0 +1,38 @@
+class {{ class_name }}(nn.Module):
+    """
+    2D Max Pooling Layer
+
+    Applies a 2D max pooling over an input signal.
+    Reduces spatial dimensions while preserving channel count.
+
+    Parameters:
+        - Kernel size: {{ kernel_size }}x{{ kernel_size }}
+        - Stride: {{ stride }}
+        - Padding: {{ padding }}
+
+    Shape:
+        - Input: [batch_size, C, H, W]
+        - Output: [batch_size, C, H/stride, W/stride]
+    """
+
+    def __init__(self, kernel_size: int, stride: int, padding: int):
+        """Initialize the max pooling layer."""
+        super({{ class_name }}, self).__init__()
+        self.pool = nn.MaxPool2d(
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass through the pooling layer.
+
+        Args:
+            x: Input tensor of shape [batch, C, H, W]
+
+        Returns:
+            Output tensor with reduced spatial dimensions
+        """
+        x = self.pool(x)
+        return x

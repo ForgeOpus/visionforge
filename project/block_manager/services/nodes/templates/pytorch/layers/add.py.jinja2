@@ -1,0 +1,25 @@
+class {{ class_name }}(nn.Module):
+    """
+    Addition Block
+
+    Element-wise addition block for tensors of same shape.
+
+    Parameters:
+        - tensor_list: list of input tensors of same shape
+    """
+
+    def __init__(self):
+        """Initialize the addition layer (no learnable parameters)."""
+        super({{ class_name }}, self).__init__()
+
+    def forward(self, tensor_list: List[torch.Tensor]) -> torch.Tensor:
+        """
+        Forward pass through the addition layer.
+
+        Args:
+            tensor_list: List of input tensors
+
+        Returns:
+            Element-wise sum of all input tensors
+        """
+        return torch.stack(tensor_list).sum(dim=0)
