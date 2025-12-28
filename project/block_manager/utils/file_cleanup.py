@@ -23,9 +23,20 @@ def save_uploaded_file_temporarily(uploaded_file):
     upload_dir = Path(getattr(settings, 'TEMP_UPLOAD_DIR', '/tmp/visionforge_uploads'))
     upload_dir.mkdir(parents=True, exist_ok=True)
 
+    # Sanitize filename to prevent path traversal attacks
+    # Extract only the basename and remove any path components
+    original_name = os.path.basename(uploaded_file.name)
+    # Remove any potentially dangerous characters and path separators
+    safe_name = original_name.replace('..', '').replace('/', '').replace('\\', '')
+    
     timestamp = int(time.time())
-    safe_filename = f"{timestamp}_{uploaded_file.name}"
+    safe_filename = f"{timestamp}_{safe_name}"
     file_path = upload_dir / safe_filename
+    
+    # Verify the resolved path is within the upload directory (additional security check)
+    resolved_path = file_path.resolve()
+    if not str(resolved_path).startswith(str(upload_dir.resolve())):
+        raise ValueError("Invalid file path detected - potential path traversal attack")
 
     with open(file_path, 'wb+') as destination:
         for chunk in uploaded_file.chunks():
