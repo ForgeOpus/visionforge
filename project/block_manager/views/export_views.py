@@ -182,10 +182,7 @@ Generated with VisionForge
         import traceback
         logger.error(f"Error in export_model: {str(e)}", exc_info=True)
         response = {
-            'error': 'Code generation failed',
-            'details': str(e)
+            'error': 'Code generation failed'
         }
-        if settings.DEBUG:
-            response['traceback'] = traceback.format_exc()
         return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
