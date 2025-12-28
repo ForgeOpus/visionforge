@@ -3,6 +3,7 @@ Maintenance endpoints for system administration tasks.
 """
 import logging
 import time
+import hmac
 from pathlib import Path
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -96,9 +97,9 @@ def trigger_file_cleanup(request):
         data = json.loads(request.body)
         provided_secret = data.get('secret', '')
 
-        # Verify secret token
+        # Verify secret token using constant-time comparison to prevent timing attacks
         expected_secret = settings.CLEANUP_SECRET_TOKEN
-        if not expected_secret or provided_secret != expected_secret:
+        if not expected_secret or not hmac.compare_digest(provided_secret, expected_secret):
             logger.warning(f"Unauthorized cleanup attempt from IP {request.META.get('REMOTE_ADDR')}")
             return JsonResponse({
                 'error': 'Unauthorized',
@@ -143,9 +144,9 @@ def get_upload_stats(request):
     try:
         provided_secret = request.GET.get('secret', '')
 
-        # Verify secret token
+        # Verify secret token using constant-time comparison to prevent timing attacks
         expected_secret = settings.CLEANUP_SECRET_TOKEN
-        if not expected_secret or provided_secret != expected_secret:
+        if not expected_secret or not hmac.compare_digest(provided_secret, expected_secret):
             logger.warning(f"Unauthorized stats access attempt from IP {request.META.get('REMOTE_ADDR')}")
             return JsonResponse({
                 'error': 'Unauthorized',
