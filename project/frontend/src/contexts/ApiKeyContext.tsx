@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { SecureStorage } from '../lib/encryption'
 
 interface ApiKeyContextType {
   geminiApiKey: string | null
@@ -32,13 +33,21 @@ export function ApiKeyProvider({ children }: ApiKeyProviderProps) {
   const [environment, setEnvironment] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Load keys from sessionStorage on mount
+  // Load encrypted keys from sessionStorage on mount
   useEffect(() => {
-    const savedGeminiKey = sessionStorage.getItem(STORAGE_KEY_GEMINI)
-    const savedAnthropicKey = sessionStorage.getItem(STORAGE_KEY_ANTHROPIC)
+    const loadKeys = async () => {
+      try {
+        const savedGeminiKey = await SecureStorage.getItem(STORAGE_KEY_GEMINI)
+        const savedAnthropicKey = await SecureStorage.getItem(STORAGE_KEY_ANTHROPIC)
 
-    if (savedGeminiKey) setGeminiApiKeyState(savedGeminiKey)
-    if (savedAnthropicKey) setAnthropicApiKeyState(savedAnthropicKey)
+        if (savedGeminiKey) setGeminiApiKeyState(savedGeminiKey)
+        if (savedAnthropicKey) setAnthropicApiKeyState(savedAnthropicKey)
+      } catch (error) {
+        console.error('Failed to load API keys:', error)
+      }
+    }
+
+    loadKeys()
   }, [])
 
   // Fetch environment info from backend
@@ -65,21 +74,29 @@ export function ApiKeyProvider({ children }: ApiKeyProviderProps) {
     fetchEnvironmentInfo()
   }, [])
 
-  const setGeminiApiKey = (key: string | null) => {
+  const setGeminiApiKey = async (key: string | null) => {
     setGeminiApiKeyState(key)
-    if (key) {
-      sessionStorage.setItem(STORAGE_KEY_GEMINI, key)
-    } else {
-      sessionStorage.removeItem(STORAGE_KEY_GEMINI)
+    try {
+      if (key) {
+        await SecureStorage.setItem(STORAGE_KEY_GEMINI, key)
+      } else {
+        SecureStorage.removeItem(STORAGE_KEY_GEMINI)
+      }
+    } catch (error) {
+      console.error('Failed to store Gemini API key:', error)
     }
   }
 
-  const setAnthropicApiKey = (key: string | null) => {
+  const setAnthropicApiKey = async (key: string | null) => {
     setAnthropicApiKeyState(key)
-    if (key) {
-      sessionStorage.setItem(STORAGE_KEY_ANTHROPIC, key)
-    } else {
-      sessionStorage.removeItem(STORAGE_KEY_ANTHROPIC)
+    try {
+      if (key) {
+        await SecureStorage.setItem(STORAGE_KEY_ANTHROPIC, key)
+      } else {
+        SecureStorage.removeItem(STORAGE_KEY_ANTHROPIC)
+      }
+    } catch (error) {
+      console.error('Failed to store Anthropic API key:', error)
     }
   }
 
