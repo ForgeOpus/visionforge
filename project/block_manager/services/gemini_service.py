@@ -1,7 +1,7 @@
 """
 Gemini AI Service for chat functionality and workflow modifications.
 """
-import google.generativeai as genai
+from google import genai
 import json
 import os
 import tempfile

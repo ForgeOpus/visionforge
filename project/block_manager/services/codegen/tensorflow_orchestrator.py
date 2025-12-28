@@ -41,7 +41,7 @@ class TensorFlowCodeOrchestrator:
             nodes: List of node definitions from the frontend
             edges: List of edge definitions
             project_name: Name for the generated model class
-            group_definitions: Optional group definitions (not yet implemented)
+            group_definitions: Optional list of group block definitions
 
         Returns:
             Tuple of (files dict, errors list)
@@ -50,6 +50,12 @@ class TensorFlowCodeOrchestrator:
         errors = []
 
         try:
+            # Initialize group block generator if needed
+            group_generator = None
+            if group_definitions:
+                from .tensorflow_group_generator import TensorFlowGroupBlockGenerator
+                group_generator = TensorFlowGroupBlockGenerator()
+
             # Sort nodes topologically
             sorted_nodes = topological_sort(nodes, edges)
 
@@ -57,11 +63,33 @@ class TensorFlowCodeOrchestrator:
             edge_map = self._build_edge_map(edges)
 
             # Generate code specifications for each node
-            code_specs, spec_errors = self._generate_code_specs(sorted_nodes, edge_map)
+            code_specs, spec_errors = self._generate_code_specs(
+                sorted_nodes, edge_map, group_generator, group_definitions
+            )
             errors.extend(spec_errors)
 
-            # Render layer classes from templates
+            # Generate code specs for internal layers in group blocks
+            if group_definitions:
+                internal_specs, internal_errors = self._generate_internal_layer_specs(
+                    group_definitions
+                )
+                code_specs.extend(internal_specs)
+                errors.extend(internal_errors)
+
+            # Render layer classes from templates (includes internal layers)
             layer_classes = self._render_layer_classes(code_specs)
+
+            # Generate group block class definitions
+            group_classes = ""
+            if group_generator and group_definitions:
+                group_classes = self._generate_group_block_classes(
+                    group_definitions, group_generator
+                )
+
+            # Combine regular layers + group classes
+            all_classes = layer_classes
+            if group_classes:
+                all_classes += "\n\n" + group_classes
 
             # Generate model class definition
             model_definition = self._generate_model_definition(
@@ -78,7 +106,7 @@ class TensorFlowCodeOrchestrator:
             # Render complete model file
             model_code = self._render_model_file(
                 project_name,
-                layer_classes,
+                all_classes,
                 model_definition,
                 test_code
             )
@@ -116,11 +144,18 @@ class TensorFlowCodeOrchestrator:
     def _generate_code_specs(
         self,
         sorted_nodes: List[Dict[str, Any]],
-        edge_map: Dict[str, List[str]]
+        edge_map: Dict[str, List[str]],
+        group_generator=None,
+        group_definitions: Optional[List[Dict[str, Any]]] = None
     ) -> Tuple[List[LayerCodeSpec], List[Exception]]:
-        """Generate code specifications for all nodes"""
+        """Generate code specifications for all nodes including group blocks"""
         code_specs = []
         errors = []
+
+        # Build group definition lookup
+        group_def_map = {}
+        if group_definitions:
+            group_def_map = {gd['id']: gd for gd in group_definitions}
 
         processable_nodes = [
             n for n in sorted_nodes
@@ -133,26 +168,113 @@ class TensorFlowCodeOrchestrator:
                 node_type = get_node_type(node)
                 config = get_node_config(node)
 
-                node_def = get_node_definition(node_type, Framework.TENSORFLOW)
+                # Handle group blocks
+                if node_type == 'group':
+                    if not group_generator:
+                        raise UnsupportedNodeTypeError(
+                            f"Group node {node_id} found but no group_definitions provided"
+                        )
 
-                if not node_def:
-                    raise UnsupportedNodeTypeError(
-                        f"Node type '{node_type}' (id: {node_id}) is not supported for TensorFlow"
+                    group_def_id = node.get('data', {}).get('groupDefinitionId')
+                    group_def = group_def_map.get(group_def_id)
+
+                    if not group_def:
+                        raise ValueError(
+                            f"Group definition {group_def_id} not found for node {node_id}"
+                        )
+
+                    # Generate spec for this group instance
+                    code_spec = group_generator.generate_group_block_spec(
+                        group_definition=group_def,
+                        node_id=node_id,
+                        instance_config=config
+                    )
+                    code_specs.append(code_spec)
+
+                else:
+                    # Regular node
+                    node_def = get_node_definition(node_type, Framework.TENSORFLOW)
+
+                    if not node_def:
+                        raise UnsupportedNodeTypeError(
+                            f"Node type '{node_type}' (id: {node_id}) is not supported for TensorFlow"
+                        )
+
+                    code_spec = node_def.get_tensorflow_code_spec(
+                        node_id=node_id,
+                        config=config,
+                        input_shape=None,
+                        output_shape=None
                     )
 
-                code_spec = node_def.get_tensorflow_code_spec(
-                    node_id=node_id,
-                    config=config,
-                    input_shape=None,
-                    output_shape=None
-                )
-
-                code_specs.append(code_spec)
+                    code_specs.append(code_spec)
 
             except Exception as e:
                 errors.append(e)
 
         return code_specs, errors
+
+    def _generate_internal_layer_specs(
+        self,
+        group_definitions: List[Dict[str, Any]]
+    ) -> Tuple[List[LayerCodeSpec], List[Exception]]:
+        """
+        Generate LayerCodeSpecs for all unique internal layers used in group blocks.
+        This ensures internal layer classes are defined before group blocks use them.
+
+        Args:
+            group_definitions: List of group block definitions
+
+        Returns:
+            Tuple of (list of internal layer specs, list of errors)
+        """
+        internal_specs = []
+        errors = []
+        seen_node_types = set()
+
+        for group_def in group_definitions:
+            internal_structure = group_def.get('internal_structure', {})
+            internal_nodes = internal_structure.get('nodes', [])
+
+            for node in internal_nodes:
+                node_type = get_node_type(node)
+
+                # Skip special nodes
+                if node_type in ('input', 'output', 'dataloader', 'group'):
+                    continue
+
+                # Only generate each node type once
+                if node_type in seen_node_types:
+                    continue
+
+                seen_node_types.add(node_type)
+
+                try:
+                    node_id = node['id']
+                    config = get_node_config(node)
+
+                    # Get node definition from registry
+                    node_def = get_node_definition(node_type, Framework.TENSORFLOW)
+
+                    if not node_def:
+                        raise UnsupportedNodeTypeError(
+                            f"Internal node type '{node_type}' not supported in group block"
+                        )
+
+                    # Generate code specification
+                    code_spec = node_def.get_tensorflow_code_spec(
+                        node_id=node_id,
+                        config=config,
+                        input_shape=None,
+                        output_shape=None
+                    )
+
+                    internal_specs.append(code_spec)
+
+                except Exception as e:
+                    errors.append(e)
+
+        return internal_specs, errors
 
     def _render_layer_classes(self, code_specs: List[LayerCodeSpec]) -> str:
         """Render all unique layer class definitions"""
@@ -162,15 +284,92 @@ class TensorFlowCodeOrchestrator:
             if spec.node_type not in unique_classes:
                 try:
                     template_path = spec.get_template_path(Framework.TENSORFLOW)
-                    rendered = self.template_manager.render(
-                        template_path,
-                        spec.template_context
-                    )
+                    # Merge class_name, init_params, and template_context for rendering
+                    context = {
+                        'class_name': spec.class_name,
+                        **spec.init_params,
+                        **spec.template_context
+                    }
+                    rendered = self.template_manager.render(template_path, context)
                     unique_classes[spec.node_type] = rendered
                 except Exception:
                     pass
 
         return '\n\n'.join(unique_classes.values())
+
+    def _generate_group_block_classes(
+        self,
+        group_definitions: List[Dict[str, Any]],
+        group_generator
+    ) -> str:
+        """
+        Generate class definitions for all group blocks.
+
+        Args:
+            group_definitions: List of group block definitions
+            group_generator: TensorFlowGroupBlockGenerator instance
+
+        Returns:
+            String containing all group block class definitions
+        """
+        # Detect dependency order for nested groups
+        ordered_definitions = self._order_group_definitions(group_definitions)
+
+        class_codes = []
+        for group_def in ordered_definitions:
+            try:
+                class_code = group_generator.generate_group_class_code(group_def)
+                class_codes.append(class_code)
+            except Exception as e:
+                # Log error but continue with other groups
+                print(f"Error generating group {group_def.get('name')}: {e}")
+
+        return '\n\n'.join(class_codes)
+
+    def _order_group_definitions(
+        self,
+        group_definitions: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Order group definitions so nested groups are defined before their parents.
+        Uses topological sort based on group dependencies.
+
+        Args:
+            group_definitions: List of group block definitions
+
+        Returns:
+            Topologically sorted list of group definitions
+        """
+        # Build dependency graph
+        graph = {gd['id']: [] for gd in group_definitions}
+
+        for group_def in group_definitions:
+            internal_nodes = group_def.get('internal_structure', {}).get('nodes', [])
+            for node in internal_nodes:
+                if node.get('data', {}).get('blockType') == 'group':
+                    nested_group_id = node.get('data', {}).get('groupDefinitionId')
+                    if nested_group_id in graph:
+                        # This group depends on the nested group
+                        graph[group_def['id']].append(nested_group_id)
+
+        # Topological sort (simple implementation)
+        visited = set()
+        result = []
+
+        def visit(gd_id):
+            if gd_id in visited:
+                return
+            visited.add(gd_id)
+            for dep in graph.get(gd_id, []):
+                visit(dep)
+            result.append(gd_id)
+
+        for gd in group_definitions:
+            visit(gd['id'])
+
+        # Map back to group definitions
+        gd_map = {gd['id']: gd for gd in group_definitions}
+        return [gd_map[gd_id] for gd_id in result if gd_id in gd_map]
 
     def _generate_model_definition(
         self,
@@ -262,17 +461,31 @@ class TensorFlowCodeOrchestrator:
 
             output_var = f"x_{node_id.replace('-', '_')}"
 
+            # Handle group blocks with multiple outputs
+            if node_type == 'group' and spec.template_context.get('has_multi_output'):
+                num_outputs = spec.template_context.get('num_outputs', 1)
+                output_vars = [
+                    f"{node_id.replace('-', '_')}_out{i}"
+                    for i in range(num_outputs)
+                ]
+                forward_lines.append(
+                    f"{', '.join(output_vars)} = self.{spec.layer_variable_name}({input_var}, training=training)"
+                )
+                # Map first output as primary variable for this node
+                var_map[node_id] = output_vars[0]
+
             # Handle multi-input nodes
-            if node_type in ('add', 'concat'):
+            elif node_type in ('add', 'concat'):
                 forward_lines.append(
                     f"{output_var} = self.{spec.layer_variable_name}({input_var}, training=training)"
                 )
+                var_map[node_id] = output_var
+
             else:
                 forward_lines.append(
                     f"{output_var} = self.{spec.layer_variable_name}({input_var}, training=training)"
                 )
-
-            var_map[node_id] = output_var
+                var_map[node_id] = output_var
 
             if len(incoming) > 1:
                 skip_connections.add(output_var)

@@ -41,7 +41,7 @@ class PyTorchCodeOrchestrator:
             nodes: List of node definitions from the frontend
             edges: List of edge definitions
             project_name: Name for the generated model class
-            group_definitions: Optional group definitions (not yet implemented)
+            group_definitions: Optional list of group block definitions
 
         Returns:
             Tuple of (files dict, errors list)
@@ -50,6 +50,12 @@ class PyTorchCodeOrchestrator:
         errors = []
 
         try:
+            # Initialize group block generator if needed
+            group_generator = None
+            if group_definitions:
+                from .pytorch_group_generator import PyTorchGroupBlockGenerator
+                group_generator = PyTorchGroupBlockGenerator()
+
             # Sort nodes topologically
             sorted_nodes = topological_sort(nodes, edges)
 
@@ -57,11 +63,33 @@ class PyTorchCodeOrchestrator:
             edge_map = self._build_edge_map(edges)
 
             # Generate code specifications for each node
-            code_specs, spec_errors = self._generate_code_specs(sorted_nodes, edge_map)
+            code_specs, spec_errors = self._generate_code_specs(
+                sorted_nodes, edge_map, group_generator, group_definitions
+            )
             errors.extend(spec_errors)
 
-            # Render layer classes from templates
+            # Generate code specs for internal layers in group blocks
+            if group_definitions:
+                internal_specs, internal_errors = self._generate_internal_layer_specs(
+                    group_definitions
+                )
+                code_specs.extend(internal_specs)
+                errors.extend(internal_errors)
+
+            # Render layer classes from templates (includes internal layers)
             layer_classes = self._render_layer_classes(code_specs)
+
+            # Generate group block class definitions
+            group_classes = ""
+            if group_generator and group_definitions:
+                group_classes = self._generate_group_block_classes(
+                    group_definitions, group_generator, sorted_nodes, edge_map
+                )
+
+            # Combine regular layers + group classes
+            all_classes = layer_classes
+            if group_classes:
+                all_classes += "\n\n" + group_classes
 
             # Generate model class definition
             model_definition = self._generate_model_definition(
@@ -78,7 +106,7 @@ class PyTorchCodeOrchestrator:
             # Render complete model file
             model_code = self._render_model_file(
                 project_name,
-                layer_classes,
+                all_classes,
                 model_definition,
                 test_code
             )
@@ -113,19 +141,130 @@ class PyTorchCodeOrchestrator:
                 edge_map[target].append(source)
         return dict(edge_map)
 
+    def _compute_shape_map(
+        self,
+        sorted_nodes: List[Dict[str, Any]],
+        edge_map: Dict[str, List[str]],
+        group_definitions: Optional[List[Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """
+        Compute input and output shapes for all nodes through forward propagation.
+
+        Returns:
+            Dict mapping "{node_id}_input" and "{node_id}_output" to TensorShape
+        """
+        from ..nodes.rules.shape import TensorShape
+
+        shape_map = {}
+        node_output_shapes = {}  # Track each node's output shape
+
+        for node in sorted_nodes:
+            node_id = node['id']
+            node_type = get_node_type(node)
+            config = get_node_config(node)
+
+            # Handle input nodes
+            if node_type == 'input':
+                # Extract shape from input node config
+                shape_str = config.get('shape', '[1, 3, 224, 224]')
+                try:
+                    import json
+                    shape_list = json.loads(shape_str) if isinstance(shape_str, str) else shape_str
+                    if isinstance(shape_list, list):
+                        output_shape = TensorShape({'dims': shape_list, 'description': 'Input'})
+                        node_output_shapes[node_id] = output_shape
+                except (ValueError, TypeError):
+                    # Default shape if parsing fails
+                    node_output_shapes[node_id] = TensorShape({'dims': [1, 3, 224, 224], 'description': 'Input'})
+                continue
+
+            # Handle dataloader nodes
+            if node_type == 'dataloader':
+                # Dataloader typically outputs batched image data
+                # Use default or extract from config if available
+                shape_str = config.get('output_shape', '[1, 3, 224, 224]')
+                try:
+                    import json
+                    shape_list = json.loads(shape_str) if isinstance(shape_str, str) else shape_str
+                    if isinstance(shape_list, list):
+                        output_shape = TensorShape({'dims': shape_list, 'description': 'Dataloader output'})
+                        node_output_shapes[node_id] = output_shape
+                except (ValueError, TypeError):
+                    node_output_shapes[node_id] = TensorShape({'dims': [1, 3, 224, 224], 'description': 'Dataloader output'})
+                continue
+
+            # Skip output nodes
+            if node_type == 'output':
+                continue
+
+            # Get incoming nodes
+            incoming = edge_map.get(node_id, [])
+
+            # Determine input shape from incoming connections
+            input_shape = None
+            if incoming:
+                if len(incoming) == 1:
+                    # Single input
+                    input_shape = node_output_shapes.get(incoming[0])
+                else:
+                    # Multiple inputs (for add, concat nodes)
+                    # Store all input shapes for multi-input operations
+                    input_shapes = [node_output_shapes.get(src) for src in incoming]
+                    input_shapes = [s for s in input_shapes if s is not None]
+                    if input_shapes:
+                        # For now, use the first input shape as primary
+                        # Specific nodes (add, concat) will handle multiple shapes
+                        input_shape = input_shapes[0]
+
+            # Store input shape in map
+            if input_shape:
+                shape_map[f"{node_id}_input"] = input_shape
+
+            # Compute output shape using node definition
+            output_shape = None
+            try:
+                if node_type == 'group':
+                    # For group blocks, we'll need to infer from internal structure
+                    # For now, pass through input shape (placeholder)
+                    output_shape = input_shape
+                else:
+                    node_def = get_node_definition(node_type, Framework.PYTORCH)
+                    if node_def and hasattr(node_def, 'compute_output_shape'):
+                        output_shape = node_def.compute_output_shape(input_shape, config)
+            except Exception:
+                # If shape computation fails, use None
+                pass
+
+            # Store output shape
+            if output_shape:
+                shape_map[f"{node_id}_output"] = output_shape
+                node_output_shapes[node_id] = output_shape
+
+        return shape_map
+
     def _generate_code_specs(
         self,
         sorted_nodes: List[Dict[str, Any]],
-        edge_map: Dict[str, List[str]]
+        edge_map: Dict[str, List[str]],
+        group_generator=None,
+        group_definitions: Optional[List[Dict[str, Any]]] = None
     ) -> Tuple[List[LayerCodeSpec], List[Exception]]:
         """
-        Generate code specifications for all nodes.
+        Generate code specifications for all nodes including group blocks.
 
         Returns:
             Tuple of (list of code specs, list of errors)
         """
         code_specs = []
         errors = []
+
+        # Build group definition lookup
+        group_def_map = {}
+        if group_definitions:
+            group_def_map = {gd['id']: gd for gd in group_definitions}
+
+        # Compute shape map for all nodes
+        shape_map = self._compute_shape_map(sorted_nodes, edge_map, group_definitions)
 
         # Skip input/dataloader/output nodes - they don't generate layers
         processable_nodes = [
@@ -139,30 +278,119 @@ class PyTorchCodeOrchestrator:
                 node_type = get_node_type(node)
                 config = get_node_config(node)
 
-                # Get node definition from registry
-                node_def = get_node_definition(node_type, Framework.PYTORCH)
+                # Get input and output shapes from shape map
+                input_shape = shape_map.get(f"{node_id}_input")
+                output_shape = shape_map.get(f"{node_id}_output")
 
-                if not node_def:
-                    raise UnsupportedNodeTypeError(
-                        f"Node type '{node_type}' (id: {node_id}) is not supported for PyTorch"
+                # Handle group blocks
+                if node_type == 'group':
+                    if not group_generator:
+                        raise UnsupportedNodeTypeError(
+                            f"Group node {node_id} found but no group_definitions provided"
+                        )
+
+                    group_def_id = node.get('data', {}).get('groupDefinitionId')
+                    group_def = group_def_map.get(group_def_id)
+
+                    if not group_def:
+                        raise ValueError(
+                            f"Group definition {group_def_id} not found for node {node_id}"
+                        )
+
+                    # Generate spec for this group instance
+                    code_spec = group_generator.generate_group_block_spec(
+                        group_definition=group_def,
+                        node_id=node_id,
+                        instance_config=config,
+                        input_shape=input_shape
+                    )
+                    code_specs.append(code_spec)
+
+                else:
+                    # Regular node - existing logic
+                    node_def = get_node_definition(node_type, Framework.PYTORCH)
+
+                    if not node_def:
+                        raise UnsupportedNodeTypeError(
+                            f"Node type '{node_type}' (id: {node_id}) is not supported for PyTorch"
+                        )
+
+                    # Generate code specification with shape information
+                    code_spec = node_def.get_pytorch_code_spec(
+                        node_id=node_id,
+                        config=config,
+                        input_shape=input_shape,
+                        output_shape=output_shape
                     )
 
-                # Generate code specification
-                # Note: Shape inference would ideally happen here
-                # For now, we pass None and let the node handle it
-                code_spec = node_def.get_pytorch_code_spec(
-                    node_id=node_id,
-                    config=config,
-                    input_shape=None,  # TODO: Add shape inference
-                    output_shape=None
-                )
-
-                code_specs.append(code_spec)
+                    code_specs.append(code_spec)
 
             except Exception as e:
                 errors.append(e)
 
         return code_specs, errors
+
+    def _generate_internal_layer_specs(
+        self,
+        group_definitions: List[Dict[str, Any]]
+    ) -> Tuple[List[LayerCodeSpec], List[Exception]]:
+        """
+        Generate LayerCodeSpecs for all unique internal layers used in group blocks.
+        This ensures internal layer classes are defined before group blocks use them.
+
+        Args:
+            group_definitions: List of group block definitions
+
+        Returns:
+            Tuple of (list of internal layer specs, list of errors)
+        """
+        internal_specs = []
+        errors = []
+        seen_node_types = set()
+
+        for group_def in group_definitions:
+            internal_structure = group_def.get('internal_structure', {})
+            internal_nodes = internal_structure.get('nodes', [])
+
+            for node in internal_nodes:
+                node_type = get_node_type(node)
+
+                # Skip special nodes
+                if node_type in ('input', 'output', 'dataloader', 'group'):
+                    continue
+
+                # Only generate each node type once
+                if node_type in seen_node_types:
+                    continue
+
+                seen_node_types.add(node_type)
+
+                try:
+                    node_id = node['id']
+                    config = get_node_config(node)
+
+                    # Get node definition from registry
+                    node_def = get_node_definition(node_type, Framework.PYTORCH)
+
+                    if not node_def:
+                        raise UnsupportedNodeTypeError(
+                            f"Internal node type '{node_type}' not supported in group block"
+                        )
+
+                    # Generate code specification
+                    code_spec = node_def.get_pytorch_code_spec(
+                        node_id=node_id,
+                        config=config,
+                        input_shape=None,
+                        output_shape=None
+                    )
+
+                    internal_specs.append(code_spec)
+
+                except Exception as e:
+                    errors.append(e)
+
+        return internal_specs, errors
 
     def _render_layer_classes(self, code_specs: List[LayerCodeSpec]) -> str:
         """
@@ -178,10 +406,13 @@ class PyTorchCodeOrchestrator:
             if spec.node_type not in unique_classes:
                 try:
                     template_path = spec.get_template_path(Framework.PYTORCH)
-                    rendered = self.template_manager.render(
-                        template_path,
-                        spec.template_context
-                    )
+                    # Merge class_name, init_params, and template_context for rendering
+                    context = {
+                        'class_name': spec.class_name,
+                        **spec.init_params,
+                        **spec.template_context
+                    }
+                    rendered = self.template_manager.render(template_path, context)
                     unique_classes[spec.node_type] = rendered
                 except Exception:
                     # If template doesn't exist, skip this layer
@@ -190,6 +421,135 @@ class PyTorchCodeOrchestrator:
 
         # Join all classes with blank lines
         return '\n\n'.join(unique_classes.values())
+
+    def _generate_group_block_classes(
+        self,
+        group_definitions: List[Dict[str, Any]],
+        group_generator,
+        sorted_nodes: List[Dict[str, Any]],
+        edge_map: Dict[str, List[str]]
+    ) -> str:
+        """
+        Generate class definitions for all group blocks with representative input shapes.
+
+        Args:
+            group_definitions: List of group block definitions
+            group_generator: PyTorchGroupBlockGenerator instance
+            sorted_nodes: Sorted nodes from main graph
+            edge_map: Edge map for shape inference
+
+        Returns:
+            String containing all group block class definitions
+        """
+        # Compute shape map for the main graph
+        shape_map = self._compute_shape_map(sorted_nodes, edge_map, group_definitions)
+
+        # Extract representative input shapes for each group definition
+        group_shape_map = self._extract_group_representative_shapes(
+            group_definitions, sorted_nodes, shape_map
+        )
+
+        # Detect dependency order for nested groups
+        ordered_definitions = self._order_group_definitions(group_definitions)
+
+        class_codes = []
+        for group_def in ordered_definitions:
+            try:
+                # Get representative input shape for this group definition
+                representative_shape = group_shape_map.get(group_def['id'])
+
+                class_code = group_generator.generate_group_class_code(
+                    group_def,
+                    input_shape=representative_shape
+                )
+                class_codes.append(class_code)
+            except Exception as e:
+                # Log error but continue with other groups
+                print(f"Error generating group {group_def.get('name')}: {e}")
+
+        return '\n\n'.join(class_codes)
+
+    def _extract_group_representative_shapes(
+        self,
+        group_definitions: List[Dict[str, Any]],
+        sorted_nodes: List[Dict[str, Any]],
+        shape_map: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Extract representative input shapes for each group definition.
+        Finds the first usage of each group definition and uses its input shape.
+
+        Args:
+            group_definitions: List of group block definitions
+            sorted_nodes: Sorted nodes from main graph
+            shape_map: Shape map containing input shapes for all nodes
+
+        Returns:
+            Dict mapping group_definition_id -> representative input shape
+        """
+        group_shape_map = {}
+
+        for group_def in group_definitions:
+            group_def_id = group_def['id']
+
+            # Find first usage of this group definition in the main graph
+            for node in sorted_nodes:
+                if get_node_type(node) == 'group':
+                    node_group_def_id = node.get('data', {}).get('groupDefinitionId')
+                    if node_group_def_id == group_def_id:
+                        # Found a usage - get its input shape
+                        node_id = node['id']
+                        input_shape = shape_map.get(f"{node_id}_input")
+                        if input_shape:
+                            group_shape_map[group_def_id] = input_shape
+                            break
+
+        return group_shape_map
+
+    def _order_group_definitions(
+        self,
+        group_definitions: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Order group definitions so nested groups are defined before their parents.
+        Uses topological sort based on group dependencies.
+
+        Args:
+            group_definitions: List of group block definitions
+
+        Returns:
+            Topologically sorted list of group definitions
+        """
+        # Build dependency graph
+        graph = {gd['id']: [] for gd in group_definitions}
+
+        for group_def in group_definitions:
+            internal_nodes = group_def.get('internal_structure', {}).get('nodes', [])
+            for node in internal_nodes:
+                if node.get('data', {}).get('blockType') == 'group':
+                    nested_group_id = node.get('data', {}).get('groupDefinitionId')
+                    if nested_group_id in graph:
+                        # This group depends on the nested group
+                        graph[group_def['id']].append(nested_group_id)
+
+        # Topological sort (simple implementation)
+        visited = set()
+        result = []
+
+        def visit(gd_id):
+            if gd_id in visited:
+                return
+            visited.add(gd_id)
+            for dep in graph.get(gd_id, []):
+                visit(dep)
+            result.append(gd_id)
+
+        for gd in group_definitions:
+            visit(gd['id'])
+
+        # Map back to group definitions
+        gd_map = {gd['id']: gd for gd in group_definitions}
+        return [gd_map[gd_id] for gd_id in result if gd_id in gd_map]
 
     def _generate_model_definition(
         self,
@@ -291,8 +651,21 @@ class PyTorchCodeOrchestrator:
             # Generate forward pass line
             output_var = f"x_{node_id.replace('-', '_')}"
 
+            # Handle group blocks with multiple outputs
+            if node_type == 'group' and spec.template_context.get('has_multi_output'):
+                num_outputs = spec.template_context.get('num_outputs', 1)
+                output_vars = [
+                    f"{node_id.replace('-', '_')}_out{i}"
+                    for i in range(num_outputs)
+                ]
+                forward_lines.append(
+                    f"{', '.join(output_vars)} = self.{spec.layer_variable_name}({input_var})"
+                )
+                # Map first output as primary variable for this node
+                var_map[node_id] = output_vars[0]
+
             # Handle multi-input nodes (add, concat)
-            if node_type in ('add', 'concat'):
+            elif node_type in ('add', 'concat'):
                 if node_type == 'concat':
                     dim = spec.template_context.get('dim', 1)
                     forward_lines.append(
@@ -302,14 +675,16 @@ class PyTorchCodeOrchestrator:
                     forward_lines.append(
                         f"{output_var} = self.{spec.layer_variable_name}({input_var})"
                     )
+                # Update variable map
+                var_map[node_id] = output_var
+
             else:
-                # Regular single-input node
+                # Regular single-input, single-output node
                 forward_lines.append(
                     f"{output_var} = self.{spec.layer_variable_name}({input_var})"
                 )
-
-            # Update variable map
-            var_map[node_id] = output_var
+                # Update variable map
+                var_map[node_id] = output_var
 
             # Track skip connections (nodes with multiple outgoing edges)
             # This helps identify which variables need to be preserved

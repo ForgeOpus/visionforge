@@ -1,0 +1,69 @@
+class {{ class_name }}(tf.keras.Model):
+    """
+    {{ group_name }}{% if description %}: {{ description }}{% endif %}
+
+    Custom group block with internal layers.
+{% if has_multi_input %}
+
+    Inputs:
+{% for port in input_ports %}
+        - {{ port.externalPortLabel }}: {{ port.semantic }} (port: {{ port.externalPortId }})
+{% endfor %}
+{% endif %}
+{% if has_multi_output %}
+
+    Outputs:
+{% for port in output_ports %}
+        - {{ port.externalPortLabel }}: {{ port.semantic }} (port: {{ port.externalPortId }})
+{% endfor %}
+{% endif %}
+    """
+
+    def __init__(self{% for param in init_params %}, {{ param.name }}={{ param.default }}{% endfor %}):
+        """Initialize {{ group_name }} with internal layers."""
+        super({{ class_name }}, self).__init__()
+
+        # Internal layers
+{% for spec in internal_specs %}
+        self.{{ spec.layer_variable_name }} = {{ spec.class_name }}(
+{% for key, value in spec.init_params.items() %}
+            {{ key }}={{ value }}{{ "," if not loop.last else "" }}
+{% endfor %}
+        )
+{% endfor %}
+
+    def call(self, inputs, training=None):
+        """
+        Forward pass through {{ group_name }}.
+
+        Args:
+{% if has_multi_input %}
+            inputs: List or tuple of {{ num_inputs }} input tensors
+{% else %}
+            inputs: Input tensor
+{% endif %}
+            training: Whether in training mode
+
+        Returns:
+{% if has_multi_output %}
+            Tuple of {{ num_outputs }} output tensors: ({{ output_vars | join(', ') }})
+{% else %}
+            Output tensor
+{% endif %}
+        """
+{% if has_multi_input %}
+        # Unpack multiple inputs
+{% for i in range(num_inputs) %}
+        input_{{ i }} = inputs[{{ i }}]
+{% endfor %}
+
+{% endif %}
+{% for line in call_lines %}
+        {{ line }}
+{% endfor %}
+
+{% if has_multi_output %}
+        return ({{ output_vars | join(', ') }})
+{% else %}
+        return {{ output_vars[0] if output_vars else 'inputs' }}
+{% endif %}
