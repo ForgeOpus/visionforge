@@ -154,8 +154,9 @@ REQUIRES_USER_API_KEY = IS_PRODUCTION
 
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticatedOrReadOnly",
+        "rest_framework.permissions.AllowAny",  # Views handle auth via Firebase middleware
     ],
+    "DEFAULT_AUTHENTICATION_CLASSES": [],  # Disable DRF auth, using Firebase middleware
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
