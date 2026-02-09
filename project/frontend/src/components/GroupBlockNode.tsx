@@ -154,8 +154,10 @@ const GroupBlockNode = memo(({ data, selected, id }: GroupBlockNodeProps) => {
 
       {/* Render input handles */}
       {inputPorts.map((port, index) => {
-        const spacing = 100 / (inputPorts.length + 1)
-        const topPercent = spacing * (index + 1)
+        const rangeStart = 70
+        const rangeEnd = 90
+        const spacing = (rangeEnd - rangeStart) / (inputPorts.length + 1)
+        const topPercent = rangeStart + spacing * (index + 1)
         const color = getPortColor(port.semantic)
         const isConnected = isHandleConnected(port.externalPortId, true)
 
@@ -212,45 +214,46 @@ const GroupBlockNode = memo(({ data, selected, id }: GroupBlockNodeProps) => {
         )
       })}
 
-      <div className="p-3 space-y-2">
+      <div className="p-3">
         <div className="flex items-center gap-2">
           <div
-            className="p-1.5 rounded"
+            className="p-1 rounded shrink-0"
             style={{
               backgroundColor: groupDef.color,
               color: 'white'
             }}
           >
-            <Icons.SquaresFour size={16} weight="bold" />
+            <Icons.SquaresFour size={14} weight="bold" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-sm truncate">
+            <div className="font-semibold text-sm truncate leading-tight">
               {groupDef.name}
-            </div>
-            <div className="flex items-center gap-1">
-              <Badge
-                variant="secondary"
-                className="text-[9px] px-1 py-0 h-3.5"
-              >
-                {groupDef.category}
-              </Badge>
-              <Badge
-                variant="outline"
-                className="text-[9px] px-1 py-0 h-3.5"
-              >
-                {groupDef.internalNodes.length} nodes
-              </Badge>
             </div>
           </div>
         </div>
 
+        <div className="flex items-center gap-1 mt-1">
+          <Badge
+            variant="secondary"
+            className="text-[9px] px-1 py-0 h-3.5"
+          >
+            {groupDef.category}
+          </Badge>
+          <Badge
+            variant="outline"
+            className="text-[9px] px-1 py-0 h-3.5"
+          >
+            {groupDef.internalNodes.length} nodes
+          </Badge>
+        </div>
+
         {groupDef.description && (
-          <div className="text-[10px] text-muted-foreground line-clamp-2">
+          <div className="text-[10px] text-muted-foreground line-clamp-2 mt-1">
             {groupDef.description}
           </div>
         )}
 
-        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-1">
           <Icons.ArrowsIn size={12} />
           <span>{inputPorts.length} in</span>
           <span className="mx-1">•</span>
@@ -261,8 +264,10 @@ const GroupBlockNode = memo(({ data, selected, id }: GroupBlockNodeProps) => {
 
       {/* Render output handles */}
       {outputPorts.map((port, index) => {
-        const spacing = 100 / (outputPorts.length + 1)
-        const topPercent = spacing * (index + 1)
+        const rangeStart = 70
+        const rangeEnd = 90
+        const spacing = (rangeEnd - rangeStart) / (outputPorts.length + 1)
+        const topPercent = rangeStart + spacing * (index + 1)
         const color = getPortColor(port.semantic)
         const isConnected = isHandleConnected(port.externalPortId, false)
 
