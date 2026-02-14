@@ -175,7 +175,7 @@ class TensorFlowCodeOrchestrator:
 
         processable_nodes = [
             n for n in sorted_nodes
-            if get_node_type(n) not in ('input', 'dataloader', 'output')
+            if get_node_type(n) not in ('input', 'dataloader', 'output', 'loss')
         ]
 
         for node in processable_nodes:
@@ -256,7 +256,7 @@ class TensorFlowCodeOrchestrator:
                 node_type = get_node_type(node)
 
                 # Skip special nodes
-                if node_type in ('input', 'output', 'dataloader', 'group'):
+                if node_type in ('input', 'output', 'dataloader', 'group', 'loss'):
                     continue
 
                 # Only generate each node type once
@@ -514,7 +514,7 @@ class TensorFlowCodeOrchestrator:
 
         processable_nodes = [
             n for n in sorted_nodes
-            if get_node_type(n) not in ('output',)
+            if get_node_type(n) not in ('output', 'loss')
         ]
 
         for node in processable_nodes:
@@ -645,17 +645,75 @@ from typing import List, Tuple, Optional
 {test_code}
 '''
 
+    def _extract_loss_config(self, nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Extract loss configuration from loss node (REQUIRED).
+
+        Args:
+            nodes: List of node definitions
+
+        Returns:
+            Dictionary with loss configuration
+
+        Raises:
+            ValueError: If no loss node is found
+        """
+        loss_node = next((n for n in nodes if get_node_type(n) == 'loss'), None)
+
+        if not loss_node:
+            raise ValueError(
+                "No loss function node found in architecture. "
+                "Please add a Loss Function node from the 'Output' category "
+                "to specify the training loss."
+            )
+
+        config = get_node_config(loss_node)
+        loss_type = config.get('loss_type', 'cross_entropy')
+        reduction = config.get('reduction', 'sum_over_batch_size')
+        from_logits = config.get('from_logits', True)
+
+        return {
+            'loss_type': loss_type,
+            'reduction': reduction,
+            'from_logits': from_logits
+        }
+
     def _generate_training_script(self, project_name: str, nodes: List[Dict[str, Any]]) -> str:
         """Generate training script using template"""
-        has_softmax = any(get_node_type(n) == 'softmax' for n in nodes)
-        is_classification = has_softmax
+        # Extract loss configuration from loss node
+        loss_config = self._extract_loss_config(nodes)
+
+        # Map loss types to TensorFlow/Keras loss classes
+        loss_map = {
+            'cross_entropy': 'keras.losses.SparseCategoricalCrossentropy',
+            'mse': 'keras.losses.MeanSquaredError',
+            'mae': 'keras.losses.MeanAbsoluteError',
+            'bce': 'keras.losses.BinaryCrossentropy',
+            'categorical_crossentropy': 'keras.losses.CategoricalCrossentropy',
+            'kl_div': 'keras.losses.KLDivergence',
+            'hinge': 'keras.losses.Hinge',
+        }
+
+        loss_class = loss_map.get(loss_config['loss_type'], 'keras.losses.SparseCategoricalCrossentropy')
+
+        # Build loss function instantiation with parameters
+        loss_params = []
+        if loss_config['from_logits'] is not None and loss_config['loss_type'] in ['cross_entropy', 'bce', 'categorical_crossentropy']:
+            loss_params.append(f"from_logits={loss_config['from_logits']}")
+        if loss_config['reduction'] and loss_config['reduction'] != 'sum_over_batch_size':
+            loss_params.append(f"reduction='{loss_config['reduction']}'")
+
+        loss_function = f"{loss_class}({', '.join(loss_params)})" if loss_params else f"{loss_class}()"
+
+        # Determine if classification based on loss type
+        is_classification = loss_config['loss_type'] in ['cross_entropy', 'bce', 'categorical_crossentropy']
 
         context = {
             'project_name': project_name,
             'model_class_name': project_name,
             'task_type': 'classification' if is_classification else 'regression',
             'is_classification': is_classification,
-            'loss_function': 'keras.losses.SparseCategoricalCrossentropy()' if is_classification else 'keras.losses.MeanSquaredError()',
+            'loss_function': loss_function,
             'metric_name': 'accuracy' if is_classification else 'mse'
         }
 
@@ -680,9 +738,10 @@ from typing import List, Tuple, Optional
         """Generate config file using template"""
         input_shape = self._extract_input_shape(nodes)
 
+        # Count layers (exclude special nodes)
         layer_count = sum(
             1 for n in nodes
-            if get_node_type(n) not in ('input', 'output', 'dataloader')
+            if get_node_type(n) not in ('input', 'output', 'dataloader', 'loss')
         )
 
         if layer_count > 20:
@@ -701,10 +760,15 @@ from typing import List, Tuple, Optional
             epochs = 30
             complexity = "Shallow"
 
+        # Check for attention layers (affects learning rate)
         has_attention = any(get_node_type(n) in ('self_attention', 'attention') for n in nodes)
         if has_attention:
             learning_rate = learning_rate * 0.1
             batch_size = max(8, batch_size // 2)
+
+        # Get loss configuration for reference in config
+        loss_config = self._extract_loss_config(nodes)
+        is_classification = loss_config['loss_type'] in ['cross_entropy', 'bce', 'categorical_crossentropy']
 
         context = {
             'batch_size': batch_size,
@@ -713,7 +777,9 @@ from typing import List, Tuple, Optional
             'input_shape': list(input_shape),
             'complexity': complexity,
             'layer_count': layer_count,
-            'has_attention': has_attention
+            'has_attention': has_attention,
+            'loss_type': loss_config['loss_type'],
+            'is_classification': is_classification
         }
 
         return self.template_manager.render('tensorflow/files/config.py.jinja2', context)

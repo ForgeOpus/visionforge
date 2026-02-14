@@ -209,8 +209,8 @@ class PyTorchCodeOrchestrator:
                     node_output_shapes[node_id] = TensorShape({'dims': [1, 3, 224, 224], 'description': 'Dataloader output'})
                 continue
 
-            # Skip output nodes
-            if node_type == 'output':
+            # Skip output and loss nodes
+            if node_type in ('output', 'loss'):
                 continue
 
             # Get incoming nodes
@@ -282,10 +282,10 @@ class PyTorchCodeOrchestrator:
         # Compute shape map for all nodes
         shape_map = self._compute_shape_map(sorted_nodes, edge_map, group_definitions)
 
-        # Skip input/dataloader/output nodes - they don't generate layers
+        # Skip input/dataloader/output/loss nodes - they don't generate layers
         processable_nodes = [
             n for n in sorted_nodes
-            if get_node_type(n) not in ('input', 'dataloader', 'output')
+            if get_node_type(n) not in ('input', 'dataloader', 'output', 'loss')
         ]
 
         for node in processable_nodes:
@@ -372,7 +372,7 @@ class PyTorchCodeOrchestrator:
                 node_type = get_node_type(node)
 
                 # Skip special nodes
-                if node_type in ('input', 'output', 'dataloader', 'group'):
+                if node_type in ('input', 'output', 'dataloader', 'group', 'loss'):
                     continue
 
                 # Only generate each node type once
@@ -693,7 +693,7 @@ class PyTorchCodeOrchestrator:
         # Process nodes in topological order
         processable_nodes = [
             n for n in sorted_nodes
-            if get_node_type(n) not in ('output',)  # Keep input/dataloader for var mapping
+            if get_node_type(n) not in ('output', 'loss')  # Keep input/dataloader for var mapping
         ]
 
         for node in processable_nodes:
@@ -850,18 +850,82 @@ from typing import List, Tuple, Optional
 {test_code}
 '''
 
+    def _extract_loss_config(self, nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Extract loss configuration from loss node (REQUIRED).
+
+        Args:
+            nodes: List of node definitions
+
+        Returns:
+            Dictionary with loss configuration
+
+        Raises:
+            ValueError: If no loss node is found
+        """
+        loss_node = next((n for n in nodes if get_node_type(n) == 'loss'), None)
+
+        if not loss_node:
+            raise ValueError(
+                "No loss function node found in architecture. "
+                "Please add a Loss Function node from the 'Output' category "
+                "to specify the training loss."
+            )
+
+        config = get_node_config(loss_node)
+        loss_type = config.get('loss_type', 'cross_entropy')
+        reduction = config.get('reduction', 'mean')
+        weight = config.get('weight', None)
+
+        return {
+            'loss_type': loss_type,
+            'reduction': reduction,
+            'weight': weight
+        }
+
     def _generate_training_script(self, project_name: str, nodes: List[Dict[str, Any]]) -> str:
         """Generate training script using template"""
-        # Determine task type based on architecture
-        has_softmax = any(get_node_type(n) == 'softmax' for n in nodes)
-        is_classification = has_softmax
+        # Extract loss configuration from loss node
+        loss_config = self._extract_loss_config(nodes)
+
+        # Map loss types to PyTorch loss classes
+        loss_map = {
+            'cross_entropy': 'nn.CrossEntropyLoss',
+            'mse': 'nn.MSELoss',
+            'mae': 'nn.L1Loss',
+            'bce': 'nn.BCELoss',
+            'nll': 'nn.NLLLoss',
+            'smooth_l1': 'nn.SmoothL1Loss',
+            'kl_div': 'nn.KLDivLoss',
+        }
+
+        loss_class = loss_map.get(loss_config['loss_type'], 'nn.CrossEntropyLoss')
+
+        # Build loss function instantiation with parameters
+        loss_params = []
+        if loss_config['reduction'] and loss_config['reduction'] != 'mean':
+            loss_params.append(f"reduction='{loss_config['reduction']}'")
+        if loss_config['weight']:
+            try:
+                # Parse weight as JSON array
+                import json
+                weights = json.loads(loss_config['weight'])
+                loss_params.append(f"weight=torch.tensor({weights})")
+            except (json.JSONDecodeError, ValueError):
+                # Skip invalid weights
+                pass
+
+        loss_function = f"{loss_class}({', '.join(loss_params)})" if loss_params else f"{loss_class}()"
+
+        # Determine if classification based on loss type
+        is_classification = loss_config['loss_type'] in ['cross_entropy', 'bce', 'nll']
 
         context = {
             'project_name': project_name,
             'model_class_name': project_name,
             'task_type': 'classification' if is_classification else 'regression',
             'is_classification': is_classification,
-            'loss_function': 'nn.CrossEntropyLoss()' if is_classification else 'nn.MSELoss()',
+            'loss_function': loss_function,
             'metric_name': 'accuracy' if is_classification else 'mse'
         }
 
@@ -886,10 +950,10 @@ from typing import List, Tuple, Optional
         """Generate config file using template"""
         input_shape = self._extract_input_shape(nodes)
 
-        # Count layers
+        # Count layers (exclude special nodes)
         layer_count = sum(
             1 for n in nodes
-            if get_node_type(n) not in ('input', 'output', 'dataloader')
+            if get_node_type(n) not in ('input', 'output', 'dataloader', 'loss')
         )
 
         # Determine complexity and hyperparameters
@@ -909,11 +973,15 @@ from typing import List, Tuple, Optional
             epochs = 30
             complexity = "Shallow"
 
-        # Check for attention layers
+        # Check for attention layers (affects learning rate)
         has_attention = any(get_node_type(n) in ('self_attention', 'attention') for n in nodes)
         if has_attention:
             learning_rate = learning_rate * 0.1
             batch_size = max(8, batch_size // 2)
+
+        # Get loss configuration for reference in config
+        loss_config = self._extract_loss_config(nodes)
+        is_classification = loss_config['loss_type'] in ['cross_entropy', 'bce', 'nll']
 
         context = {
             'batch_size': batch_size,
@@ -922,7 +990,9 @@ from typing import List, Tuple, Optional
             'input_shape': list(input_shape),
             'complexity': complexity,
             'layer_count': layer_count,
-            'has_attention': has_attention
+            'has_attention': has_attention,
+            'loss_type': loss_config['loss_type'],
+            'is_classification': is_classification
         }
 
         return self.template_manager.render('pytorch/files/config.py.jinja2', context)
