@@ -134,7 +134,7 @@ class TensorFlowGroupBlockGenerator(GroupBlockGenerator):
             node_type = get_node_type(node)
 
             # Skip special nodes
-            if node_type in ('input', 'output', 'dataloader'):
+            if node_type in ('input', 'output', 'dataloader', 'loss'):
                 continue
 
             node_id = node['id']
@@ -210,8 +210,8 @@ class TensorFlowGroupBlockGenerator(GroupBlockGenerator):
                         var_map[node_id] = f'inputs[{idx}]'
                 continue
 
-            # Skip output and dataloader nodes
-            if node_type in ('output', 'dataloader'):
+            # Skip output, dataloader, and loss nodes
+            if node_type in ('output', 'dataloader', 'loss'):
                 continue
 
             # Get the spec for this node

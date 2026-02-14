@@ -44,8 +44,14 @@ class AddNode(NodeDefinition):
         source_output_shape: Optional[TensorShape],
         target_config: Dict[str, Any]
     ) -> Optional[str]:
-        # Add accepts multiple inputs - validation happens at graph level
-        # to ensure all inputs have the same shape
+        # Add accepts multiple inputs
+        # Individual connection validation is basic - full multi-input validation
+        # happens at graph level to ensure all inputs have identical shapes
+
+        # Ensure source provides a valid output shape
+        if not source_output_shape or not source_output_shape.dims:
+            return "Add node requires inputs with defined shapes"
+
         return None
     
     def allows_multiple_inputs(self) -> bool:
