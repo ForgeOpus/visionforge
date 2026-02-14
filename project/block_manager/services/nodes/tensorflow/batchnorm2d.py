@@ -10,11 +10,11 @@ class BatchNorm2DNode(NodeDefinition):
     @property
     def metadata(self) -> NodeMetadata:
         return NodeMetadata(
-            type="batchnorm2d",
-            label="BatchNorm2D",
+            type="batchnorm",
+            label="Batch Normalization",
             category="basic",
-            color="var(--color-orange)",
-            icon="Zap",
+            color="var(--color-accent)",
+            icon="ChartLineUp",
             description="Batch normalization layer",
             framework=Framework.TENSORFLOW
         )
