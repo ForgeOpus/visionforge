@@ -1,7 +1,7 @@
 """PyTorch Ground Truth Node Definition"""
 
 from typing import Dict, List, Optional, Any
-from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework
+from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework, LayerCodeSpec
 
 
 class GroundTruthNode(NodeDefinition):
@@ -74,3 +74,28 @@ class GroundTruthNode(NodeDefinition):
     ) -> Optional[str]:
         # Ground truth is a source node, doesn't accept incoming connections
         return "Ground Truth is a source node and cannot accept incoming connections"
+
+    def get_pytorch_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """
+        Ground truth nodes don't generate layer code - they only provide data
+        for the training script. This method exists for interface compatibility.
+        """
+        sanitized_id = node_id.replace('-', '_')
+
+        return LayerCodeSpec(
+            class_name='GroundTruth',
+            layer_variable_name=f'{sanitized_id}_GroundTruth',
+            node_type='groundtruth',
+            node_id=node_id,
+            init_params={},
+            config_params=config,
+            input_shape_info={'dims': []},
+            output_shape_info={'dims': output_shape.dims if output_shape else []},
+            template_context={}
+        )

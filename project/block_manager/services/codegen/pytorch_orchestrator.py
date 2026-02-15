@@ -209,6 +209,21 @@ class PyTorchCodeOrchestrator:
                     node_output_shapes[node_id] = TensorShape({'dims': [1, 3, 224, 224], 'description': 'Dataloader output'})
                 continue
 
+            # Handle groundtruth nodes
+            if node_type == 'groundtruth':
+                # Ground truth outputs label data
+                # Extract from config
+                shape_str = config.get('shape', '[1, 10]')
+                try:
+                    import json
+                    shape_list = json.loads(shape_str) if isinstance(shape_str, str) else shape_str
+                    if isinstance(shape_list, list):
+                        output_shape = TensorShape({'dims': shape_list, 'description': 'Ground truth labels'})
+                        node_output_shapes[node_id] = output_shape
+                except (ValueError, TypeError):
+                    node_output_shapes[node_id] = TensorShape({'dims': [1, 10], 'description': 'Ground truth labels'})
+                continue
+
             # Skip output and loss nodes
             if node_type in ('output', 'loss'):
                 continue
@@ -282,10 +297,10 @@ class PyTorchCodeOrchestrator:
         # Compute shape map for all nodes
         shape_map = self._compute_shape_map(sorted_nodes, edge_map, group_definitions)
 
-        # Skip input/dataloader/output/loss nodes - they don't generate layers
+        # Skip input/dataloader/groundtruth/output/loss nodes - they don't generate layers
         processable_nodes = [
             n for n in sorted_nodes
-            if get_node_type(n) not in ('input', 'dataloader', 'output', 'loss')
+            if get_node_type(n) not in ('input', 'dataloader', 'groundtruth', 'output', 'loss')
         ]
 
         for node in processable_nodes:
@@ -372,7 +387,7 @@ class PyTorchCodeOrchestrator:
                 node_type = get_node_type(node)
 
                 # Skip special nodes
-                if node_type in ('input', 'output', 'dataloader', 'group', 'loss'):
+                if node_type in ('input', 'output', 'dataloader', 'groundtruth', 'group', 'loss'):
                     continue
 
                 # Only generate each node type once
@@ -693,7 +708,7 @@ class PyTorchCodeOrchestrator:
         # Process nodes in topological order
         processable_nodes = [
             n for n in sorted_nodes
-            if get_node_type(n) not in ('output', 'loss')  # Keep input/dataloader for var mapping
+            if get_node_type(n) not in ('output', 'loss', 'groundtruth')  # Keep input/dataloader for var mapping
         ]
 
         for node in processable_nodes:
@@ -953,7 +968,7 @@ from typing import List, Tuple, Optional
         # Count layers (exclude special nodes)
         layer_count = sum(
             1 for n in nodes
-            if get_node_type(n) not in ('input', 'output', 'dataloader', 'loss')
+            if get_node_type(n) not in ('input', 'output', 'dataloader', 'groundtruth', 'loss')
         )
 
         # Determine complexity and hyperparameters
