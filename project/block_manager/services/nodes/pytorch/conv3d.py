@@ -1,7 +1,7 @@
 """PyTorch Conv3D Node Definition"""
 
 from typing import Dict, List, Optional, Any
-from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework
+from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework, LayerCodeSpec
 
 
 class Conv3DNode(NodeDefinition):
@@ -105,14 +105,66 @@ class Conv3DNode(NodeDefinition):
         # Allow connections from input/dataloader without shape validation
         if source_node_type in ("input", "dataloader"):
             return None
-        
+
         # Empty and custom nodes are flexible
         if source_node_type in ("empty", "custom"):
             return None
-        
+
         # Validate 5D input (N, C, D, H, W)
         return self.validate_dimensions(
             source_output_shape,
             5,
             "[batch, channels, depth, height, width]"
+        )
+
+    def get_pytorch_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """Generate PyTorch code specification for Conv3D layer"""
+        out_channels = config.get('out_channels', 64)
+        kernel_size = config.get('kernel_size', 3)
+        stride = config.get('stride', 1)
+        padding = config.get('padding', 0)
+        dilation = config.get('dilation', 1)
+        bias = config.get('bias', True)
+
+        # Determine in_channels from input shape if available
+        in_channels = None
+        if input_shape and len(input_shape.dims) >= 2:
+            in_channels = input_shape.dims[1]
+
+        sanitized_id = node_id.replace('-', '_')
+        class_name = 'Conv3DBlock'
+        layer_var = f'{sanitized_id}_Conv3DBlock'
+
+        return LayerCodeSpec(
+            class_name=class_name,
+            layer_variable_name=layer_var,
+            node_type='conv3d',
+            node_id=node_id,
+            init_params={
+                'in_channels': in_channels,
+                'out_channels': out_channels,
+                'kernel_size': kernel_size,
+                'stride': stride,
+                'padding': padding,
+                'dilation': dilation,
+                'bias': bias
+            },
+            config_params=config,
+            input_shape_info={'dims': input_shape.dims if input_shape else []},
+            output_shape_info={'dims': output_shape.dims if output_shape else []},
+            template_context={
+                'in_channels': in_channels,
+                'out_channels': out_channels,
+                'kernel_size': kernel_size,
+                'stride': stride,
+                'padding': padding,
+                'dilation': dilation,
+                'bias': bias
+            }
         )
