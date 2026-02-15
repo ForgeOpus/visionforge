@@ -142,14 +142,42 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
   updateNode: (id, data) => {
     const state = get()
     const historyUpdate = saveHistory(state)
-    
+
+    // Update node and immediately recompute output shape if config changed
     set((state) => ({
-      nodes: state.nodes.map((node) =>
-        node.id === id ? { ...node, data: { ...node.data, ...data } } : node
-      ),
+      nodes: state.nodes.map((node) => {
+        if (node.id === id) {
+          const updatedData = { ...node.data, ...data }
+
+          // If config changed, recompute output shape
+          if (data.config) {
+            const nodeDef = getNodeDefinition(
+              node.data.blockType as BlockType,
+              BackendFramework.PyTorch
+            )
+
+            if (nodeDef) {
+              // For source nodes, compute from config alone
+              if (node.data.blockType === 'input' ||
+                  node.data.blockType === 'dataloader' ||
+                  node.data.blockType === 'groundtruth') {
+                updatedData.outputShape = nodeDef.computeOutputShape(undefined, updatedData.config)
+              }
+              // For other nodes, use current input shape
+              else if (updatedData.inputShape) {
+                updatedData.outputShape = nodeDef.computeOutputShape(updatedData.inputShape, updatedData.config)
+              }
+            }
+          }
+
+          return { ...node, data: updatedData }
+        }
+        return node
+      }),
       ...historyUpdate
     }))
-    
+
+    // Propagate changes downstream
     get().inferDimensions()
   },
 
@@ -223,21 +251,29 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
         set({ nodes: updatedNodes })
       }
       
-      if (!targetNode.data.inputShape) {
-        const updatedNodes = nodes.map((node) => {
-          if (node.id === targetNode.id) {
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                inputShape: sourceShape
-              }
+      // Update input shape and immediately recompute output shape
+      const updatedNodes = nodes.map((node) => {
+        if (node.id === targetNode.id) {
+          const newInputShape = sourceShape
+          let newOutputShape = node.data.outputShape
+
+          // Recompute output shape based on new input and current config
+          if (targetNodeDef) {
+            newOutputShape = targetNodeDef.computeOutputShape(newInputShape, node.data.config)
+          }
+
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              inputShape: newInputShape,
+              outputShape: newOutputShape
             }
           }
-          return node
-        })
-        set({ nodes: updatedNodes })
-      }
+        }
+        return node
+      })
+      set({ nodes: updatedNodes })
     }
     
     setTimeout(() => get().inferDimensions(), 0)
