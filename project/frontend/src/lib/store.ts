@@ -528,16 +528,25 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     nodes.forEach((node) => {
       const hasInput = edges.some((e) => e.target === node.id)
       const hasOutput = edges.some((e) => e.source === node.id)
-      
-      if (!hasInput && node.data.blockType !== 'input') {
+
+      // Source nodes (input, dataloader, groundtruth) are SUPPOSED to have no input connections
+      const isSourceNode = node.data.blockType === 'input' ||
+                          node.data.blockType === 'dataloader' ||
+                          node.data.blockType === 'groundtruth'
+
+      if (!hasInput && !isSourceNode) {
         errors.push({
           nodeId: node.id,
           message: `Block "${node.data.label}" has no input connection`,
           type: 'warning'
         })
       }
-      
-      if (!hasOutput && node.data.blockType !== 'output' && node.data.blockType !== 'loss') {
+
+      // Terminal nodes (output, loss) are SUPPOSED to have no output connections
+      const isTerminalNode = node.data.blockType === 'output' ||
+                            node.data.blockType === 'loss'
+
+      if (!hasOutput && !isTerminalNode) {
         errors.push({
           nodeId: node.id,
           message: `Block "${node.data.label}" has no output connection`,
