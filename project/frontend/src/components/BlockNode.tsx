@@ -274,7 +274,11 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
             <div className="space-y-1 mt-2">
               <div className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">Inputs</div>
               {inputPorts.map((port: any, i: number) => (
-                <div key={`port-label-${i}`} className="text-[10px] flex items-center gap-1.5">
+                <div
+                  key={`port-label-${i}`}
+                  className="text-[10px] flex items-center gap-1.5 relative"
+                  id={`loss-port-row-${i}`}
+                >
                   <div
                     className="w-2 h-2 rounded-full flex-shrink-0"
                     style={{ backgroundColor: ['#ef4444', '#f59e0b'][i % 2] }}
@@ -390,7 +394,7 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
         </>
       ) : data.blockType === 'loss' ? (
         <>
-          {/* Multiple input handles for Loss node - simplified without labels */}
+          {/* Multiple input handles for Loss node - aligned with labels */}
           {(() => {
             const lossNodeDef = nodeDef as any
             const inputPorts = lossNodeDef.getInputPorts ? lossNodeDef.getInputPorts(data.config) : []
@@ -420,12 +424,26 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
               )
             }
 
-            // Calculate positions for multiple inputs
-            const spacing = 100 / (inputPorts.length + 1)
-            const colors = ['#ef4444', '#f59e0b']
+            // Calculate positions to align with label rows
+            // Estimated positions based on card layout:
+            // - padding-top: 8px
+            // - header row: ~28px
+            // - space before inputs: ~6px
+            // - "INPUTS" header: ~14px
+            // - space: ~4px
+            // For typical card height of ~110px:
+            // First label: ~60px from top (54.5%)
+            // Second label: ~82px from top (74.5%)
+            const positions = inputPorts.length === 2
+              ? [60, 82] // pixel positions for 2 ports
+              : inputPorts.length === 3
+              ? [56, 72, 88] // pixel positions for 3 ports
+              : [70] // single port fallback
+
+            const colors = ['#ef4444', '#f59e0b', '#10b981']
 
             return inputPorts.map((port: any, i: number) => {
-              const topPercent = spacing * (i + 1)
+              const topPx = positions[i] || 70
               const color = colors[i % colors.length]
               const handleId = port.id
               const isConnected = isHandleConnected(handleId, true)
@@ -438,7 +456,7 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
                     id={handleId}
                     className={`w-3 h-3 transition-all ${isConnected ? 'ring-2 ring-offset-1 ring-green-400' : ''}`}
                     style={{
-                      top: `${topPercent}%`,
+                      top: `${topPx}px`,
                       left: -6,
                       zIndex: 10,
                       backgroundColor: isConnected ? '#10b981' : color,
@@ -449,7 +467,7 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
                     <div
                       className="absolute left-0 w-6 h-6 rounded-full border-2 animate-pulse pointer-events-none"
                       style={{
-                        top: `${topPercent}%`,
+                        top: `${topPx}px`,
                         left: -6,
                         transform: 'translate(-50%, -50%)',
                         borderColor: isConnected ? '#10b981' : color,
