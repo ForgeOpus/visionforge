@@ -64,7 +64,9 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
 
   return (
     <Card
-      className="min-w-[200px] w-[220px] transition-all duration-200 relative"
+      className={`min-w-[200px] w-[220px] transition-all duration-200 relative ${
+        data.blockType === 'loss' ? 'min-h-[120px]' : ''
+      }`}
       style={{
         borderColor: selected ? 'var(--color-accent)' : definition.color,
         borderWidth: selected ? 3 : 2,
@@ -396,17 +398,24 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
               )
             }
 
-            const spacing = 100 / (inputPorts.length + 1)
+            // Use better spacing to avoid overlap with title
+            // Start from 40% to give room for the title/header section
+            const startPercent = 40
+            const endPercent = 100
+            const range = endPercent - startPercent
+            const spacing = inputPorts.length > 1 ? range / (inputPorts.length - 1) : 0
             const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6']
 
             return inputPorts.map((port: any, i: number) => {
-              const topPercent = spacing * (i + 1)
+              const topPercent = inputPorts.length > 1
+                ? startPercent + (spacing * i)
+                : 50 // Center single port
               const color = colors[i % colors.length]
               const handleId = port.id  // Port ID already includes 'loss-input-' prefix
               const isConnected = isHandleConnected(handleId, true)
 
               return (
-                <div key={`loss-input-${i}`} className="absolute left-0 flex items-center" style={{ top: `${topPercent}%`, transform: 'translateY(-50%)' }}>
+                <div key={`loss-input-${i}`} className="absolute left-0 flex items-center z-20" style={{ top: `${topPercent}%`, transform: 'translateY(-50%)' }}>
                   <Handle
                     type="target"
                     position={Position.Left}
@@ -420,8 +429,8 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
                       opacity: isConnected ? 1 : 0.8
                     }}
                   />
-                  <span 
-                    className={`text-[10px] font-medium ml-2 bg-card px-1.5 py-0.5 rounded border ${isConnected ? 'opacity-60' : ''}`}
+                  <span
+                    className={`text-[10px] font-medium ml-2 bg-card/95 backdrop-blur-sm px-1.5 py-0.5 rounded border shadow-sm ${isConnected ? 'opacity-60' : ''}`}
                     style={{ color: isConnected ? '#10b981' : color, borderColor: isConnected ? '#10b981' : color }}
                   >
                     {port.label} {isConnected && '✓'}
@@ -442,23 +451,29 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
               )
             })
           })()}
-          
+
           {/* Single output handle for loss value */}
-          <Handle
-            type="source"
-            position={Position.Right}
-            className="w-3 h-3 !bg-red-500 transition-all"
-            style={{
-              right: -6,
-              zIndex: 10
-            }}
-          />
-          {selected && (
-            <div
-              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-6 h-6 rounded-full border-2 border-red-500 bg-red-500/20 animate-pulse pointer-events-none"
-              style={{ right: -6 }}
+          <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center z-20">
+            <span className="text-[10px] font-medium mr-2 bg-card/95 backdrop-blur-sm px-1.5 py-0.5 rounded border border-red-400 text-red-500 shadow-sm">
+              Loss
+            </span>
+            <Handle
+              type="source"
+              position={Position.Right}
+              className="w-3 h-3 !bg-red-500 transition-all border-2 border-card"
+              style={{
+                position: 'relative',
+                right: -6,
+                zIndex: 10
+              }}
             />
-          )}
+            {selected && (
+              <div
+                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-6 h-6 rounded-full border-2 border-red-500 bg-red-500/20 animate-pulse pointer-events-none"
+                style={{ right: -6 }}
+              />
+            )}
+          </div>
         </>
       ) : (
         <>
