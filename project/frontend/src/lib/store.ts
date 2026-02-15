@@ -157,13 +157,22 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
             )
 
             if (nodeDef) {
-              // For source nodes, compute from config alone
-              if (node.data.blockType === 'input' ||
-                  node.data.blockType === 'dataloader' ||
+              // Pure source nodes (dataloader, groundtruth) compute from config alone
+              if (node.data.blockType === 'dataloader' ||
                   node.data.blockType === 'groundtruth') {
                 updatedData.outputShape = nodeDef.computeOutputShape(undefined, updatedData.config)
               }
-              // For other nodes, use current input shape
+              // Input nodes: passthrough if has input, otherwise from config
+              else if (node.data.blockType === 'input') {
+                if (updatedData.inputShape) {
+                  // Connected to DataLoader: passthrough (output = input)
+                  updatedData.outputShape = nodeDef.computeOutputShape(updatedData.inputShape, updatedData.config)
+                } else {
+                  // Not connected: act as source
+                  updatedData.outputShape = nodeDef.computeOutputShape(undefined, updatedData.config)
+                }
+              }
+              // Transform nodes: use current input shape
               else if (updatedData.inputShape) {
                 updatedData.outputShape = nodeDef.computeOutputShape(updatedData.inputShape, updatedData.config)
               }
@@ -689,14 +698,29 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
         // Regular node processing
         let nodeDef = getNodeDefinition(node.data.blockType, BackendFramework.PyTorch)
 
-        // Source nodes (input, dataloader, groundtruth) compute shape from config
-        if (node.data.blockType === 'input' ||
-            node.data.blockType === 'dataloader' ||
-            node.data.blockType === 'groundtruth') {
+        // Pure source nodes (dataloader, groundtruth) compute shape from config
+        if (node.data.blockType === 'dataloader' || node.data.blockType === 'groundtruth') {
           if (nodeDef) {
-            // Use new registry method - source nodes don't need inputShape
+            // Source nodes don't need inputShape - compute from config alone
             const outputShape = nodeDef.computeOutputShape(undefined, node.data.config)
             node.data.outputShape = outputShape
+          }
+        }
+        // Input nodes: passthrough if connected, otherwise use config
+        else if (node.data.blockType === 'input') {
+          if (nodeDef) {
+            if (incomingEdges.length > 0) {
+              // Passthrough: output = input from connected DataLoader
+              const sourceNode = nodeMap.get(incomingEdges[0].source)
+              if (sourceNode?.data.outputShape) {
+                node.data.inputShape = sourceNode.data.outputShape
+                node.data.outputShape = nodeDef.computeOutputShape(node.data.inputShape, node.data.config)
+              }
+            } else {
+              // No incoming edges: compute from config (acts as source)
+              const outputShape = nodeDef.computeOutputShape(undefined, node.data.config)
+              node.data.outputShape = outputShape
+            }
           }
         } else {
           if (incomingEdges.length > 0) {
@@ -749,12 +773,19 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
       outgoingEdges.forEach((e) => processNode(e.target))
     }
     
-    // Start from all source nodes (input, dataloader, groundtruth)
-    const sourceNodes = updatedNodes.filter((n) =>
-      n.data.blockType === 'input' ||
-      n.data.blockType === 'dataloader' ||
-      n.data.blockType === 'groundtruth'
-    )
+    // Start from all source nodes
+    // - DataLoader and GroundTruth are always sources
+    // - Input nodes are only sources if they have no incoming edges (not connected to DataLoader)
+    const sourceNodes = updatedNodes.filter((n) => {
+      if (n.data.blockType === 'dataloader' || n.data.blockType === 'groundtruth') {
+        return true
+      }
+      if (n.data.blockType === 'input') {
+        // Input is a source only if it has no incoming edges
+        return getIncomingEdges(n.id).length === 0
+      }
+      return false
+    })
     sourceNodes.forEach((node) => processNode(node.id))
     
     set({ nodes: updatedNodes })
