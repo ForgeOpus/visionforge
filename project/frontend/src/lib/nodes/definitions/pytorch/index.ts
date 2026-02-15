@@ -5,6 +5,7 @@
 
 export { InputNode } from './input'
 export { DataLoaderNode } from './dataloader'
+export { GroundTruthNode } from './groundtruth'
 export { OutputNode } from './output'
 export { LossNode } from './loss'
 export { EmptyNode } from './empty'
