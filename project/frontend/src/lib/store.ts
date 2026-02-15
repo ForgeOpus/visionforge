@@ -652,10 +652,13 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
       } else {
         // Regular node processing
         let nodeDef = getNodeDefinition(node.data.blockType, BackendFramework.PyTorch)
-        
-        if (node.data.blockType === 'input') {
+
+        // Source nodes (input, dataloader, groundtruth) compute shape from config
+        if (node.data.blockType === 'input' ||
+            node.data.blockType === 'dataloader' ||
+            node.data.blockType === 'groundtruth') {
           if (nodeDef) {
-            // Use new registry method
+            // Use new registry method - source nodes don't need inputShape
             const outputShape = nodeDef.computeOutputShape(undefined, node.data.config)
             node.data.outputShape = outputShape
           }
@@ -710,8 +713,13 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
       outgoingEdges.forEach((e) => processNode(e.target))
     }
     
-    const inputNodes = updatedNodes.filter((n) => n.data.blockType === 'input')
-    inputNodes.forEach((node) => processNode(node.id))
+    // Start from all source nodes (input, dataloader, groundtruth)
+    const sourceNodes = updatedNodes.filter((n) =>
+      n.data.blockType === 'input' ||
+      n.data.blockType === 'dataloader' ||
+      n.data.blockType === 'groundtruth'
+    )
+    sourceNodes.forEach((node) => processNode(node.id))
     
     set({ nodes: updatedNodes })
   },
