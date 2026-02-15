@@ -5,6 +5,7 @@
 import { SourceNodeDefinition } from '../../base'
 import { NodeMetadata, BackendFramework } from '../../contracts'
 import { TensorShape, BlockConfig, ConfigField } from '../../../types'
+import { PortDefinition } from '../../ports'
 
 export class GroundTruthNode extends SourceNodeDefinition {
   readonly metadata: NodeMetadata = {
@@ -43,6 +44,20 @@ export class GroundTruthNode extends SourceNodeDefinition {
       description: 'Notes or comments about this ground truth data'
     }
   ]
+
+  /**
+   * Ground truth outputs labels, not data
+   */
+  getOutputPorts(config: BlockConfig): PortDefinition[] {
+    return [{
+      id: 'default',
+      label: 'Labels',
+      type: 'output',
+      semantic: 'labels',
+      required: false,
+      description: 'Ground truth labels for training'
+    }]
+  }
 
   computeOutputShape(inputShape: TensorShape | undefined, config: BlockConfig): TensorShape | undefined {
     const shapeStr = String(config.shape || '[1, 10]')
