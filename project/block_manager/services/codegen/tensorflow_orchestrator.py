@@ -178,7 +178,7 @@ class TensorFlowCodeOrchestrator:
 
         processable_nodes = [
             n for n in sorted_nodes
-            if get_node_type(n) not in ('input', 'dataloader', 'output', 'loss')
+            if get_node_type(n) not in ('input', 'dataloader', 'output', 'loss', 'metrics')
         ]
 
         for node in processable_nodes:
@@ -259,7 +259,7 @@ class TensorFlowCodeOrchestrator:
                 node_type = get_node_type(node)
 
                 # Skip special nodes
-                if node_type in ('input', 'output', 'dataloader', 'group', 'loss'):
+                if node_type in ('input', 'output', 'dataloader', 'group', 'loss', 'metrics'):
                     continue
 
                 # Only generate each node type once
@@ -517,7 +517,7 @@ class TensorFlowCodeOrchestrator:
 
         processable_nodes = [
             n for n in sorted_nodes
-            if get_node_type(n) not in ('output', 'loss')
+            if get_node_type(n) not in ('output', 'loss', 'groundtruth', 'metrics')
         ]
 
         for node in processable_nodes:

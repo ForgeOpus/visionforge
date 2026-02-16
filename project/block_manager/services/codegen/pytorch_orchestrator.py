@@ -300,10 +300,10 @@ class PyTorchCodeOrchestrator:
         # Compute shape map for all nodes
         shape_map = self._compute_shape_map(sorted_nodes, edge_map, group_definitions)
 
-        # Skip input/dataloader/groundtruth/output/loss nodes - they don't generate layers
+        # Skip input/dataloader/groundtruth/output/loss/metrics nodes - they don't generate layers
         processable_nodes = [
             n for n in sorted_nodes
-            if get_node_type(n) not in ('input', 'dataloader', 'groundtruth', 'output', 'loss')
+            if get_node_type(n) not in ('input', 'dataloader', 'groundtruth', 'output', 'loss', 'metrics')
         ]
 
         for node in processable_nodes:
@@ -390,7 +390,7 @@ class PyTorchCodeOrchestrator:
                 node_type = get_node_type(node)
 
                 # Skip special nodes
-                if node_type in ('input', 'output', 'dataloader', 'groundtruth', 'group', 'loss'):
+                if node_type in ('input', 'output', 'dataloader', 'groundtruth', 'group', 'loss', 'metrics'):
                     continue
 
                 # Only generate each node type once
@@ -711,7 +711,7 @@ class PyTorchCodeOrchestrator:
         # Process nodes in topological order
         processable_nodes = [
             n for n in sorted_nodes
-            if get_node_type(n) not in ('output', 'loss', 'groundtruth')  # Keep input/dataloader for var mapping
+            if get_node_type(n) not in ('output', 'loss', 'groundtruth', 'metrics')  # Keep input/dataloader for var mapping
         ]
 
         for node in processable_nodes:
@@ -947,18 +947,36 @@ from typing import List, Tuple, Optional
         # Build parameters based on task type
         params = []
 
+        # Classification metrics
         if metric_name in ['accuracy', 'precision', 'recall', 'f1', 'specificity', 'auroc', 'auprc']:
-            # Classification metrics
             if task_type == 'binary_classification':
                 params.append("task='binary'")
-            elif task_type in ['multiclass_classification', 'multilabel_classification']:
-                params.append(f"task='multiclass'" if task_type == 'multiclass_classification' else "task='multilabel'")
+            elif task_type == 'multiclass_classification':
+                params.append("task='multiclass'")
+                params.append(f"num_classes={num_classes}")
+            elif task_type == 'multilabel_classification':
+                params.append("task='multilabel'")
                 params.append(f"num_labels={num_classes}")
 
-            # Add averaging method for multi-class metrics
-            if task_type != 'binary_classification' and metric_name in ['precision', 'recall', 'f1']:
-                if average != 'none':
-                    params.append(f"average='{average}'")
+            # Add averaging method for specific metrics that support it
+            if task_type == 'multiclass_classification':
+                if metric_name in ['precision', 'recall', 'f1', 'specificity']:
+                    if average != 'none':
+                        params.append(f"average='{average}'")
+                elif metric_name in ['auroc', 'auprc']:
+                    # AUROC and AveragePrecision use average parameter for multiclass
+                    if average != 'none':
+                        params.append(f"average='{average}'")
+            elif task_type == 'multilabel_classification':
+                if metric_name in ['precision', 'recall', 'f1', 'specificity', 'auroc', 'auprc']:
+                    if average != 'none':
+                        params.append(f"average='{average}'")
+
+        # Regression metrics
+        elif metric_name == 'rmse':
+            # RMSE is MeanSquaredError with squared=False
+            params.append("squared=False")
+        # mse, mae, r2 don't need special parameters
 
         return f"{metric_class}({', '.join(params)})"
 

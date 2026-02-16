@@ -475,7 +475,7 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     }
     
     // Check if target allows multiple inputs (for backwards compatibility)
-    const allowsMultiple = targetNode.data.blockType === 'concat' || targetNode.data.blockType === 'add' || targetNode.data.blockType === 'loss'
+    const allowsMultiple = targetNode.data.blockType === 'concat' || targetNode.data.blockType === 'add' || targetNode.data.blockType === 'loss' || targetNode.data.blockType === 'metrics'
     if (!allowsMultiple) {
       const hasExistingInput = edges.some((e) => e.target === connection.target)
       if (hasExistingInput) return false
