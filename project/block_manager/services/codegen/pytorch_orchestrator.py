@@ -868,6 +868,135 @@ from typing import List, Tuple, Optional
 {test_code}
 '''
 
+    def _extract_metrics_config(self, nodes: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        Extract metrics configuration from metrics node (OPTIONAL).
+
+        Args:
+            nodes: List of node definitions
+
+        Returns:
+            Dictionary with metrics configuration, or None if no metrics node found
+        """
+        metrics_node = next((n for n in nodes if get_node_type(n) == 'metrics'), None)
+
+        if not metrics_node:
+            return None
+
+        config = get_node_config(metrics_node)
+        task_type = config.get('task_type', 'binary_classification')
+        metrics_raw = config.get('metrics', ['accuracy'])
+        num_classes = config.get('num_classes', 2)
+        average = config.get('average', 'macro')
+
+        # Handle both array and JSON string formats for backward compatibility
+        metrics_list = []
+        if isinstance(metrics_raw, list):
+            metrics_list = metrics_raw
+        elif isinstance(metrics_raw, str):
+            try:
+                metrics_list = json.loads(metrics_raw)
+            except (json.JSONDecodeError, ValueError):
+                metrics_list = ['accuracy']
+        else:
+            metrics_list = ['accuracy']
+
+        return {
+            'task_type': task_type,
+            'metrics': metrics_list,
+            'num_classes': num_classes,
+            'average': average
+        }
+
+    def _generate_metric_init_code(
+        self,
+        metric_name: str,
+        task_type: str,
+        num_classes: int,
+        average: str
+    ) -> str:
+        """
+        Generate initialization code for a metric using torchmetrics.
+
+        Args:
+            metric_name: Name of the metric (e.g., 'accuracy', 'precision')
+            task_type: Task type (binary_classification, multiclass_classification, etc.)
+            num_classes: Number of classes for classification tasks
+            average: Averaging method (macro, micro, weighted, none)
+
+        Returns:
+            String with metric initialization code
+        """
+        # Map metric names to torchmetrics classes with their parameters
+        metric_map = {
+            'accuracy': 'torchmetrics.Accuracy',
+            'precision': 'torchmetrics.Precision',
+            'recall': 'torchmetrics.Recall',
+            'f1': 'torchmetrics.F1Score',
+            'specificity': 'torchmetrics.Specificity',
+            'auroc': 'torchmetrics.AUROC',
+            'auprc': 'torchmetrics.AveragePrecision',
+            'mse': 'torchmetrics.MeanSquaredError',
+            'mae': 'torchmetrics.MeanAbsoluteError',
+            'rmse': 'torchmetrics.MeanSquaredError',
+            'r2': 'torchmetrics.R2Score'
+        }
+
+        metric_class = metric_map.get(metric_name, 'torchmetrics.Accuracy')
+
+        # Build parameters based on task type
+        params = []
+
+        if metric_name in ['accuracy', 'precision', 'recall', 'f1', 'specificity', 'auroc', 'auprc']:
+            # Classification metrics
+            if task_type == 'binary_classification':
+                params.append("task='binary'")
+            elif task_type in ['multiclass_classification', 'multilabel_classification']:
+                params.append(f"task='multiclass'" if task_type == 'multiclass_classification' else "task='multilabel'")
+                params.append(f"num_labels={num_classes}")
+
+            # Add averaging method for multi-class metrics
+            if task_type != 'binary_classification' and metric_name in ['precision', 'recall', 'f1']:
+                if average != 'none':
+                    params.append(f"average='{average}'")
+
+        return f"{metric_class}({', '.join(params)})"
+
+    def _validate_loss_metrics_consistency(
+        self,
+        loss_config: Dict[str, Any],
+        metrics_config: Optional[Dict[str, Any]]
+    ) -> List[str]:
+        """
+        Validate consistency between loss and metrics configurations.
+
+        Args:
+            loss_config: Loss configuration dictionary
+            metrics_config: Metrics configuration dictionary or None
+
+        Returns:
+            List of warning/error strings
+        """
+        if not metrics_config:
+            return []
+
+        warnings = []
+        loss_type = loss_config.get('loss_type', 'cross_entropy')
+        metrics_task = metrics_config.get('task_type', 'binary_classification')
+
+        # Check if loss type aligns with metrics task type
+        is_classification_loss = loss_type in ['cross_entropy', 'bce', 'nll']
+        is_classification_task = 'classification' in metrics_task
+        is_regression_loss = loss_type in ['mse', 'mae']
+        is_regression_task = metrics_task == 'regression'
+
+        if is_classification_loss and not is_classification_task:
+            warnings.append("Loss type suggests classification but metrics task is not classification")
+        elif is_regression_loss and not is_regression_task:
+            warnings.append("Loss type suggests regression but metrics task is not regression")
+
+        return warnings
+
     def _extract_loss_config(self, nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Extract loss configuration from loss node (REQUIRED).
@@ -906,6 +1035,9 @@ from typing import List, Tuple, Optional
         # Extract loss configuration from loss node
         loss_config = self._extract_loss_config(nodes)
 
+        # Extract metrics configuration (optional)
+        metrics_config = self._extract_metrics_config(nodes)
+
         # Map loss types to PyTorch loss classes
         loss_map = {
             'cross_entropy': 'nn.CrossEntropyLoss',
@@ -926,7 +1058,6 @@ from typing import List, Tuple, Optional
         if loss_config['weight']:
             try:
                 # Parse weight as JSON array
-                import json
                 weights = json.loads(loss_config['weight'])
                 loss_params.append(f"weight=torch.tensor({weights})")
             except (json.JSONDecodeError, ValueError):
@@ -938,13 +1069,37 @@ from typing import List, Tuple, Optional
         # Determine if classification based on loss type
         is_classification = loss_config['loss_type'] in ['cross_entropy', 'bce', 'nll']
 
+        # Generate metric initialization code if metrics are configured
+        metric_init_code = {}
+        if metrics_config:
+            for metric in metrics_config['metrics']:
+                try:
+                    init_code = self._generate_metric_init_code(
+                        metric,
+                        metrics_config['task_type'],
+                        metrics_config['num_classes'],
+                        metrics_config['average']
+                    )
+                    metric_init_code[metric] = init_code
+                except Exception:
+                    # Skip metrics that fail to generate
+                    pass
+
+        # Validate loss-metrics consistency
+        consistency_warnings = self._validate_loss_metrics_consistency(loss_config, metrics_config)
+
         context = {
             'project_name': project_name,
             'model_class_name': sanitized_project_name,
             'task_type': 'classification' if is_classification else 'regression',
             'is_classification': is_classification,
             'loss_function': loss_function,
-            'metric_name': 'accuracy' if is_classification else 'mse'
+            'metric_name': 'accuracy' if is_classification else 'mse',
+            'has_metrics': metrics_config is not None,
+            'metric_names': metrics_config['metrics'] if metrics_config else [],
+            'metric_init_code': metric_init_code,
+            'task_type_for_metrics': metrics_config['task_type'] if metrics_config else None,
+            'consistency_warnings': consistency_warnings
         }
 
         return self.template_manager.render('pytorch/files/train.py.jinja2', context)

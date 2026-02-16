@@ -648,6 +648,118 @@ from typing import List, Tuple, Optional
 {test_code}
 '''
 
+    def _extract_metrics_config(self, nodes: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        Extract metrics configuration from metrics node (OPTIONAL).
+
+        Args:
+            nodes: List of node definitions
+
+        Returns:
+            Dictionary with metrics configuration, or None if no metrics node found
+        """
+        metrics_node = next((n for n in nodes if get_node_type(n) == 'metrics'), None)
+
+        if not metrics_node:
+            return None
+
+        config = get_node_config(metrics_node)
+        task_type = config.get('task_type', 'binary_classification')
+        metrics_raw = config.get('metrics', ['accuracy'])
+        num_classes = config.get('num_classes', 2)
+        average = config.get('average', 'macro')
+
+        # Handle both array and JSON string formats for backward compatibility
+        metrics_list = []
+        if isinstance(metrics_raw, list):
+            metrics_list = metrics_raw
+        elif isinstance(metrics_raw, str):
+            try:
+                metrics_list = json.loads(metrics_raw)
+            except (json.JSONDecodeError, ValueError):
+                metrics_list = ['accuracy']
+        else:
+            metrics_list = ['accuracy']
+
+        return {
+            'task_type': task_type,
+            'metrics': metrics_list,
+            'num_classes': num_classes,
+            'average': average
+        }
+
+    def _generate_metric_init_code(
+        self,
+        metric_name: str,
+        task_type: str,
+        _num_classes: int,
+        _average: str
+    ) -> str:
+        """
+        Generate initialization code for a metric using keras.metrics.
+
+        Args:
+            metric_name: Name of the metric (e.g., 'accuracy', 'precision')
+            task_type: Task type (binary_classification, multiclass_classification, etc.)
+            _num_classes: Number of classes for classification tasks (unused for keras)
+            _average: Averaging method (unused for keras basic metrics)
+
+        Returns:
+            String with metric initialization code
+        """
+        # Map metric names to keras.metrics classes
+        metric_map = {
+            'accuracy': 'keras.metrics.Accuracy',
+            'precision': 'keras.metrics.Precision',
+            'recall': 'keras.metrics.Recall',
+            'mse': 'keras.metrics.MeanSquaredError',
+            'mae': 'keras.metrics.MeanAbsoluteError',
+            'rmse': 'keras.metrics.RootMeanSquaredError'
+        }
+
+        # Special handling for SparseCategoricalAccuracy
+        if metric_name == 'accuracy' and task_type == 'multiclass_classification':
+            metric_class = 'keras.metrics.SparseCategoricalAccuracy'
+        else:
+            metric_class = metric_map.get(metric_name, 'keras.metrics.Accuracy')
+
+        return f"{metric_class}(name='{metric_name}')"
+
+    def _validate_loss_metrics_consistency(
+        self,
+        loss_config: Dict[str, Any],
+        metrics_config: Optional[Dict[str, Any]]
+    ) -> List[str]:
+        """
+        Validate consistency between loss and metrics configurations.
+
+        Args:
+            loss_config: Loss configuration dictionary
+            metrics_config: Metrics configuration dictionary or None
+
+        Returns:
+            List of warning/error strings
+        """
+        if not metrics_config:
+            return []
+
+        warnings = []
+        loss_type = loss_config.get('loss_type', 'cross_entropy')
+        metrics_task = metrics_config.get('task_type', 'binary_classification')
+
+        # Check if loss type aligns with metrics task type
+        is_classification_loss = loss_type in ['cross_entropy', 'bce', 'categorical_crossentropy']
+        is_classification_task = 'classification' in metrics_task
+        is_regression_loss = loss_type in ['mse', 'mae']
+        is_regression_task = metrics_task == 'regression'
+
+        if is_classification_loss and not is_classification_task:
+            warnings.append("Loss type suggests classification but metrics task is not classification")
+        elif is_regression_loss and not is_regression_task:
+            warnings.append("Loss type suggests regression but metrics task is not regression")
+
+        return warnings
+
     def _extract_loss_config(self, nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Extract loss configuration from loss node (REQUIRED).
@@ -686,6 +798,9 @@ from typing import List, Tuple, Optional
         # Extract loss configuration from loss node
         loss_config = self._extract_loss_config(nodes)
 
+        # Extract metrics configuration (optional)
+        metrics_config = self._extract_metrics_config(nodes)
+
         # Map loss types to TensorFlow/Keras loss classes
         loss_map = {
             'cross_entropy': 'keras.losses.SparseCategoricalCrossentropy',
@@ -711,13 +826,37 @@ from typing import List, Tuple, Optional
         # Determine if classification based on loss type
         is_classification = loss_config['loss_type'] in ['cross_entropy', 'bce', 'categorical_crossentropy']
 
+        # Generate metric initialization code if metrics are configured
+        metric_init_code = {}
+        if metrics_config:
+            for metric in metrics_config['metrics']:
+                try:
+                    init_code = self._generate_metric_init_code(
+                        metric,
+                        metrics_config['task_type'],
+                        metrics_config['num_classes'],
+                        metrics_config['average']
+                    )
+                    metric_init_code[metric] = init_code
+                except Exception:
+                    # Skip metrics that fail to generate
+                    pass
+
+        # Validate loss-metrics consistency
+        consistency_warnings = self._validate_loss_metrics_consistency(loss_config, metrics_config)
+
         context = {
             'project_name': project_name,
             'model_class_name': sanitized_project_name,
             'task_type': 'classification' if is_classification else 'regression',
             'is_classification': is_classification,
             'loss_function': loss_function,
-            'metric_name': 'accuracy' if is_classification else 'mse'
+            'metric_name': 'accuracy' if is_classification else 'mse',
+            'has_metrics': metrics_config is not None,
+            'metric_names': metrics_config['metrics'] if metrics_config else [],
+            'metric_init_code': metric_init_code,
+            'task_type_for_metrics': metrics_config['task_type'] if metrics_config else None,
+            'consistency_warnings': consistency_warnings
         }
 
         return self.template_manager.render('tensorflow/files/train.py.jinja2', context)

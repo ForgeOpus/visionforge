@@ -17,7 +17,7 @@ from dataset import create_dataset
 from config import *
 
 
-def train_step(model: keras.Model, x_batch, y_batch, loss_fn, optimizer):
+def train_step(model: keras.Model, x_batch, y_batch, loss_fn, optimizer{% if has_metrics %}, train_metrics=None{% endif %}):
     """
     Perform one training step.
 
@@ -27,7 +27,10 @@ def train_step(model: keras.Model, x_batch, y_batch, loss_fn, optimizer):
         y_batch: Target batch
         loss_fn: Loss function
         optimizer: Optimizer
+{% if has_metrics %}
+        train_metrics: Dictionary of metrics to track
 
+{% endif %}
     Returns:
         Loss value for this batch
     """
@@ -38,6 +41,12 @@ def train_step(model: keras.Model, x_batch, y_batch, loss_fn, optimizer):
     gradients = tape.gradient(loss, model.trainable_variables)
     optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
+{% if has_metrics %}
+    # Update metrics
+    if train_metrics:
+        for metric in train_metrics.values():
+            metric.update_state(y_batch, predictions)
+{% endif %}
     return loss
 
 
@@ -58,9 +67,19 @@ def main():
     loss_fn = {{ loss_function }}
     optimizer = keras.optimizers.Adam(learning_rate=LEARNING_RATE)
 
+{% if has_metrics %}
+    # Initialize metrics
+    train_metrics = {}
+    val_metrics = {}
+{% for metric_name in metric_names %}
+    train_metrics['{{ metric_name }}'] = {{ metric_init_code[metric_name] }}
+    val_metrics['{{ metric_name }}'] = {{ metric_init_code[metric_name] }}
+{% endfor %}
+{% else %}
 {% if is_classification %}
     train_accuracy = keras.metrics.SparseCategoricalAccuracy(name='train_accuracy')
     val_accuracy = keras.metrics.SparseCategoricalAccuracy(name='val_accuracy')
+{% endif %}
 {% endif %}
 
     # Training loop
@@ -71,34 +90,64 @@ def main():
 
         # Training
         train_loss_avg = keras.metrics.Mean()
+{% if has_metrics %}
+        for metric in train_metrics.values():
+            metric.reset_states()
+{% else %}
 {% if is_classification %}
         train_accuracy.reset_states()
 {% endif %}
+{% endif %}
 
         for x_batch, y_batch in train_dataset:
+{% if has_metrics %}
+            loss = train_step(model, x_batch, y_batch, loss_fn, optimizer, train_metrics)
+{% else %}
             loss = train_step(model, x_batch, y_batch, loss_fn, optimizer)
+{% endif %}
             train_loss_avg.update_state(loss)
+{% if not has_metrics %}
 {% if is_classification %}
             train_accuracy.update_state(y_batch, model(x_batch, training=True))
+{% endif %}
 {% endif %}
 
         # Validation
         val_loss_avg = keras.metrics.Mean()
+{% if has_metrics %}
+        for metric in val_metrics.values():
+            metric.reset_states()
+{% else %}
 {% if is_classification %}
         val_accuracy.reset_states()
+{% endif %}
 {% endif %}
 
         for x_batch, y_batch in val_dataset:
             predictions = model(x_batch, training=False)
             loss = loss_fn(y_batch, predictions)
             val_loss_avg.update_state(loss)
+{% if has_metrics %}
+            for metric in val_metrics.values():
+                metric.update_state(y_batch, predictions)
+{% else %}
 {% if is_classification %}
             val_accuracy.update_state(y_batch, predictions)
+{% endif %}
 {% endif %}
 
         epoch_time = time.time() - start_time
 
         # Print progress
+{% if has_metrics %}
+        # Build metric strings
+        train_metrics_str = " | ".join([f"Train {name.upper()}: {metric.result().numpy():.4f}" for name, metric in train_metrics.items()])
+        val_metrics_str = " | ".join([f"Val {name.upper()}: {metric.result().numpy():.4f}" for name, metric in val_metrics.items()])
+        print(f"Epoch {epoch+1}/{NUM_EPOCHS} | "
+              f"Time: {epoch_time:.2f}s | "
+              f"Train Loss: {train_loss_avg.result():.4f} | {train_metrics_str} | "
+              f"Val Loss: {val_loss_avg.result():.4f} | {val_metrics_str}")
+{% else %}
         print(f"Epoch {epoch+1}/{NUM_EPOCHS} | "
               f"Time: {epoch_time:.2f}s | "
               f"Train Loss: {train_loss_avg.result():.4f} | "
@@ -108,6 +157,7 @@ def main():
               f"Val Acc: {val_accuracy.result()*100:.2f}%")
 {% else %}
               f"Val Loss: {val_loss_avg.result():.4f}")
+{% endif %}
 {% endif %}
 
         # Save best model

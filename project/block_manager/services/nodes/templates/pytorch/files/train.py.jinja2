@@ -11,6 +11,9 @@ from torch.utils.data import DataLoader
 from pathlib import Path
 from typing import Tuple, Dict
 import time
+{% if has_metrics %}
+import torchmetrics
+{% endif %}
 
 from model import {{ model_class_name }}
 from dataset import CustomDataset
@@ -22,8 +25,9 @@ def train_epoch(
     dataloader: DataLoader,
     criterion: nn.Module,
     optimizer: optim.Optimizer,
-    device: torch.device
-) -> Tuple[float, float]:
+    device: torch.device{% if has_metrics %},
+    train_metrics: Dict = None{% endif %}
+) -> Tuple[float, {% if has_metrics %}Dict{% else %}float{% endif %}]:
     """
     Train for one epoch.
 
@@ -33,14 +37,26 @@ def train_epoch(
         criterion: Loss function
         optimizer: Optimizer
         device: Device to train on
+{% if has_metrics %}
+        train_metrics: Dictionary of metrics to track
 
     Returns:
+        Tuple of (average loss, metrics dictionary)
+{% else %}
+    Returns:
         Tuple of (average loss, metric value)
+{% endif %}
     """
     model.train()
     total_loss = 0.0
+{% if has_metrics %}
+    if train_metrics:
+        for metric in train_metrics.values():
+            metric = metric.to(device)
+{% else %}
     correct = 0
     total = 0
+{% endif %}
 
     for batch_idx, (data, target) in enumerate(dataloader):
         data, target = data.to(device), target.to(device)
@@ -54,6 +70,12 @@ def train_epoch(
 
         total_loss += loss.item()
 
+{% if has_metrics %}
+        # Update metrics
+        if train_metrics:
+            for metric in train_metrics.values():
+                metric.update(output, target)
+{% else %}
         # Calculate metric
 {% if is_classification %}
         pred = output.argmax(dim=1, keepdim=True)
@@ -62,8 +84,18 @@ def train_epoch(
         # For regression tasks, metric tracking can be added here
 {% endif %}
         total += target.size(0)
+{% endif %}
 
     avg_loss = total_loss / len(dataloader)
+{% if has_metrics %}
+    # Compute final metric values
+    metrics_dict = {}
+    if train_metrics:
+        for name, metric in train_metrics.items():
+            metrics_dict[name] = metric.compute().item()
+            metric.reset()
+    return avg_loss, metrics_dict
+{% else %}
 {% if is_classification %}
     metric = 100. * correct / total
 {% else %}
@@ -71,14 +103,16 @@ def train_epoch(
 {% endif %}
 
     return avg_loss, metric
+{% endif %}
 
 
 def validate_epoch(
     model: nn.Module,
     dataloader: DataLoader,
     criterion: nn.Module,
-    device: torch.device
-) -> Tuple[float, float]:
+    device: torch.device{% if has_metrics %},
+    val_metrics: Dict = None{% endif %}
+) -> Tuple[float, {% if has_metrics %}Dict{% else %}float{% endif %}]:
     """
     Validate for one epoch.
 
@@ -87,14 +121,26 @@ def validate_epoch(
         dataloader: Validation data loader
         criterion: Loss function
         device: Device to validate on
+{% if has_metrics %}
+        val_metrics: Dictionary of metrics to track
 
     Returns:
+        Tuple of (average loss, metrics dictionary)
+{% else %}
+    Returns:
         Tuple of (average loss, metric value)
+{% endif %}
     """
     model.eval()
     total_loss = 0.0
+{% if has_metrics %}
+    if val_metrics:
+        for metric in val_metrics.values():
+            metric = metric.to(device)
+{% else %}
     correct = 0
     total = 0
+{% endif %}
 
     with torch.no_grad():
         for data, target in dataloader:
@@ -104,6 +150,12 @@ def validate_epoch(
 
             total_loss += loss.item()
 
+{% if has_metrics %}
+            # Update metrics
+            if val_metrics:
+                for metric in val_metrics.values():
+                    metric.update(output, target)
+{% else %}
             # Calculate metric
 {% if is_classification %}
             pred = output.argmax(dim=1, keepdim=True)
@@ -112,8 +164,18 @@ def validate_epoch(
             # Metric calculation for regression
 {% endif %}
             total += target.size(0)
+{% endif %}
 
     avg_loss = total_loss / len(dataloader)
+{% if has_metrics %}
+    # Compute final metric values
+    metrics_dict = {}
+    if val_metrics:
+        for name, metric in val_metrics.items():
+            metrics_dict[name] = metric.compute().item()
+            metric.reset()
+    return avg_loss, metrics_dict
+{% else %}
 {% if is_classification %}
     metric = 100. * correct / total
 {% else %}
@@ -121,6 +183,7 @@ def validate_epoch(
 {% endif %}
 
     return avg_loss, metric
+{% endif %}
 
 
 def main():
@@ -156,6 +219,16 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
 
+{% if has_metrics %}
+    # Initialize metrics
+    train_metrics = {}
+    val_metrics = {}
+{% for metric_name in metric_names %}
+    train_metrics['{{ metric_name }}'] = {{ metric_init_code[metric_name] }}.to(device)
+    val_metrics['{{ metric_name }}'] = {{ metric_init_code[metric_name] }}.to(device)
+{% endfor %}
+{% endif %}
+
     # Training loop
     best_val_loss = float('inf')
 
@@ -163,10 +236,17 @@ def main():
         start_time = time.time()
 
         # Train
+{% if has_metrics %}
+        train_loss, train_metrics_dict = train_epoch(model, train_loader, criterion, optimizer, device, train_metrics)
+
+        # Validate
+        val_loss, val_metrics_dict = validate_epoch(model, val_loader, criterion, device, val_metrics)
+{% else %}
         train_loss, train_metric = train_epoch(model, train_loader, criterion, optimizer, device)
 
         # Validate
         val_loss, val_metric = validate_epoch(model, val_loader, criterion, device)
+{% endif %}
 
         # Update learning rate
         scheduler.step(val_loss)
@@ -174,10 +254,20 @@ def main():
         epoch_time = time.time() - start_time
 
         # Print progress
+{% if has_metrics %}
+        # Build metric strings
+        train_metrics_str = " | ".join([f"Train {name.upper()}: {val:.4f}" for name, val in train_metrics_dict.items()])
+        val_metrics_str = " | ".join([f"Val {name.upper()}: {val:.4f}" for name, val in val_metrics_dict.items()])
+        print(f"Epoch {epoch+1}/{NUM_EPOCHS} | "
+              f"Time: {epoch_time:.2f}s | "
+              f"Train Loss: {train_loss:.4f} | {train_metrics_str} | "
+              f"Val Loss: {val_loss:.4f} | {val_metrics_str}")
+{% else %}
         print(f"Epoch {epoch+1}/{NUM_EPOCHS} | "
               f"Time: {epoch_time:.2f}s | "
               f"Train Loss: {train_loss:.4f} | Train {{ metric_name.upper() }}: {train_metric:.2f} | "
               f"Val Loss: {val_loss:.4f} | Val {{ metric_name.upper() }}: {val_metric:.2f}")
+{% endif %}
 
         # Save best model
         if val_loss < best_val_loss:
