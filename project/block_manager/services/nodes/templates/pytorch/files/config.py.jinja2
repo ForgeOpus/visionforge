@@ -7,6 +7,7 @@ Architecture Complexity: {{ complexity }} ({{ layer_count }} layers)
 # Training Configuration
 BATCH_SIZE = {{ batch_size }}  # Adjusted for {{ complexity.lower() }} network
 LEARNING_RATE = {{ learning_rate }}  # {% if has_attention %}Reduced for attention layers{% else %}Standard for architecture{% endif %}
+
 NUM_EPOCHS = {{ num_epochs }}
 WEIGHT_DECAY = 1e-4
 
@@ -18,7 +19,7 @@ DATA_DIR = './data'
 NUM_WORKERS = 0  # Set to 0 for debugging, increase for faster data loading
 
 # Device Configuration
-DEVICE = 'cuda'  # Change to 'cpu' if no GPU available
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # Logging Configuration
 LOG_INTERVAL = 10  # Print every N batches

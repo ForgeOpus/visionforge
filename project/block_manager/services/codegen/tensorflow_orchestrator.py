@@ -50,6 +50,9 @@ class TensorFlowCodeOrchestrator:
         errors = []
 
         try:
+            # Sanitize project name once (replace non-alphanumeric characters with underscores)
+            sanitized_project_name = "".join(c if c.isalnum() else "_" for c in project_name)
+
             # Initialize group block generator if needed
             group_generator = None
             if group_definitions:
@@ -93,7 +96,7 @@ class TensorFlowCodeOrchestrator:
 
             # Generate model class definition
             model_definition = self._generate_model_definition(
-                project_name,
+                sanitized_project_name,
                 code_specs,
                 sorted_nodes,
                 edges,
@@ -106,14 +109,14 @@ class TensorFlowCodeOrchestrator:
 
             # Render complete model file
             model_code = self._render_model_file(
-                project_name,
+                sanitized_project_name,
                 all_classes,
                 model_definition,
                 test_code
             )
 
             # Generate training script
-            train_code = self._generate_training_script(project_name, nodes)
+            train_code = self._generate_training_script(project_name, sanitized_project_name, nodes)
 
             # Generate dataset script
             dataset_code = self._generate_dataset_script(nodes)
@@ -678,7 +681,7 @@ from typing import List, Tuple, Optional
             'from_logits': from_logits
         }
 
-    def _generate_training_script(self, project_name: str, nodes: List[Dict[str, Any]]) -> str:
+    def _generate_training_script(self, project_name: str, sanitized_project_name: str, nodes: List[Dict[str, Any]]) -> str:
         """Generate training script using template"""
         # Extract loss configuration from loss node
         loss_config = self._extract_loss_config(nodes)
@@ -708,11 +711,9 @@ from typing import List, Tuple, Optional
         # Determine if classification based on loss type
         is_classification = loss_config['loss_type'] in ['cross_entropy', 'bce', 'categorical_crossentropy']
 
-        model_class_name = project_name.replace(project_name, "".join(c if c.isalnum() else "_" for c in project_name))
-
         context = {
             'project_name': project_name,
-            'model_class_name': model_class_name,
+            'model_class_name': sanitized_project_name,
             'task_type': 'classification' if is_classification else 'regression',
             'is_classification': is_classification,
             'loss_function': loss_function,

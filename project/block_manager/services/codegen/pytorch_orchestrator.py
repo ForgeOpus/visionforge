@@ -50,6 +50,9 @@ class PyTorchCodeOrchestrator:
         errors = []
 
         try:
+            # Sanitize project name once (replace non-alphanumeric characters with underscores)
+            sanitized_project_name = "".join(c if c.isalnum() else "_" for c in project_name)
+
             # Initialize group block generator if needed
             group_generator = None
             if group_definitions:
@@ -93,7 +96,7 @@ class PyTorchCodeOrchestrator:
 
             # Generate model class definition
             model_definition = self._generate_model_definition(
-                project_name,
+                sanitized_project_name,
                 code_specs,
                 sorted_nodes,
                 edges,
@@ -102,18 +105,18 @@ class PyTorchCodeOrchestrator:
 
             # Generate test code
             input_shape = self._extract_input_shape(nodes)
-            test_code = self._generate_test_code(project_name, input_shape)
+            test_code = self._generate_test_code(project_name, sanitized_project_name, input_shape)
 
             # Render complete model file
             model_code = self._render_model_file(
-                project_name,
+                sanitized_project_name,
                 all_classes,
                 model_definition,
                 test_code
             )
 
             # Generate training script
-            train_code = self._generate_training_script(project_name, nodes)
+            train_code = self._generate_training_script(project_name, sanitized_project_name, nodes)
 
             # Generate dataset script
             dataset_code = self._generate_dataset_script(nodes)
@@ -808,11 +811,11 @@ class PyTorchCodeOrchestrator:
 
         return (1, 3, 224, 224)
 
-    def _generate_test_code(self, project_name: str, input_shape: Tuple[int, ...]) -> str:
+    def _generate_test_code(self, project_name: str, sanitized_project_name: str, input_shape: Tuple[int, ...]) -> str:
         """Generate test code for model validation"""
         return f'''if __name__ == "__main__":
         # Test the model with random input
-        model = {project_name.replace(project_name, "".join(c if c.isalnum() else "_" for c in project_name))}()
+        model = {sanitized_project_name}()
         model.eval()
         test_input = torch.randn({input_shape})
         print(f"Input shape: {{test_input.shape}}")
@@ -898,7 +901,7 @@ from typing import List, Tuple, Optional
             'weight': weight
         }
 
-    def _generate_training_script(self, project_name: str, nodes: List[Dict[str, Any]]) -> str:
+    def _generate_training_script(self, project_name: str, sanitized_project_name: str, nodes: List[Dict[str, Any]]) -> str:
         """Generate training script using template"""
         # Extract loss configuration from loss node
         loss_config = self._extract_loss_config(nodes)
@@ -937,7 +940,7 @@ from typing import List, Tuple, Optional
 
         context = {
             'project_name': project_name,
-            'model_class_name': project_name,
+            'model_class_name': sanitized_project_name,
             'task_type': 'classification' if is_classification else 'regression',
             'is_classification': is_classification,
             'loss_function': loss_function,
