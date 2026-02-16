@@ -708,9 +708,11 @@ from typing import List, Tuple, Optional
         # Determine if classification based on loss type
         is_classification = loss_config['loss_type'] in ['cross_entropy', 'bce', 'categorical_crossentropy']
 
+        model_class_name = project_name.replace(project_name, "".join(c if c.isalnum() else "_" for c in project_name))
+
         context = {
             'project_name': project_name,
-            'model_class_name': project_name,
+            'model_class_name': model_class_name,
             'task_type': 'classification' if is_classification else 'regression',
             'is_classification': is_classification,
             'loss_function': loss_function,

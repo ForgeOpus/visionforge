@@ -811,15 +811,15 @@ class PyTorchCodeOrchestrator:
     def _generate_test_code(self, project_name: str, input_shape: Tuple[int, ...]) -> str:
         """Generate test code for model validation"""
         return f'''if __name__ == "__main__":
-    # Test the model with random input
-    model = {project_name}()
-    model.eval()
-    test_input = torch.randn({input_shape})
-    print(f"Input shape: {{test_input.shape}}")
-    output = model(test_input)
-    print(f"Output shape: {{output.shape}}")
-    print(f"Model has {{sum(p.numel() for p in model.parameters()):,}} parameters")
-'''
+        # Test the model with random input
+        model = {project_name.replace(project_name, "".join(c if c.isalnum() else "_" for c in project_name))}()
+        model.eval()
+        test_input = torch.randn({input_shape})
+        print(f"Input shape: {{test_input.shape}}")
+        output = model(test_input)
+        print(f"Output shape: {{output.shape}}")
+        print(f"Model has {{sum(p.numel() for p in model.parameters()):,}} parameters")
+    '''
 
     def _render_model_file(
         self,
