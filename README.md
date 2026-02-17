@@ -10,9 +10,10 @@
   [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
   [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
   [![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev)
-  <a href="https://www.producthunt.com/products/forgeopus?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-forgeopus" target="_blank" rel="noopener noreferrer"><img alt="ForgeOpus - Where AI masterpieces are forged. Your work, your opus. | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1080450&amp;theme=light&amp;t=1771311433851"></a>
 
 </div>
+
+<a href="https://www.producthunt.com/products/forgeopus?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-forgeopus" target="_blank" rel="noopener noreferrer"><img alt="ForgeOpus - Where AI masterpieces are forged. Your work, your opus. | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1080450&amp;theme=light&amp;t=1771311433851"></a>
 
 <br />
 
