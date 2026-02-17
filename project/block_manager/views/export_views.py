@@ -45,6 +45,28 @@ def export_model(request: Request) -> Response:
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    # Validate that a loss node exists in the architecture
+    has_loss_node = any(
+        node.get('data', {}).get('blockType') == 'loss'
+        for node in nodes
+    )
+
+    if not has_loss_node:
+        return Response(
+            {
+                'error': 'Missing Loss Function Node',
+                'message': 'Your architecture must include a Loss Function node to specify the training loss.',
+                'suggestion': 'Add a "Loss Function" node from the Output category and select your desired loss type (Cross Entropy, MSE, etc.).',
+                'validationErrors': [{
+                    'type': 'error',
+                    'message': 'Loss Function node is required for code generation. Please add one from the Output category.',
+                    'category': 'Missing Required Node'
+                }],
+                'errorCount': 1
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     try:
         # Generate code based on framework
         shape_errors = []

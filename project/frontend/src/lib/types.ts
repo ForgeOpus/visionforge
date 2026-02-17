@@ -4,6 +4,7 @@ import type { PortSemantic } from './nodes/ports'
 export type BlockType =
   | 'input'
   | 'dataloader'
+  | 'groundtruth'
   | 'output'
   | 'loss'
   | 'empty'

@@ -8,8 +8,10 @@
 
 export { InputNode } from '../pytorch/input'
 export { DataLoaderNode } from '../pytorch/dataloader'
+export { GroundTruthNode } from '../pytorch/groundtruth'
 export { OutputNode } from '../pytorch/output'
 export { LossNode } from '../pytorch/loss'
+export { MetricsNode } from './metrics'
 export { EmptyNode } from '../pytorch/empty'
 export { LinearNode } from '../pytorch/linear'
 export { Conv2DNode } from '../pytorch/conv2d'

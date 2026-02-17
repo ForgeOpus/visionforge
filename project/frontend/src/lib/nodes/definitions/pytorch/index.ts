@@ -5,8 +5,10 @@
 
 export { InputNode } from './input'
 export { DataLoaderNode } from './dataloader'
+export { GroundTruthNode } from './groundtruth'
 export { OutputNode } from './output'
 export { LossNode } from './loss'
+export { MetricsNode } from './metrics'
 export { EmptyNode } from './empty'
 export { LinearNode } from './linear'
 export { Conv2DNode } from './conv2d'

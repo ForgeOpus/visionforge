@@ -318,7 +318,7 @@ class ArchitectureValidator:
             config = node.get('data', {}).get('config', {})
 
             # Skip nodes that don't have shape requirements
-            if node_type in ('input', 'output', 'dataloader'):
+            if node_type in ('input', 'output', 'dataloader', 'loss', 'metrics', 'groundtruth'):
                 continue
 
             incoming = edge_map.get(node_id, [])

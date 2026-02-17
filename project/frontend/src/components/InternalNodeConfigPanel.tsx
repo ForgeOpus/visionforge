@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -279,6 +280,41 @@ export default function InternalNodeConfigPanel({
                         ))}
                       </SelectContent>
                     </Select>
+                  )}
+
+                  {field.type === 'multiselect' && field.options && (
+                    <div className={`space-y-3 border border-input rounded-md p-3 bg-muted/30 ${isOverridden ? 'border-blue-500' : ''}`}>
+                      {field.options.map((opt) => {
+                        const currentValues = currentValue ?? field.default ?? []
+                        const isChecked = Array.isArray(currentValues) && currentValues.includes(opt.value)
+
+                        return (
+                          <div key={opt.value} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`${field.name}-${opt.value}`}
+                              checked={isChecked}
+                              onCheckedChange={(checked) => {
+                                const newValues = Array.isArray(currentValues) ? [...currentValues] : []
+                                if (checked) {
+                                  if (!newValues.includes(opt.value)) {
+                                    newValues.push(opt.value)
+                                  }
+                                } else {
+                                  const index = newValues.indexOf(opt.value)
+                                  if (index > -1) {
+                                    newValues.splice(index, 1)
+                                  }
+                                }
+                                handleConfigChange(field.name, newValues)
+                              }}
+                            />
+                            <Label htmlFor={`${field.name}-${opt.value}`} className="font-normal cursor-pointer">
+                              {opt.label}
+                            </Label>
+                          </div>
+                        )
+                      })}
+                    </div>
                   )}
                 </div>
               )

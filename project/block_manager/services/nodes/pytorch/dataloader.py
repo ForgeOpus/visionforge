@@ -1,7 +1,7 @@
 """PyTorch DataLoader Node Definition"""
 
 from typing import Dict, List, Optional, Any
-from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework
+from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework, LayerCodeSpec
 
 
 class DataLoaderNode(NodeDefinition):
@@ -84,3 +84,24 @@ class DataLoaderNode(NodeDefinition):
     ) -> Optional[str]:
         # DataLoader is typically a source node, doesn't accept incoming connections
         return "DataLoader is a source node and cannot accept incoming connections"
+
+    def get_pytorch_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """Source node - doesn't generate layer code. For interface compatibility."""
+        sanitized_id = node_id.replace('-', '_')
+        return LayerCodeSpec(
+            class_name='SourceNode',
+            layer_variable_name=f'{sanitized_id}_Source',
+            node_type='dataloader',
+            node_id=node_id,
+            init_params={},
+            config_params=config,
+            input_shape_info={'dims': []},
+            output_shape_info={'dims': output_shape.dims if output_shape else []},
+            template_context={}
+        )
