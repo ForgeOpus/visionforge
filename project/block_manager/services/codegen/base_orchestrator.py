@@ -273,7 +273,7 @@ class BaseCodeOrchestrator(ABC):
         input_shape = self._extract_input_shape(nodes)
         layer_count = sum(
             1 for n in nodes
-            if get_node_type(n) not in ('input', 'output', 'dataloader', 'loss')
+            if get_node_type(n) not in ('input', 'output', 'dataloader', 'loss', 'metrics', 'groundtruth')
         )
 
         if layer_count > 20:
