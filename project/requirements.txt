@@ -27,9 +27,6 @@ pillow>=11.0.0
 
 # Numerical Computing
 numpy>=2.2.0
-torch>=2.0.0
-torchmetrics>=1.0.0
-tensorflow>=2.14.0
 
 # Security & Rate Limiting
 django-ratelimit>=4.1.0

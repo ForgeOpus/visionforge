@@ -18,6 +18,7 @@ from .embedding import EmbeddingNode
 from .concat import ConcatNode
 from .add import AddNode
 from .loss import LossNode
+from .metrics import MetricsNode
 
 __all__ = [
     'LinearNode',
@@ -38,4 +39,5 @@ __all__ = [
     'ConcatNode',
     'AddNode',
     'LossNode',
+    'MetricsNode',
 ]

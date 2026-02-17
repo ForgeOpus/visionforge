@@ -507,22 +507,6 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
             })
           })()}
 
-          {/* Single output handle for loss value */}
-          <Handle
-            type="source"
-            position={Position.Right}
-            className="w-3 h-3 !bg-red-500 transition-all"
-            style={{
-              right: -6,
-              zIndex: 10
-            }}
-          />
-          {selected && (
-            <div
-              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-6 h-6 rounded-full border-2 border-red-500 bg-red-500/20 animate-pulse pointer-events-none"
-              style={{ right: -6 }}
-            />
-          )}
         </>
       ) : data.blockType === 'metrics' ? (
         <>
