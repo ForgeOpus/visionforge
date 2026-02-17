@@ -13,7 +13,17 @@
 
 </div>
 
-<a href="https://www.producthunt.com/products/forgeopus?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-forgeopus" target="_blank" rel="noopener noreferrer"><img alt="ForgeOpus - Where AI masterpieces are forged. Your work, your opus. | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1080450&amp;theme=light&amp;t=1771311433851"></a>
+<p align="center">
+  <a href="https://www.producthunt.com/products/forgeopus?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-forgeopus" target="_blank" rel="noopener noreferrer">
+    <img
+      alt="ForgeOpus - Where AI masterpieces are forged. Your work, your opus. | Product Hunt"
+      width="250"
+      height="54"
+      src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1080450&theme=light&t=1771311433851"
+    />
+  </a>
+</p>
+
 
 <br />
 
