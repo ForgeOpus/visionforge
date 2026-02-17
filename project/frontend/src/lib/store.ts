@@ -142,14 +142,51 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
   updateNode: (id, data) => {
     const state = get()
     const historyUpdate = saveHistory(state)
-    
+
+    // Update node and immediately recompute output shape if config changed
     set((state) => ({
-      nodes: state.nodes.map((node) =>
-        node.id === id ? { ...node, data: { ...node.data, ...data } } : node
-      ),
+      nodes: state.nodes.map((node) => {
+        if (node.id === id) {
+          const updatedData = { ...node.data, ...data }
+
+          // If config changed, recompute output shape
+          if (data.config) {
+            const nodeDef = getNodeDefinition(
+              node.data.blockType as BlockType,
+              BackendFramework.PyTorch
+            )
+
+            if (nodeDef) {
+              // Pure source nodes (dataloader, groundtruth) compute from config alone
+              if (node.data.blockType === 'dataloader' ||
+                  node.data.blockType === 'groundtruth') {
+                updatedData.outputShape = nodeDef.computeOutputShape(undefined, updatedData.config)
+              }
+              // Input nodes: passthrough if has input, otherwise from config
+              else if (node.data.blockType === 'input') {
+                if (updatedData.inputShape) {
+                  // Connected to DataLoader: passthrough (output = input)
+                  updatedData.outputShape = nodeDef.computeOutputShape(updatedData.inputShape, updatedData.config)
+                } else {
+                  // Not connected: act as source
+                  updatedData.outputShape = nodeDef.computeOutputShape(undefined, updatedData.config)
+                }
+              }
+              // Transform nodes: use current input shape
+              else if (updatedData.inputShape) {
+                updatedData.outputShape = nodeDef.computeOutputShape(updatedData.inputShape, updatedData.config)
+              }
+            }
+          }
+
+          return { ...node, data: updatedData }
+        }
+        return node
+      }),
       ...historyUpdate
     }))
-    
+
+    // Propagate changes downstream
     get().inferDimensions()
   },
 
@@ -223,21 +260,29 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
         set({ nodes: updatedNodes })
       }
       
-      if (!targetNode.data.inputShape) {
-        const updatedNodes = nodes.map((node) => {
-          if (node.id === targetNode.id) {
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                inputShape: sourceShape
-              }
+      // Update input shape and immediately recompute output shape
+      const updatedNodes = nodes.map((node) => {
+        if (node.id === targetNode.id) {
+          const newInputShape = sourceShape
+          let newOutputShape = node.data.outputShape
+
+          // Recompute output shape based on new input and current config
+          if (targetNodeDef) {
+            newOutputShape = targetNodeDef.computeOutputShape(newInputShape, node.data.config)
+          }
+
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              inputShape: newInputShape,
+              outputShape: newOutputShape
             }
           }
-          return node
-        })
-        set({ nodes: updatedNodes })
-      }
+        }
+        return node
+      })
+      set({ nodes: updatedNodes })
     }
     
     setTimeout(() => get().inferDimensions(), 0)
@@ -430,7 +475,7 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     }
     
     // Check if target allows multiple inputs (for backwards compatibility)
-    const allowsMultiple = targetNode.data.blockType === 'concat' || targetNode.data.blockType === 'add' || targetNode.data.blockType === 'loss'
+    const allowsMultiple = targetNode.data.blockType === 'concat' || targetNode.data.blockType === 'add' || targetNode.data.blockType === 'loss' || targetNode.data.blockType === 'metrics'
     if (!allowsMultiple) {
       const hasExistingInput = edges.some((e) => e.target === connection.target)
       if (hasExistingInput) return false
@@ -483,16 +528,25 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
     nodes.forEach((node) => {
       const hasInput = edges.some((e) => e.target === node.id)
       const hasOutput = edges.some((e) => e.source === node.id)
-      
-      if (!hasInput && node.data.blockType !== 'input') {
+
+      // Source nodes (input, dataloader, groundtruth) are SUPPOSED to have no input connections
+      const isSourceNode = node.data.blockType === 'input' ||
+                          node.data.blockType === 'dataloader' ||
+                          node.data.blockType === 'groundtruth'
+
+      if (!hasInput && !isSourceNode) {
         errors.push({
           nodeId: node.id,
           message: `Block "${node.data.label}" has no input connection`,
           type: 'warning'
         })
       }
-      
-      if (!hasOutput && node.data.blockType !== 'output' && node.data.blockType !== 'loss') {
+
+      // Terminal nodes (output, loss) are SUPPOSED to have no output connections
+      const isTerminalNode = node.data.blockType === 'output' ||
+                            node.data.blockType === 'loss'
+
+      if (!hasOutput && !isTerminalNode) {
         errors.push({
           nodeId: node.id,
           message: `Block "${node.data.label}" has no output connection`,
@@ -652,12 +706,30 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
       } else {
         // Regular node processing
         let nodeDef = getNodeDefinition(node.data.blockType, BackendFramework.PyTorch)
-        
-        if (node.data.blockType === 'input') {
+
+        // Pure source nodes (dataloader, groundtruth) compute shape from config
+        if (node.data.blockType === 'dataloader' || node.data.blockType === 'groundtruth') {
           if (nodeDef) {
-            // Use new registry method
+            // Source nodes don't need inputShape - compute from config alone
             const outputShape = nodeDef.computeOutputShape(undefined, node.data.config)
             node.data.outputShape = outputShape
+          }
+        }
+        // Input nodes: passthrough if connected, otherwise use config
+        else if (node.data.blockType === 'input') {
+          if (nodeDef) {
+            if (incomingEdges.length > 0) {
+              // Passthrough: output = input from connected DataLoader
+              const sourceNode = nodeMap.get(incomingEdges[0].source)
+              if (sourceNode?.data.outputShape) {
+                node.data.inputShape = sourceNode.data.outputShape
+                node.data.outputShape = nodeDef.computeOutputShape(node.data.inputShape, node.data.config)
+              }
+            } else {
+              // No incoming edges: compute from config (acts as source)
+              const outputShape = nodeDef.computeOutputShape(undefined, node.data.config)
+              node.data.outputShape = outputShape
+            }
           }
         } else {
           if (incomingEdges.length > 0) {
@@ -710,8 +782,20 @@ export const useModelBuilderStore = create<ModelBuilderState>((set, get) => ({
       outgoingEdges.forEach((e) => processNode(e.target))
     }
     
-    const inputNodes = updatedNodes.filter((n) => n.data.blockType === 'input')
-    inputNodes.forEach((node) => processNode(node.id))
+    // Start from all source nodes
+    // - DataLoader and GroundTruth are always sources
+    // - Input nodes are only sources if they have no incoming edges (not connected to DataLoader)
+    const sourceNodes = updatedNodes.filter((n) => {
+      if (n.data.blockType === 'dataloader' || n.data.blockType === 'groundtruth') {
+        return true
+      }
+      if (n.data.blockType === 'input') {
+        // Input is a source only if it has no incoming edges
+        return getIncomingEdges(n.id).length === 0
+      }
+      return false
+    })
+    sourceNodes.forEach((node) => processNode(node.id))
     
     set({ nodes: updatedNodes })
   },

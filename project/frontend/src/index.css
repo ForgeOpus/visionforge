@@ -120,6 +120,13 @@ body {
   font-family: var(--font-sans);
 }
 
+.react-flow__node-group {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
 code, pre {
   font-family: var(--font-mono);
 }

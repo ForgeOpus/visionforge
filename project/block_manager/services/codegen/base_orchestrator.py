@@ -129,7 +129,7 @@ class BaseCodeOrchestrator(ABC):
 
         processable_nodes = [
             n for n in sorted_nodes
-            if get_node_type(n) not in ('input', 'dataloader', 'output')
+            if get_node_type(n) not in ('input', 'dataloader', 'output', 'loss', 'metrics', 'groundtruth')
         ]
 
         for node in processable_nodes:
@@ -193,7 +193,7 @@ class BaseCodeOrchestrator(ABC):
 
         processable_nodes = [
             n for n in sorted_nodes
-            if get_node_type(n) not in ('output',)
+            if get_node_type(n) not in ('output', 'loss', 'metrics', 'groundtruth')
         ]
 
         for node in processable_nodes:
@@ -273,7 +273,7 @@ class BaseCodeOrchestrator(ABC):
         input_shape = self._extract_input_shape(nodes)
         layer_count = sum(
             1 for n in nodes
-            if get_node_type(n) not in ('input', 'output', 'dataloader')
+            if get_node_type(n) not in ('input', 'output', 'dataloader', 'loss', 'metrics', 'groundtruth')
         )
 
         if layer_count > 20:

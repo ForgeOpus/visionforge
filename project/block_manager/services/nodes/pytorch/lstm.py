@@ -1,7 +1,7 @@
 """PyTorch LSTM Node Definition"""
 
 from typing import Dict, List, Optional, Any
-from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework
+from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework, LayerCodeSpec
 
 
 class LSTMNode(NodeDefinition):
@@ -109,14 +109,69 @@ class LSTMNode(NodeDefinition):
         # Allow connections from input/dataloader without shape validation
         if source_node_type in ("input", "dataloader"):
             return None
-        
+
         # Empty and custom nodes are flexible
         if source_node_type in ("empty", "custom"):
             return None
-        
+
         # Validate 3D input (batch, seq, features) or (seq, batch, features)
         return self.validate_dimensions(
             source_output_shape,
             3,
             "[batch, sequence, features] or [sequence, batch, features]"
+        )
+
+    def get_pytorch_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """Generate PyTorch code specification for LSTM layer"""
+        hidden_size = config.get('hidden_size', 128)
+        num_layers = config.get('num_layers', 1)
+        bias = config.get('bias', True)
+        batch_first = config.get('batch_first', True)
+        dropout = config.get('dropout', 0.0)
+        bidirectional = config.get('bidirectional', False)
+
+        # Determine input_size from input shape if available
+        input_size = None
+        if input_shape and len(input_shape.dims) == 3:
+            if batch_first:
+                input_size = input_shape.dims[2]
+            else:
+                input_size = input_shape.dims[2]
+
+        sanitized_id = node_id.replace('-', '_')
+        class_name = 'LSTMBlock'
+        layer_var = f'{sanitized_id}_LSTMBlock'
+
+        return LayerCodeSpec(
+            class_name=class_name,
+            layer_variable_name=layer_var,
+            node_type='lstm',
+            node_id=node_id,
+            init_params={
+                'input_size': input_size,
+                'hidden_size': hidden_size,
+                'num_layers': num_layers,
+                'bias': bias,
+                'batch_first': batch_first,
+                'dropout': dropout,
+                'bidirectional': bidirectional
+            },
+            config_params=config,
+            input_shape_info={'dims': input_shape.dims if input_shape else []},
+            output_shape_info={'dims': output_shape.dims if output_shape else []},
+            template_context={
+                'input_size': input_size,
+                'hidden_size': hidden_size,
+                'num_layers': num_layers,
+                'bias': bias,
+                'batch_first': batch_first,
+                'dropout': dropout,
+                'bidirectional': bidirectional
+            }
         )

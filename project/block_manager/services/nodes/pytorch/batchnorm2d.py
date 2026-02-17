@@ -10,12 +10,12 @@ class BatchNorm2DNode(NodeDefinition):
     @property
     def metadata(self) -> NodeMetadata:
         return NodeMetadata(
-            type="batchnorm2d",
-            label="BatchNorm2D",
+            type="batchnorm",
+            label="Batch Normalization",
             category="basic",
-            color="var(--color-primary)",
+            color="var(--color-accent)",
             icon="ChartLineUp",
-            description="Batch normalization for 2D inputs",
+            description="Batch normalization layer",
             framework=Framework.PYTORCH
         )
     

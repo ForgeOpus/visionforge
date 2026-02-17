@@ -318,13 +318,13 @@ class ArchitectureValidator:
             config = node.get('data', {}).get('config', {})
 
             # Skip nodes that don't have shape requirements
-            if node_type in ('input', 'output', 'dataloader'):
+            if node_type in ('input', 'output', 'dataloader', 'loss', 'metrics', 'groundtruth'):
                 continue
 
             incoming = edge_map.get(node_id, [])
 
             # Check that nodes with required inputs have connections
-            if node_type in ('conv2d', 'linear', 'maxpool2d', 'maxpool', 'batchnorm', 'batchnorm2d', 'flatten'):
+            if node_type in ('conv2d', 'linear', 'maxpool2d', 'maxpool', 'batchnorm', 'flatten'):
                 if not incoming:
                     self.errors.append(ValidationError(
                         message=f'{node_type} layer requires an input connection',

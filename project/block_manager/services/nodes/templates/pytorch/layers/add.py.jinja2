@@ -22,4 +22,6 @@ class {{ class_name }}(nn.Module):
         Returns:
             Element-wise sum of all input tensors
         """
-        return torch.stack(tensor_list).sum(dim=0)
+        # Efficient element-wise addition using sum()
+        # PyTorch overloads sum() to handle tensors correctly
+        return sum(tensor_list)
