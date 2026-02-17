@@ -44,6 +44,16 @@ def topological_sort(nodes: List[Dict], edges: List[Dict]) -> List[Dict]:
             if in_degree[neighbor] == 0:
                 queue.append(neighbor)
 
+    # Cycle detection: if not all nodes were sorted, there's a cycle
+    if len(sorted_ids) != len(nodes):
+        # Find nodes that are still in the cycle (have non-zero in-degree)
+        cycle_nodes = [node_id for node_id, degree in in_degree.items() if degree > 0]
+        raise ValueError(
+            f"Graph contains a cycle. Neural networks must be acyclic (feedforward). "
+            f"Nodes involved in cycle: {', '.join(cycle_nodes[:5])}"
+            + (" and more..." if len(cycle_nodes) > 5 else "")
+        )
+
     # Return nodes in sorted order
     return [node_map[node_id] for node_id in sorted_ids if node_id in node_map]
 

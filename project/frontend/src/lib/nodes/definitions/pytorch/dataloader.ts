@@ -66,20 +66,6 @@ export class DataLoaderNode extends SourceNodeDefinition {
       type: 'boolean',
       default: false,
       description: 'Use random synthetic data for testing'
-    },
-    {
-      name: 'csv_file',
-      label: 'CSV File',
-      type: 'file',
-      accept: '.csv',
-      description: 'Upload a CSV file for data loading (optional)'
-    },
-    {
-      name: 'csv_filename',
-      label: 'Uploaded File Name',
-      type: 'text',
-      placeholder: 'No file uploaded',
-      description: 'Name of the uploaded CSV file (read-only)'
     }
   ]
 

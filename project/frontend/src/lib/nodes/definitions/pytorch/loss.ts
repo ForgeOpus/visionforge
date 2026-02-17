@@ -121,17 +121,10 @@ export class LossNode extends NodeDefinition {
   }
   
   /**
-   * Get output ports - loss always outputs a single scalar loss value
+   * Loss nodes are terminal nodes - they don't have output ports
    */
   getOutputPorts(config: BlockConfig): PortDefinition[] {
-    return [{
-      id: 'loss-output',
-      label: 'Loss',
-      type: 'output',
-      semantic: 'loss',
-      required: false,
-      description: 'Scalar loss value'
-    }]
+    return []
   }
 
   /**

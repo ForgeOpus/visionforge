@@ -50,6 +50,9 @@ class TensorFlowCodeOrchestrator:
         errors = []
 
         try:
+            # Sanitize project name once (replace non-alphanumeric characters with underscores)
+            sanitized_project_name = "".join(c if c.isalnum() else "_" for c in project_name)
+
             # Initialize group block generator if needed
             group_generator = None
             if group_definitions:
@@ -93,7 +96,7 @@ class TensorFlowCodeOrchestrator:
 
             # Generate model class definition
             model_definition = self._generate_model_definition(
-                project_name,
+                sanitized_project_name,
                 code_specs,
                 sorted_nodes,
                 edges,
@@ -106,14 +109,14 @@ class TensorFlowCodeOrchestrator:
 
             # Render complete model file
             model_code = self._render_model_file(
-                project_name,
+                sanitized_project_name,
                 all_classes,
                 model_definition,
                 test_code
             )
 
             # Generate training script
-            train_code = self._generate_training_script(project_name, nodes)
+            train_code = self._generate_training_script(project_name, sanitized_project_name, nodes)
 
             # Generate dataset script
             dataset_code = self._generate_dataset_script(nodes)
@@ -175,7 +178,7 @@ class TensorFlowCodeOrchestrator:
 
         processable_nodes = [
             n for n in sorted_nodes
-            if get_node_type(n) not in ('input', 'dataloader', 'output')
+            if get_node_type(n) not in ('input', 'dataloader', 'output', 'loss', 'metrics')
         ]
 
         for node in processable_nodes:
@@ -256,7 +259,7 @@ class TensorFlowCodeOrchestrator:
                 node_type = get_node_type(node)
 
                 # Skip special nodes
-                if node_type in ('input', 'output', 'dataloader', 'group'):
+                if node_type in ('input', 'output', 'dataloader', 'group', 'loss', 'metrics'):
                     continue
 
                 # Only generate each node type once
@@ -514,7 +517,7 @@ class TensorFlowCodeOrchestrator:
 
         processable_nodes = [
             n for n in sorted_nodes
-            if get_node_type(n) not in ('output',)
+            if get_node_type(n) not in ('output', 'loss', 'groundtruth', 'metrics')
         ]
 
         for node in processable_nodes:
@@ -645,18 +648,215 @@ from typing import List, Tuple, Optional
 {test_code}
 '''
 
-    def _generate_training_script(self, project_name: str, nodes: List[Dict[str, Any]]) -> str:
+    def _extract_metrics_config(self, nodes: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        Extract metrics configuration from metrics node (OPTIONAL).
+
+        Args:
+            nodes: List of node definitions
+
+        Returns:
+            Dictionary with metrics configuration, or None if no metrics node found
+        """
+        metrics_node = next((n for n in nodes if get_node_type(n) == 'metrics'), None)
+
+        if not metrics_node:
+            return None
+
+        config = get_node_config(metrics_node)
+        task_type = config.get('task_type', 'binary_classification')
+        metrics_raw = config.get('metrics', ['accuracy'])
+        num_classes = config.get('num_classes', 2)
+        average = config.get('average', 'macro')
+
+        # Handle both array and JSON string formats for backward compatibility
+        metrics_list = []
+        if isinstance(metrics_raw, list):
+            metrics_list = metrics_raw
+        elif isinstance(metrics_raw, str):
+            try:
+                metrics_list = json.loads(metrics_raw)
+            except (json.JSONDecodeError, ValueError):
+                metrics_list = ['accuracy']
+        else:
+            metrics_list = ['accuracy']
+
+        return {
+            'task_type': task_type,
+            'metrics': metrics_list,
+            'num_classes': num_classes,
+            'average': average
+        }
+
+    def _generate_metric_init_code(
+        self,
+        metric_name: str,
+        task_type: str,
+        _num_classes: int,
+        _average: str
+    ) -> str:
+        """
+        Generate initialization code for a metric using keras.metrics.
+
+        Args:
+            metric_name: Name of the metric (e.g., 'accuracy', 'precision')
+            task_type: Task type (binary_classification, multiclass_classification, etc.)
+            _num_classes: Number of classes for classification tasks (unused for keras)
+            _average: Averaging method (unused for keras basic metrics)
+
+        Returns:
+            String with metric initialization code
+        """
+        # Map metric names to keras.metrics classes
+        metric_map = {
+            'accuracy': 'keras.metrics.Accuracy',
+            'precision': 'keras.metrics.Precision',
+            'recall': 'keras.metrics.Recall',
+            'mse': 'keras.metrics.MeanSquaredError',
+            'mae': 'keras.metrics.MeanAbsoluteError',
+            'rmse': 'keras.metrics.RootMeanSquaredError'
+        }
+
+        # Special handling for SparseCategoricalAccuracy
+        if metric_name == 'accuracy' and task_type == 'multiclass_classification':
+            metric_class = 'keras.metrics.SparseCategoricalAccuracy'
+        else:
+            metric_class = metric_map.get(metric_name, 'keras.metrics.Accuracy')
+
+        return f"{metric_class}(name='{metric_name}')"
+
+    def _validate_loss_metrics_consistency(
+        self,
+        loss_config: Dict[str, Any],
+        metrics_config: Optional[Dict[str, Any]]
+    ) -> List[str]:
+        """
+        Validate consistency between loss and metrics configurations.
+
+        Args:
+            loss_config: Loss configuration dictionary
+            metrics_config: Metrics configuration dictionary or None
+
+        Returns:
+            List of warning/error strings
+        """
+        if not metrics_config:
+            return []
+
+        warnings = []
+        loss_type = loss_config.get('loss_type', 'cross_entropy')
+        metrics_task = metrics_config.get('task_type', 'binary_classification')
+
+        # Check if loss type aligns with metrics task type
+        is_classification_loss = loss_type in ['cross_entropy', 'bce', 'categorical_crossentropy']
+        is_classification_task = 'classification' in metrics_task
+        is_regression_loss = loss_type in ['mse', 'mae']
+        is_regression_task = metrics_task == 'regression'
+
+        if is_classification_loss and not is_classification_task:
+            warnings.append("Loss type suggests classification but metrics task is not classification")
+        elif is_regression_loss and not is_regression_task:
+            warnings.append("Loss type suggests regression but metrics task is not regression")
+
+        return warnings
+
+    def _extract_loss_config(self, nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Extract loss configuration from loss node (REQUIRED).
+
+        Args:
+            nodes: List of node definitions
+
+        Returns:
+            Dictionary with loss configuration
+
+        Raises:
+            ValueError: If no loss node is found
+        """
+        loss_node = next((n for n in nodes if get_node_type(n) == 'loss'), None)
+
+        if not loss_node:
+            raise ValueError(
+                "No loss function node found in architecture. "
+                "Please add a Loss Function node from the 'Output' category "
+                "to specify the training loss."
+            )
+
+        config = get_node_config(loss_node)
+        loss_type = config.get('loss_type', 'cross_entropy')
+        reduction = config.get('reduction', 'sum_over_batch_size')
+        from_logits = config.get('from_logits', True)
+
+        return {
+            'loss_type': loss_type,
+            'reduction': reduction,
+            'from_logits': from_logits
+        }
+
+    def _generate_training_script(self, project_name: str, sanitized_project_name: str, nodes: List[Dict[str, Any]]) -> str:
         """Generate training script using template"""
-        has_softmax = any(get_node_type(n) == 'softmax' for n in nodes)
-        is_classification = has_softmax
+        # Extract loss configuration from loss node
+        loss_config = self._extract_loss_config(nodes)
+
+        # Extract metrics configuration (optional)
+        metrics_config = self._extract_metrics_config(nodes)
+
+        # Map loss types to TensorFlow/Keras loss classes
+        loss_map = {
+            'cross_entropy': 'keras.losses.SparseCategoricalCrossentropy',
+            'mse': 'keras.losses.MeanSquaredError',
+            'mae': 'keras.losses.MeanAbsoluteError',
+            'bce': 'keras.losses.BinaryCrossentropy',
+            'categorical_crossentropy': 'keras.losses.CategoricalCrossentropy',
+            'kl_div': 'keras.losses.KLDivergence',
+            'hinge': 'keras.losses.Hinge',
+        }
+
+        loss_class = loss_map.get(loss_config['loss_type'], 'keras.losses.SparseCategoricalCrossentropy')
+
+        # Build loss function instantiation with parameters
+        loss_params = []
+        if loss_config['from_logits'] is not None and loss_config['loss_type'] in ['cross_entropy', 'bce', 'categorical_crossentropy']:
+            loss_params.append(f"from_logits={loss_config['from_logits']}")
+        if loss_config['reduction'] and loss_config['reduction'] != 'sum_over_batch_size':
+            loss_params.append(f"reduction='{loss_config['reduction']}'")
+
+        loss_function = f"{loss_class}({', '.join(loss_params)})" if loss_params else f"{loss_class}()"
+
+        # Determine if classification based on loss type
+        is_classification = loss_config['loss_type'] in ['cross_entropy', 'bce', 'categorical_crossentropy']
+
+        # Generate metric initialization code if metrics are configured
+        metric_init_code = {}
+        if metrics_config:
+            for metric in metrics_config['metrics']:
+                try:
+                    init_code = self._generate_metric_init_code(
+                        metric,
+                        metrics_config['task_type'],
+                        metrics_config['num_classes'],
+                        metrics_config['average']
+                    )
+                    metric_init_code[metric] = init_code
+                except Exception:
+                    # Skip metrics that fail to generate
+                    pass
+
+        # Validate loss-metrics consistency
+        consistency_warnings = self._validate_loss_metrics_consistency(loss_config, metrics_config)
 
         context = {
             'project_name': project_name,
-            'model_class_name': project_name,
+            'model_class_name': sanitized_project_name,
             'task_type': 'classification' if is_classification else 'regression',
             'is_classification': is_classification,
-            'loss_function': 'keras.losses.SparseCategoricalCrossentropy()' if is_classification else 'keras.losses.MeanSquaredError()',
-            'metric_name': 'accuracy' if is_classification else 'mse'
+            'loss_function': loss_function,
+            'metric_name': 'accuracy' if is_classification else 'mse',
+            'has_metrics': metrics_config is not None,
+            'metric_names': metrics_config['metrics'] if metrics_config else [],
+            'metric_init_code': metric_init_code,
+            'task_type_for_metrics': metrics_config['task_type'] if metrics_config else None,
+            'consistency_warnings': consistency_warnings
         }
 
         return self.template_manager.render('tensorflow/files/train.py.jinja2', context)
@@ -680,9 +880,10 @@ from typing import List, Tuple, Optional
         """Generate config file using template"""
         input_shape = self._extract_input_shape(nodes)
 
+        # Count layers (exclude special nodes)
         layer_count = sum(
             1 for n in nodes
-            if get_node_type(n) not in ('input', 'output', 'dataloader')
+            if get_node_type(n) not in ('input', 'output', 'dataloader', 'loss')
         )
 
         if layer_count > 20:
@@ -701,10 +902,15 @@ from typing import List, Tuple, Optional
             epochs = 30
             complexity = "Shallow"
 
+        # Check for attention layers (affects learning rate)
         has_attention = any(get_node_type(n) in ('self_attention', 'attention') for n in nodes)
         if has_attention:
             learning_rate = learning_rate * 0.1
             batch_size = max(8, batch_size // 2)
+
+        # Get loss configuration for reference in config
+        loss_config = self._extract_loss_config(nodes)
+        is_classification = loss_config['loss_type'] in ['cross_entropy', 'bce', 'categorical_crossentropy']
 
         context = {
             'batch_size': batch_size,
@@ -713,7 +919,9 @@ from typing import List, Tuple, Optional
             'input_shape': list(input_shape),
             'complexity': complexity,
             'layer_count': layer_count,
-            'has_attention': has_attention
+            'has_attention': has_attention,
+            'loss_type': loss_config['loss_type'],
+            'is_classification': is_classification
         }
 
         return self.template_manager.render('tensorflow/files/config.py.jinja2', context)

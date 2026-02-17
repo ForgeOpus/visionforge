@@ -10,7 +10,7 @@ class MaxPool2DNode(NodeDefinition):
     @property
     def metadata(self) -> NodeMetadata:
         return NodeMetadata(
-            type="maxpool2d",
+            type="maxpool",
             label="MaxPool2D",
             category="basic",
             color="var(--color-primary)",

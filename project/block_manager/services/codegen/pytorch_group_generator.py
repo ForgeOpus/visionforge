@@ -169,7 +169,7 @@ class PyTorchGroupBlockGenerator(GroupBlockGenerator):
             node_type = get_node_type(node)
 
             # Skip special nodes
-            if node_type in ('input', 'output', 'dataloader'):
+            if node_type in ('input', 'output', 'dataloader', 'loss'):
                 continue
 
             node_id = node['id']
@@ -273,8 +273,8 @@ class PyTorchGroupBlockGenerator(GroupBlockGenerator):
                         var_map[node_id] = var_name
                 continue
 
-            # Skip output and dataloader nodes (they don't produce code)
-            if node_type in ('output', 'dataloader'):
+            # Skip output, dataloader, and loss nodes (they don't produce code)
+            if node_type in ('output', 'dataloader', 'loss'):
                 continue
 
             # Get the spec for this node

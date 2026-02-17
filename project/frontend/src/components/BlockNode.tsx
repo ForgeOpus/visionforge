@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, Fragment } from 'react'
 import { Handle, Position, NodeProps } from '@xyflow/react'
 import { BlockData, BlockType } from '@/lib/types'
 import { getNodeDefinition, BackendFramework } from '@/lib/nodes/registry'
@@ -144,7 +144,7 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
         </div>
       )}
 
-      {data.blockType !== 'dataloader' && data.blockType !== 'loss' && (
+      {data.blockType !== 'dataloader' && data.blockType !== 'loss' && data.blockType !== 'metrics' && (
         <>
           {/* Get input port ID from node definition */}
           {(() => {
@@ -152,7 +152,7 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
             const inputPort = inputPorts.length > 0 ? inputPorts[0] : null
             const handleId = inputPort?.id || 'default'
             const isConnected = isHandleConnected(handleId, true)
-            
+
             return (
               <>
                 <Handle
@@ -263,7 +263,61 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
           return shapes
         })()}
 
-        {!data.outputShape && data.blockType !== 'input' && data.blockType !== 'dataloader' && data.blockType !== 'empty' && data.blockType !== 'output' &&  data.blockType !== 'loss' && (
+        {/* Loss node input ports display */}
+        {data.blockType === 'loss' && (() => {
+          const lossNodeDef = nodeDef as any
+          const inputPorts = lossNodeDef.getInputPorts ? lossNodeDef.getInputPorts(data.config) : []
+
+          if (inputPorts.length === 0) return null
+
+          return (
+            <div className="space-y-1 mt-2">
+              <div className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">Inputs</div>
+              {inputPorts.map((port: any, i: number) => (
+                <div
+                  key={`port-label-${i}`}
+                  className="text-[10px] flex items-center gap-1.5 relative"
+                  id={`loss-port-row-${i}`}
+                >
+                  <div
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: ['#ef4444', '#f59e0b'][i % 2] }}
+                  />
+                  <span className="text-muted-foreground">{port.label}</span>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
+
+        {/* Metrics node input ports display */}
+        {data.blockType === 'metrics' && (() => {
+          const metricsNodeDef = nodeDef as any
+          const inputPorts = metricsNodeDef.getInputPorts ? metricsNodeDef.getInputPorts(data.config) : []
+
+          if (inputPorts.length === 0) return null
+
+          return (
+            <div className="space-y-1 mt-2">
+              <div className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">Inputs</div>
+              {inputPorts.map((port: any, i: number) => (
+                <div
+                  key={`port-label-${i}`}
+                  className="text-[10px] flex items-center gap-1.5 relative"
+                  id={`metrics-port-row-${i}`}
+                >
+                  <div
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: ['#3b82f6', '#8b5cf6'][i % 2] }}
+                  />
+                  <span className="text-muted-foreground">{port.label}</span>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
+
+        {!data.outputShape && data.blockType !== 'input' && data.blockType !== 'dataloader' && data.blockType !== 'groundtruth' && data.blockType !== 'empty' && data.blockType !== 'output' &&  data.blockType !== 'loss' && (
           <div className="text-[10px] text-orange-600">
             Configure params
           </div>
@@ -367,28 +421,29 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
         </>
       ) : data.blockType === 'loss' ? (
         <>
-          {/* Multiple input handles for Loss node based on loss type */}
+          {/* Multiple input handles for Loss node - aligned with labels */}
           {(() => {
-            // Get input ports from the node definition
             const lossNodeDef = nodeDef as any
             const inputPorts = lossNodeDef.getInputPorts ? lossNodeDef.getInputPorts(data.config) : []
-            
+
             if (inputPorts.length === 0) {
               // Fallback to default single input
+              const isConnected = isHandleConnected('default', true)
               return (
                 <>
                   <Handle
                     type="target"
                     position={Position.Left}
-                    className="w-3 h-3 !bg-accent transition-all"
+                    className={`w-3 h-3 !bg-red-400 transition-all ${isConnected ? 'ring-2 ring-offset-1 ring-green-400' : ''}`}
                     style={{
                       left: -6,
-                      zIndex: 10
+                      zIndex: 10,
+                      opacity: isConnected ? 1 : 0.8
                     }}
                   />
                   {selected && (
                     <div
-                      className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full border-2 border-accent bg-accent/20 animate-pulse pointer-events-none"
+                      className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full border-2 border-red-400 bg-red-400/20 animate-pulse pointer-events-none"
                       style={{ left: -6 }}
                     />
                   )}
@@ -396,41 +451,50 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
               )
             }
 
-            const spacing = 100 / (inputPorts.length + 1)
-            const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6']
+            // Calculate positions to align with label rows
+            // Estimated positions based on card layout:
+            // - padding-top: 8px
+            // - header row: ~28px
+            // - space before inputs: ~6px
+            // - "INPUTS" header: ~14px
+            // - space: ~4px
+            // For typical card height of ~110px:
+            // First label: ~60px from top (54.5%)
+            // Second label: ~82px from top (74.5%)
+            const positions = inputPorts.length === 2
+              ? [60, 82] // pixel positions for 2 ports
+              : inputPorts.length === 3
+              ? [56, 72, 88] // pixel positions for 3 ports
+              : [70] // single port fallback
+
+            const colors = ['#ef4444', '#f59e0b', '#10b981']
 
             return inputPorts.map((port: any, i: number) => {
-              const topPercent = spacing * (i + 1)
+              const topPx = positions[i] || 70
               const color = colors[i % colors.length]
-              const handleId = port.id  // Port ID already includes 'loss-input-' prefix
+              const handleId = port.id
               const isConnected = isHandleConnected(handleId, true)
 
               return (
-                <div key={`loss-input-${i}`} className="absolute left-0 flex items-center" style={{ top: `${topPercent}%`, transform: 'translateY(-50%)' }}>
+                <Fragment key={`loss-input-${i}`}>
                   <Handle
                     type="target"
                     position={Position.Left}
                     id={handleId}
-                    className={`w-3 h-3 transition-all border-2 border-card ${isConnected ? 'ring-2 ring-offset-1 ring-green-400' : ''}`}
+                    className={`w-3 h-3 transition-all ${isConnected ? 'ring-2 ring-offset-1 ring-green-400' : ''}`}
                     style={{
-                      position: 'relative',
+                      top: `${topPx}px`,
                       left: -6,
                       zIndex: 10,
                       backgroundColor: isConnected ? '#10b981' : color,
                       opacity: isConnected ? 1 : 0.8
                     }}
                   />
-                  <span 
-                    className={`text-[10px] font-medium ml-2 bg-card px-1.5 py-0.5 rounded border ${isConnected ? 'opacity-60' : ''}`}
-                    style={{ color: isConnected ? '#10b981' : color, borderColor: isConnected ? '#10b981' : color }}
-                  >
-                    {port.label} {isConnected && '✓'}
-                  </span>
                   {selected && (
                     <div
                       className="absolute left-0 w-6 h-6 rounded-full border-2 animate-pulse pointer-events-none"
                       style={{
-                        top: 0,
+                        top: `${topPx}px`,
                         left: -6,
                         transform: 'translate(-50%, -50%)',
                         borderColor: isConnected ? '#10b981' : color,
@@ -438,27 +502,89 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
                       }}
                     />
                   )}
-                </div>
+                </Fragment>
               )
             })
           })()}
-          
-          {/* Single output handle for loss value */}
-          <Handle
-            type="source"
-            position={Position.Right}
-            className="w-3 h-3 !bg-red-500 transition-all"
-            style={{
-              right: -6,
-              zIndex: 10
-            }}
-          />
-          {selected && (
-            <div
-              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-6 h-6 rounded-full border-2 border-red-500 bg-red-500/20 animate-pulse pointer-events-none"
-              style={{ right: -6 }}
-            />
-          )}
+
+        </>
+      ) : data.blockType === 'metrics' ? (
+        <>
+          {/* Multiple input handles for Metrics node - aligned with labels */}
+          {(() => {
+            const metricsNodeDef = nodeDef as any
+            const inputPorts = metricsNodeDef.getInputPorts ? metricsNodeDef.getInputPorts(data.config) : []
+
+            if (inputPorts.length === 0) {
+              // Fallback to default single input
+              const isConnected = isHandleConnected('default', true)
+              return (
+                <>
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    className={`w-3 h-3 !bg-blue-400 transition-all ${isConnected ? 'ring-2 ring-offset-1 ring-green-400' : ''}`}
+                    style={{
+                      left: -6,
+                      zIndex: 10,
+                      opacity: isConnected ? 1 : 0.8
+                    }}
+                  />
+                  {selected && (
+                    <div
+                      className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full border-2 border-blue-400 bg-blue-400/20 animate-pulse pointer-events-none"
+                      style={{ left: -6 }}
+                    />
+                  )}
+                </>
+              )
+            }
+
+            const positions = inputPorts.length === 2
+              ? [60, 82]
+              : inputPorts.length === 3
+              ? [56, 72, 88]
+              : [70]
+
+            const colors = ['#3b82f6', '#8b5cf6']
+
+            return inputPorts.map((port: any, i: number) => {
+              const topPx = positions[i] || 70
+              const color = colors[i % colors.length]
+              const handleId = port.id
+              const isConnected = isHandleConnected(handleId, true)
+
+              return (
+                <Fragment key={`metrics-input-${i}`}>
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id={handleId}
+                    className={`w-3 h-3 transition-all ${isConnected ? 'ring-2 ring-offset-1 ring-green-400' : ''}`}
+                    style={{
+                      top: `${topPx}px`,
+                      left: -6,
+                      zIndex: 10,
+                      backgroundColor: isConnected ? '#10b981' : color,
+                      opacity: isConnected ? 1 : 0.8
+                    }}
+                  />
+                  {selected && (
+                    <div
+                      className="absolute left-0 w-6 h-6 rounded-full border-2 animate-pulse pointer-events-none"
+                      style={{
+                        top: `${topPx}px`,
+                        left: -6,
+                        transform: 'translate(-50%, -50%)',
+                        borderColor: isConnected ? '#10b981' : color,
+                        backgroundColor: `${isConnected ? '#10b981' : color}33`
+                      }}
+                    />
+                  )}
+                </Fragment>
+              )
+            })
+          })()}
         </>
       ) : (
         <>

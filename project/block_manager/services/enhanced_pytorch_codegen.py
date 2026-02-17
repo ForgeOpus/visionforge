@@ -189,7 +189,8 @@ class AddBlock(nn.Module):
         Returns:
             Element-wise sum of all input tensors
         """
-        return torch.stack(tensor_list).sum(dim=0)
+        # Efficient element-wise addition using sum()
+        return sum(tensor_list)
         '''
 
     @classmethod 
@@ -1475,7 +1476,7 @@ def generate_config_file(
             pass
 
     # Count layers to estimate model complexity
-    layer_count = sum(1 for n in nodes if ClassDefinitionGenerator.get_node_type(n) not in ('input', 'output', 'dataloader'))
+    layer_count = sum(1 for n in nodes if ClassDefinitionGenerator.get_node_type(n) not in ('input', 'output', 'dataloader', 'loss'))
 
     # Adaptive hyperparameters based on complexity
     if layer_count > 20:

@@ -55,8 +55,26 @@ class ConcatNode(NodeDefinition):
         source_output_shape: Optional[TensorShape],
         target_config: Dict[str, Any]
     ) -> Optional[str]:
-        # Concat accepts multiple inputs - validation happens at the graph level
-        # to ensure all inputs have compatible shapes
+        # Concat accepts multiple inputs
+        # Individual connection validation is basic - full multi-input validation
+        # happens at graph level to ensure all inputs have compatible shapes
+        # (same number of dimensions, matching sizes except on concat axis)
+
+        # Ensure source provides a valid output shape
+        if not source_output_shape or not source_output_shape.dims:
+            return "Concat node requires inputs with defined shapes"
+
+        # Validate concat dimension is valid for input shape
+        concat_dim = int(target_config.get('dim', 1))
+        ndim = len(source_output_shape.dims)
+
+        # Normalize negative dimension
+        if concat_dim < 0:
+            concat_dim = ndim + concat_dim
+
+        if concat_dim < 0 or concat_dim >= ndim:
+            return f"Concat dimension {target_config.get('dim', 1)} is invalid for {ndim}D tensor"
+
         return None
     
     @property

@@ -1,7 +1,7 @@
 """PyTorch AdaptiveAvgPool2D Node Definition"""
 
 from typing import Dict, List, Optional, Any
-from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework
+from ..base import NodeDefinition, NodeMetadata, ConfigField, TensorShape, Framework, LayerCodeSpec
 
 
 class AdaptiveAvgPool2DNode(NodeDefinition):
@@ -70,14 +70,44 @@ class AdaptiveAvgPool2DNode(NodeDefinition):
         # Allow connections from input/dataloader without shape validation
         if source_node_type in ("input", "dataloader"):
             return None
-        
+
         # Empty and custom nodes are flexible
         if source_node_type in ("empty", "custom"):
             return None
-        
+
         # Validate 4D input (N, C, H, W)
         return self.validate_dimensions(
             source_output_shape,
             4,
             "[batch, channels, height, width]"
+        )
+
+    def get_pytorch_code_spec(
+        self,
+        node_id: str,
+        config: Dict[str, Any],
+        input_shape: Optional[TensorShape],
+        output_shape: Optional[TensorShape]
+    ) -> LayerCodeSpec:
+        """Generate PyTorch code specification for AdaptiveAvgPool2D layer"""
+        output_size = config.get('output_size', '1')
+
+        sanitized_id = node_id.replace('-', '_')
+        class_name = 'AdaptiveAvgPool2DBlock'
+        layer_var = f'{sanitized_id}_AdaptiveAvgPool2DBlock'
+
+        return LayerCodeSpec(
+            class_name=class_name,
+            layer_variable_name=layer_var,
+            node_type='adaptiveavgpool2d',
+            node_id=node_id,
+            init_params={
+                'output_size': output_size
+            },
+            config_params=config,
+            input_shape_info={'dims': input_shape.dims if input_shape else []},
+            output_shape_info={'dims': output_shape.dims if output_shape else []},
+            template_context={
+                'output_size': output_size
+            }
         )
