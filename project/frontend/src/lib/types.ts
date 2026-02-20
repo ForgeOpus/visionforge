@@ -76,6 +76,8 @@ export interface Project {
   edges: any[]
   createdAt: number
   updatedAt: number
+  share_token?: string | null
+  is_shared?: boolean
 }
 
 export interface ValidationError {

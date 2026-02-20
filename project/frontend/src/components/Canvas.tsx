@@ -37,9 +37,10 @@ const nodeTypes = {
 interface CanvasProps {
   onDragStart: (type: string) => void
   onRegisterAddNode: (handler: (blockType: string) => void) => void
+  readOnly?: boolean
 }
 
-function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (blockType: string) => void) => void }) {
+function FlowCanvas({ onRegisterAddNode, readOnly = false }: { onRegisterAddNode: (handler: (blockType: string) => void) => void; readOnly?: boolean }) {
   const {
     nodes,
     edges,
@@ -88,8 +89,9 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
   // Validation is now triggered manually via the Validate button in Header
   // Removed automatic validation on nodes/edges change
 
-  // Keyboard shortcuts for undo/redo/delete/group/expand
+  // Keyboard shortcuts for undo/redo/delete/group/expand (disabled in read-only mode)
   useEffect(() => {
+    if (readOnly) return
     const handleKeyDown = (e: KeyboardEvent) => {
       // Check for Ctrl (Windows/Linux) or Cmd (Mac)
       const isMod = e.ctrlKey || e.metaKey
@@ -130,7 +132,7 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, removeNode, removeEdge, selectedNodeId, selectedEdgeId, setSelectedEdgeId, nodes])
+  }, [readOnly, undo, redo, removeNode, removeEdge, selectedNodeId, selectedEdgeId, setSelectedEdgeId, nodes])
 
   // Find a suitable position for a new node
   const findAvailablePosition = useCallback(() => {
@@ -688,32 +690,33 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
   return (
     <div
       className="flex-1 h-full"
-      onDrop={onDrop}
-      onDragOver={onDragOver}
+      onDrop={readOnly ? undefined : onDrop}
+      onDragOver={readOnly ? undefined : onDragOver}
     >
-      <HistoryToolbar />
+      {!readOnly && <HistoryToolbar />}
       <ReactFlow
         nodes={nodesWithHandlers}
         edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onNodeClick={isInteractive ? onNodeClick : undefined}
-        onEdgeClick={isInteractive ? onEdgeClick : undefined}
-        onPaneClick={isInteractive ? onPaneClick : undefined}
-        onPaneContextMenu={isInteractive ? onPaneContextMenu : undefined}
-        onNodeContextMenu={isInteractive ? onNodeContextMenu : undefined}
-        onReconnect={onReconnect}
-        edgesReconnectable={true}
+        onNodesChange={readOnly ? undefined : onNodesChange}
+        onEdgesChange={readOnly ? undefined : onEdgesChange}
+        onConnect={readOnly ? undefined : onConnect}
+        onNodeClick={onNodeClick}
+        onEdgeClick={readOnly ? undefined : onEdgeClick}
+        onPaneClick={onPaneClick}
+        onPaneContextMenu={readOnly ? undefined : (isInteractive ? onPaneContextMenu : undefined)}
+        onNodeContextMenu={readOnly ? undefined : (isInteractive ? onNodeContextMenu : undefined)}
+        onReconnect={readOnly ? undefined : onReconnect}
+        edgesReconnectable={!readOnly}
         nodeTypes={nodeTypes}
         connectionLineComponent={CustomConnectionLine}
         fitView
         minZoom={0.5}
         maxZoom={1.5}
-        nodesDraggable={isInteractive}
-        nodesConnectable={isInteractive}
-        elementsSelectable={isInteractive}
-        onInteractiveChange={setIsInteractive}
+        nodesDraggable={readOnly ? false : isInteractive}
+        nodesConnectable={readOnly ? false : isInteractive}
+        elementsSelectable={true}
+        deleteKeyCode={readOnly ? null : undefined}
+        onInteractiveChange={readOnly ? undefined : setIsInteractive}
         defaultEdgeOptions={{
           animated: true,
           style: { stroke: '#6366f1', strokeWidth: 2 }
@@ -751,7 +754,7 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
           position="bottom-right"
         />
       </ReactFlow>
-      {contextMenu && (
+      {!readOnly && contextMenu && (
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
@@ -803,10 +806,10 @@ function FlowCanvas({ onRegisterAddNode }: { onRegisterAddNode: (handler: (block
   )
 }
 
-export default function Canvas({ onDragStart, onRegisterAddNode }: CanvasProps) {
+export default function Canvas({ onDragStart, onRegisterAddNode, readOnly = false }: CanvasProps) {
   return (
     <ReactFlowProvider>
-      <FlowCanvas onRegisterAddNode={onRegisterAddNode} />
+      <FlowCanvas onRegisterAddNode={onRegisterAddNode} readOnly={readOnly} />
     </ReactFlowProvider>
   )
 }
