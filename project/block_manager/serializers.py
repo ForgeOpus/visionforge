@@ -223,9 +223,10 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
         model = Project
         fields = [
             'id', 'name', 'description', 'framework',
+            'share_token', 'is_shared',
             'architecture', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'share_token', 'is_shared', 'created_at', 'updated_at']
 
 
 class SaveArchitectureSerializer(serializers.Serializer):
