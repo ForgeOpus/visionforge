@@ -208,7 +208,9 @@ export async function fetchSharedProject(shareToken: string): Promise<SharedProj
   })
 
   if (!response.ok) {
-    throw new Error(`Shared project not found: ${response.statusText}`)
+    const err = new Error(`Shared project not found: ${response.statusText}`) as Error & { status: number }
+    err.status = response.status
+    throw err
   }
 
   return await response.json()
@@ -228,7 +230,9 @@ export async function fetchSharedArchitecture(shareToken: string): Promise<{
   })
 
   if (!response.ok) {
-    throw new Error(`Failed to load shared architecture: ${response.statusText}`)
+    const err = new Error(`Failed to load shared architecture: ${response.statusText}`) as Error & { status: number }
+    err.status = response.status
+    throw err
   }
 
   return await response.json()

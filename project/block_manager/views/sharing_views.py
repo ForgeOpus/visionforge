@@ -1,10 +1,14 @@
 import uuid
+import logging
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
+from django.core.exceptions import ObjectDoesNotExist
 
 from block_manager.models import Project
+
+logger = logging.getLogger(__name__)
 
 
 @api_view(['GET'])
@@ -52,7 +56,10 @@ def get_shared_architecture(request, share_token):
 
     try:
         architecture = project.architecture
+    except ObjectDoesNotExist:
+        return Response({'nodes': [], 'edges': [], 'groupDefinitions': []})
     except Exception:
+        logger.exception('Unexpected error fetching architecture for project %s', project.id)
         return Response({'nodes': [], 'edges': [], 'groupDefinitions': []})
 
     if architecture.canvas_state:

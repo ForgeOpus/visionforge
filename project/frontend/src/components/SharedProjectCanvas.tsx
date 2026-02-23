@@ -100,8 +100,24 @@ export default function SharedProjectCanvas() {
         if (arch.groupDefinitions && arch.groupDefinitions.length > 0) {
           loadGroupDefinitions(arch.groupDefinitions)
         }
-      } catch {
-        setNotFound(true)
+      } catch (error: unknown) {
+        console.error('Failed to load shared project', error)
+
+        const anyError = error as { status?: number; name?: string }
+        const status = anyError?.status
+
+        if (status === 404 || status === undefined) {
+          setNotFound(true)
+          toast.error('Shared link not found.')
+        } else if (status === 401 || status === 403) {
+          toast.error('You are not authorized to view this shared project.')
+        } else if (typeof status === 'number' && status >= 500 && status < 600) {
+          toast.error('Server error while loading shared project. Please try again later.')
+        } else if (anyError?.name === 'TypeError') {
+          toast.error('Network error while loading shared project. Check your connection and try again.')
+        } else {
+          toast.error('Unexpected error while loading shared project.')
+        }
       } finally {
         setIsLoading(false)
       }
@@ -125,7 +141,7 @@ export default function SharedProjectCanvas() {
       handleExport()
     }
     setPendingAction(null)
-  }, [user])
+  }, [user, pendingAction, projectMeta, nodes, edges, groupDefinitions, navigate, handleMakeCopy, handleExport])
 
   const requireAuth = (action: 'copy' | 'export') => {
     if (!user) {

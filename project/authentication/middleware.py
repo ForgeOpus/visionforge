@@ -30,6 +30,7 @@ class FirebaseAuthenticationMiddleware(MiddlewareMixin):
             '/admin/',
             '/api/auth/verify-token',
             '/api/auth/csrf',
+            '/api/v1/shared/',
         ]
 
         if any(request.path.startswith(path) for path in exempt_paths):
