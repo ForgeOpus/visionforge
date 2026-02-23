@@ -24,7 +24,7 @@ def get_shared_project(request, share_token):
 
     owner_display_name = None
     if project.user:
-        owner_display_name = project.user.display_name or project.user.email
+        owner_display_name = project.user.display_name or "Anonymous"
 
     return Response({
         'name': project.name,
