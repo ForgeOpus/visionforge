@@ -19,6 +19,7 @@ interface InternalNodeConfigPanelProps {
   groupDefinitionId: string
   internalNodeId: string
   onClose: () => void
+  readOnly?: boolean
 }
 
 export default function InternalNodeConfigPanel({
@@ -26,7 +27,8 @@ export default function InternalNodeConfigPanel({
   parentGroupNodeId,
   groupDefinitionId,
   internalNodeId,
-  onClose
+  onClose,
+  readOnly = false,
 }: InternalNodeConfigPanelProps) {
   const {
     nodes,
@@ -171,15 +173,17 @@ export default function InternalNodeConfigPanel({
               <PencilSimple size={12} className="mr-1" />
               Customized
             </Badge>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={handleResetAll}
-            >
-              <ArrowCounterClockwise size={12} className="mr-1" />
-              Reset All
-            </Button>
+            {!readOnly && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handleResetAll}
+              >
+                <ArrowCounterClockwise size={12} className="mr-1" />
+                Reset All
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -200,7 +204,7 @@ export default function InternalNodeConfigPanel({
                       {field.label}
                       {field.required && <span className="text-destructive ml-1">*</span>}
                     </Label>
-                    {isOverridden && (
+                    {isOverridden && !readOnly && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -233,7 +237,8 @@ export default function InternalNodeConfigPanel({
                     <Input
                       type="text"
                       value={String(currentValue ?? field.default ?? '')}
-                      onChange={(e) => handleConfigChange(field.name, e.target.value)}
+                      onChange={(e) => !readOnly && handleConfigChange(field.name, e.target.value)}
+                      readOnly={readOnly}
                       placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
                       className={`font-mono text-sm ${isOverridden ? 'border-blue-500' : ''}`}
                     />
@@ -245,7 +250,8 @@ export default function InternalNodeConfigPanel({
                       min={field.min}
                       max={field.max}
                       value={Number(currentValue ?? field.default ?? 0)}
-                      onChange={(e) => handleConfigChange(field.name, parseFloat(e.target.value) || 0)}
+                      onChange={(e) => !readOnly && handleConfigChange(field.name, parseFloat(e.target.value) || 0)}
+                      readOnly={readOnly}
                       placeholder={`Enter ${field.label.toLowerCase()}`}
                       className={isOverridden ? 'border-blue-500' : ''}
                     />
@@ -255,7 +261,8 @@ export default function InternalNodeConfigPanel({
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={currentValue as boolean ?? field.default}
-                        onCheckedChange={(checked) => handleConfigChange(field.name, checked)}
+                        onCheckedChange={(checked) => !readOnly && handleConfigChange(field.name, checked)}
+                        disabled={readOnly}
                         className={isOverridden ? 'border-blue-500' : ''}
                       />
                       <span className="text-sm">
@@ -267,7 +274,8 @@ export default function InternalNodeConfigPanel({
                   {field.type === 'select' && field.options && (
                     <Select
                       value={String(currentValue ?? field.default ?? '')}
-                      onValueChange={(value) => handleConfigChange(field.name, value)}
+                      onValueChange={(value) => !readOnly && handleConfigChange(field.name, value)}
+                      disabled={readOnly}
                     >
                       <SelectTrigger className={isOverridden ? 'border-blue-500' : ''}>
                         <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
@@ -349,12 +357,18 @@ export default function InternalNodeConfigPanel({
       {/* Info Footer */}
       <div className="p-4 border-t border-border shrink-0 bg-muted/30">
         <div className="text-xs text-muted-foreground">
-          <p className="mb-1">
-            Editing internal node configuration for this group instance.
-          </p>
-          <p>
-            Changes only affect this instance, not the group definition.
-          </p>
+          {readOnly ? (
+            <p>Read-only view — configuration cannot be edited.</p>
+          ) : (
+            <>
+              <p className="mb-1">
+                Editing internal node configuration for this group instance.
+              </p>
+              <p>
+                Changes only affect this instance, not the group definition.
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>

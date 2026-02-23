@@ -28,6 +28,18 @@ class Project(models.Model):
         choices=[('pytorch', 'PyTorch'), ('tensorflow', 'TensorFlow')],
         default='pytorch'
     )
+    share_token = models.UUIDField(
+        default=None,
+        null=True,
+        blank=True,
+        unique=True,
+        db_index=True,
+        help_text='Unique token for public sharing; generated on first share'
+    )
+    is_shared = models.BooleanField(
+        default=False,
+        help_text='Whether this project is publicly accessible via share link'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -36,7 +48,7 @@ class Project(models.Model):
 
     def __str__(self):
         return self.name
-    
+
 class ModelArchitecture(models.Model):
     """Stores the architecture graph for a project"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
