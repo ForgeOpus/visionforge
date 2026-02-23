@@ -22,7 +22,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Download, FloppyDisk, CaretDown, Code, CheckCircle, GitBranch, Upload, FileCode, FilePy, GearSix, Trash, Info, PencilSimple, Warning, Key, User, SignOut, SquaresFour } from '@phosphor-icons/react'
+import { Plus, Download, FloppyDisk, CaretDown, Code, CheckCircle, GitBranch, Upload, FileCode, FilePy, GearSix, Trash, Info, PencilSimple, Warning, Key, User, SignOut, SquaresFour, ShareNetwork } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { validateModel, exportModel as apiExportModel } from '@/lib/api'
@@ -33,6 +33,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import ApiKeyModal from './ApiKeyModal'
 import { GuestLoginPrompt } from './GuestLoginPrompt'
 import LoginModal from './LoginModal'
+import ShareDialog from './ShareDialog'
 
 export default function Header() {
   const navigate = useNavigate()
@@ -61,6 +62,7 @@ export default function Header() {
 
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false)
   const [isExportOpen, setIsExportOpen] = useState(false)
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false)
   const [isManageProjectOpen, setIsManageProjectOpen] = useState(false)
   const [managingProject, setManagingProject] = useState<projectApi.ProjectResponse | null>(null)
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
@@ -967,6 +969,18 @@ export default function Header() {
           Validate
         </Button>
 
+        {/* Share Button — visible for authenticated owners with an active project */}
+        {user && !isGuest && currentProject && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsShareDialogOpen(true)}
+          >
+            <ShareNetwork size={16} className="mr-2" />
+            Share
+          </Button>
+        )}
+
         {/* Export Dropdown */}
         <Dialog open={isExportOpen} onOpenChange={setIsExportOpen}>
           <DropdownMenu>
@@ -1314,6 +1328,17 @@ export default function Header() {
         </Dialog>
       </div>
     </header>
+
+    {/* Share Dialog */}
+    {currentProject && (
+      <ShareDialog
+        open={isShareDialogOpen}
+        onOpenChange={setIsShareDialogOpen}
+        projectId={currentProject.id}
+        initialIsShared={currentProject.is_shared ?? false}
+        initialShareToken={currentProject.share_token ?? null}
+      />
+    )}
 
     {/* API Key Modal */}
     <ApiKeyModal

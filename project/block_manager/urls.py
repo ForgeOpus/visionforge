@@ -13,6 +13,12 @@ from block_manager.views.validation_views import validate_model
 from block_manager.views.export_views import export_model
 from block_manager.views.chat_views import chat_message, get_suggestions, get_environment_info
 from block_manager.views.group_views import group_definition_list, group_definition_detail
+from block_manager.views.sharing_views import (
+    get_shared_project,
+    get_shared_architecture,
+    enable_sharing,
+    disable_sharing,
+)
 
 # Create router for viewsets
 router = DefaultRouter()
@@ -47,4 +53,10 @@ urlpatterns = [
 
     # Environment info endpoint
     path('environment', get_environment_info, name='environment-info'),
+
+    # Sharing endpoints
+    path('shared/<uuid:share_token>/', get_shared_project, name='shared-project'),
+    path('shared/<uuid:share_token>/architecture/', get_shared_architecture, name='shared-architecture'),
+    path('projects/<uuid:project_id>/share/', enable_sharing, name='enable-sharing'),
+    path('projects/<uuid:project_id>/unshare/', disable_sharing, name='disable-sharing'),
 ]

@@ -15,6 +15,7 @@ const ConfigPanel = lazy(() => import('./components/ConfigPanel'))
 const ChatBot = lazy(() => import('./components/ChatBot'))
 const LandingPage = lazy(() => import('./landing').then(module => ({ default: module.LandingPage })))
 const Dashboard = lazy(() => import('./pages/Dashboard').then(module => ({ default: module.Dashboard })))
+const SharedProjectCanvas = lazy(() => import('./components/SharedProjectCanvas'))
 
 // Loading spinner component
 function LoadingSpinner() {
@@ -163,6 +164,7 @@ function App() {
         />
         <Route path="/project" element={<ProjectCanvas />} />
         <Route path="/project/:projectId" element={<ProjectCanvas />} />
+        <Route path="/shared/:shareToken" element={<SharedProjectCanvas />} />
       </Routes>
     </Suspense>
   )
