@@ -30,6 +30,7 @@ import {
   saveArchitecture,
   SharedProjectResponse,
 } from '@/lib/projectApi'
+import ConfigPanel from './ConfigPanel'
 import { exportModel as apiExportModel } from '@/lib/api'
 import { useAuth } from '@/contexts/AuthContext'
 import LoginModal from './LoginModal'
@@ -53,6 +54,7 @@ export default function SharedProjectCanvas() {
     nodes,
     edges,
     groupDefinitions,
+    selectedNodeId,
     setNodes,
     setEdges,
     loadGroupDefinitions,
@@ -419,8 +421,8 @@ export default function SharedProjectCanvas() {
         </div>
       </header>
 
-      {/* Read-only canvas */}
-      <div className="flex-1 overflow-hidden">
+      {/* Read-only canvas + config panel */}
+      <div className="flex-1 overflow-hidden flex">
         <Suspense fallback={<LoadingSpinner />}>
           <Canvas
             onDragStart={() => {}}
@@ -428,6 +430,7 @@ export default function SharedProjectCanvas() {
             readOnly={true}
           />
         </Suspense>
+        {selectedNodeId && <ConfigPanel readOnly={true} />}
       </div>
 
       <Toaster position="bottom-right" richColors />

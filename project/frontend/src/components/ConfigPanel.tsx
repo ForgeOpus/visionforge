@@ -14,7 +14,11 @@ import { toast } from 'sonner'
 import CustomLayerModal from './CustomLayerModal'
 import InternalNodeConfigPanel from './InternalNodeConfigPanel'
 
-export default function ConfigPanel() {
+interface ConfigPanelProps {
+  readOnly?: boolean
+}
+
+export default function ConfigPanel({ readOnly = false }: ConfigPanelProps) {
   const { nodes, selectedNodeId, updateNode, setSelectedNodeId, removeNode, repeatGroupBlock, groupDefinitions } = useModelBuilderStore()
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false)
   const [repeatCount, setRepeatCount] = useState(2)
@@ -50,24 +54,15 @@ export default function ConfigPanel() {
     }
   }
 
-  // Automatically open modal when custom block is selected
+  // Automatically open modal when custom block is selected (not in read-only mode)
   useEffect(() => {
-    if (selectedNode?.data.blockType === 'custom') {
+    if (!readOnly && selectedNode?.data.blockType === 'custom') {
       setIsCustomModalOpen(true)
     }
-  }, [selectedNode?.id, selectedNode?.data.blockType])
+  }, [readOnly, selectedNode?.id, selectedNode?.data.blockType])
 
   // Handle expanded internal node configuration
   if (isExpandedInternal && parentGroupNodeId && groupDefinitionId && internalNodeId) {
-    // Debug logging
-    console.log('ConfigPanel - Routing to InternalNodeConfigPanel:', {
-      selectedNodeId: selectedNode.id,
-      parentGroupNodeId,
-      groupDefinitionId,
-      internalNodeId,
-      isExpandedInternal
-    })
-
     return (
       <InternalNodeConfigPanel
         selectedNodeId={selectedNode.id}
@@ -75,28 +70,33 @@ export default function ConfigPanel() {
         groupDefinitionId={groupDefinitionId}
         internalNodeId={internalNodeId}
         onClose={() => setSelectedNodeId(null)}
+        readOnly={readOnly}
       />
     )
   }
 
-  // For custom blocks, don't show the sidebar at all - only the modal
+  // For custom blocks: show modal in edit mode, show read-only sidebar in read-only mode
   if (selectedNode?.data.blockType === 'custom') {
-    return (
-      <CustomLayerModal
-        isOpen={isCustomModalOpen}
-        onClose={() => {
-          setIsCustomModalOpen(false)
-          setSelectedNodeId(null) // Deselect the node when modal closes
-        }}
-        onSave={handleCustomLayerSave}
-        initialConfig={{
-          name: selectedNode.data.config.name as string | undefined,
-          code: selectedNode.data.config.code as string | undefined,
-          output_shape: selectedNode.data.config.output_shape as string | undefined,
-          description: selectedNode.data.config.description as string | undefined
-        }}
-      />
-    )
+    if (readOnly) {
+      // Fall through to normal panel rendering below (shows config values as text)
+    } else {
+      return (
+        <CustomLayerModal
+          isOpen={isCustomModalOpen}
+          onClose={() => {
+            setIsCustomModalOpen(false)
+            setSelectedNodeId(null)
+          }}
+          onSave={handleCustomLayerSave}
+          initialConfig={{
+            name: selectedNode.data.config.name as string | undefined,
+            code: selectedNode.data.config.code as string | undefined,
+            output_shape: selectedNode.data.config.output_shape as string | undefined,
+            description: selectedNode.data.config.description as string | undefined
+          }}
+        />
+      )
+    }
   }
 
   // Define handleDelete early so it can be used in all sections
@@ -165,47 +165,49 @@ export default function ConfigPanel() {
                   )}
                 </Card>
 
-                <div className="space-y-4">
-                  <div className="text-sm font-semibold">Repeat Block</div>
-                  <div className="space-y-3">
-                    <div>
-                      <Label className="text-sm">Number of Copies</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={10}
-                        value={repeatCount}
-                        onChange={(e) => setRepeatCount(parseInt(e.target.value) || 1)}
-                        placeholder="Enter count"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">Create 1-10 copies</p>
+                {!readOnly && (
+                  <div className="space-y-4">
+                    <div className="text-sm font-semibold">Repeat Block</div>
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-sm">Number of Copies</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={10}
+                          value={repeatCount}
+                          onChange={(e) => setRepeatCount(parseInt(e.target.value) || 1)}
+                          placeholder="Enter count"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">Create 1-10 copies</p>
+                      </div>
+                      <div>
+                        <Label className="text-sm">Horizontal Spacing (px)</Label>
+                        <Input
+                          type="number"
+                          value={repeatSpacingX}
+                          onChange={(e) => setRepeatSpacingX(parseInt(e.target.value) || 0)}
+                          placeholder="Enter spacing"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-sm">Vertical Spacing (px)</Label>
+                        <Input
+                          type="number"
+                          value={repeatSpacingY}
+                          onChange={(e) => setRepeatSpacingY(parseInt(e.target.value) || 0)}
+                          placeholder="Enter spacing"
+                        />
+                      </div>
+                      <Button
+                        onClick={handleRepeat}
+                        className="w-full"
+                      >
+                        Create {repeatCount} {repeatCount === 1 ? 'Copy' : 'Copies'}
+                      </Button>
                     </div>
-                    <div>
-                      <Label className="text-sm">Horizontal Spacing (px)</Label>
-                      <Input
-                        type="number"
-                        value={repeatSpacingX}
-                        onChange={(e) => setRepeatSpacingX(parseInt(e.target.value) || 0)}
-                        placeholder="Enter spacing"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-sm">Vertical Spacing (px)</Label>
-                      <Input
-                        type="number"
-                        value={repeatSpacingY}
-                        onChange={(e) => setRepeatSpacingY(parseInt(e.target.value) || 0)}
-                        placeholder="Enter spacing"
-                      />
-                    </div>
-                    <Button
-                      onClick={handleRepeat}
-                      className="w-full"
-                    >
-                      Create {repeatCount} {repeatCount === 1 ? 'Copy' : 'Copies'}
-                    </Button>
                   </div>
-                </div>
+                )}
               </>
             )}
 
@@ -229,16 +231,18 @@ export default function ConfigPanel() {
           </div>
         </div>
 
-        <div className="p-4 border-t border-border shrink-0">
-          <Button
-            variant="destructive"
-            className="w-full"
-            onClick={handleDelete}
-          >
-            <X size={16} className="mr-2" />
-            Delete Block
-          </Button>
-        </div>
+        {!readOnly && (
+          <div className="p-4 border-t border-border shrink-0">
+            <Button
+              variant="destructive"
+              className="w-full"
+              onClick={handleDelete}
+            >
+              <X size={16} className="mr-2" />
+              Delete Block
+            </Button>
+          </div>
+        )}
       </div>
     )
   }
@@ -334,7 +338,8 @@ export default function ConfigPanel() {
                     <Input
                       type="text"
                       value={String(selectedNode.data.config[field.name] ?? field.default ?? '')}
-                      onChange={(e) => handleConfigChange(field.name, e.target.value)}
+                      onChange={(e) => !readOnly && handleConfigChange(field.name, e.target.value)}
+                      readOnly={readOnly}
                       placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
                       className={`font-mono text-sm ${
                         field.name === 'shape' && selectedNode.data.config[field.name] && !isValidTensorShape(String(selectedNode.data.config[field.name]))
@@ -345,7 +350,7 @@ export default function ConfigPanel() {
                     {field.name === 'shape' && selectedNode.data.config[field.name] && !isValidTensorShape(String(selectedNode.data.config[field.name])) && (
                       <p className="text-xs text-destructive">Invalid shape format. Use JSON array like [1, 3, 224, 224]</p>
                     )}
-                    {field.name === 'shape' && (
+                    {!readOnly && field.name === 'shape' && (
                       <div className="space-y-1 mt-3">
                         <p className="text-xs font-medium text-muted-foreground">Quick Presets:</p>
                         <div className="flex flex-wrap gap-1.5">
@@ -389,7 +394,8 @@ export default function ConfigPanel() {
                     min={field.min}
                     max={field.max}
                     value={Number(selectedNode.data.config[field.name] ?? field.default ?? 0)}
-                    onChange={(e) => handleConfigChange(field.name, parseFloat(e.target.value) || 0)}
+                    onChange={(e) => !readOnly && handleConfigChange(field.name, parseFloat(e.target.value) || 0)}
+                    readOnly={readOnly}
                     placeholder={`Enter ${field.label.toLowerCase()}`}
                   />
                 )}
@@ -398,7 +404,8 @@ export default function ConfigPanel() {
                   <div className="flex items-center gap-2">
                     <Switch
                       checked={selectedNode.data.config[field.name] as boolean ?? field.default}
-                      onCheckedChange={(checked) => handleConfigChange(field.name, checked)}
+                      onCheckedChange={(checked) => !readOnly && handleConfigChange(field.name, checked)}
+                      disabled={readOnly}
                     />
                     <span className="text-sm">
                       {selectedNode.data.config[field.name] ? 'Enabled' : 'Disabled'}
@@ -409,7 +416,8 @@ export default function ConfigPanel() {
                 {field.type === 'select' && field.options && (
                   <Select
                     value={String(selectedNode.data.config[field.name] ?? field.default ?? '')}
-                    onValueChange={(value) => handleConfigChange(field.name, value)}
+                    onValueChange={(value) => !readOnly && handleConfigChange(field.name, value)}
+                    disabled={readOnly}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
@@ -459,7 +467,7 @@ export default function ConfigPanel() {
                   </div>
                 )}
 
-                {field.type === 'file' && (
+                {field.type === 'file' && !readOnly && (
                   <div className="space-y-2">
                     <input
                       ref={(el) => (fileInputRefs.current[field.name] = el)}
@@ -530,16 +538,18 @@ export default function ConfigPanel() {
         </div>
       </div>
 
-      <div className="p-4 border-t border-border shrink-0">
-        <Button
-          variant="destructive"
-          className="w-full"
-          onClick={handleDelete}
-        >
-          <X size={16} className="mr-2" />
-          Delete Block
-        </Button>
-      </div>
+      {!readOnly && (
+        <div className="p-4 border-t border-border shrink-0">
+          <Button
+            variant="destructive"
+            className="w-full"
+            onClick={handleDelete}
+          >
+            <X size={16} className="mr-2" />
+            Delete Block
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

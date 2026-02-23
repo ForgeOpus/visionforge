@@ -402,6 +402,22 @@ function FlowCanvas({ onRegisterAddNode, readOnly = false }: { onRegisterAddNode
     [nodes, setNodes]
   )
 
+  // In read-only mode we still need to propagate selection changes so that
+  // ReactFlow sets node.selected=true (which reveals the group-block expand button
+  // and drives ConfigPanel display). We filter out position/remove/add changes so
+  // nothing can mutate the graph structure.
+  const onNodesChangeReadOnly = useCallback(
+    (changes: any) => {
+      const allowed = changes.filter((c: any) =>
+        c.type === 'select' || c.type === 'dimensions' || c.type === 'reset'
+      )
+      if (allowed.length > 0) {
+        setNodes(applyNodeChanges(allowed, nodes))
+      }
+    },
+    [nodes, setNodes]
+  )
+
   const onEdgesChange = useCallback(
     (changes: any) => {
       setEdges(applyEdgeChanges(changes, edges))
@@ -697,7 +713,7 @@ function FlowCanvas({ onRegisterAddNode, readOnly = false }: { onRegisterAddNode
       <ReactFlow
         nodes={nodesWithHandlers}
         edges={edges}
-        onNodesChange={readOnly ? undefined : onNodesChange}
+        onNodesChange={readOnly ? onNodesChangeReadOnly : onNodesChange}
         onEdgesChange={readOnly ? undefined : onEdgesChange}
         onConnect={readOnly ? undefined : onConnect}
         onNodeClick={onNodeClick}
