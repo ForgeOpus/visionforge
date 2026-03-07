@@ -1,0 +1,100 @@
+site_name: VisionForge User Documentation
+site_description: Complete guide for building neural networks with VisionForge
+site_author: VisionForge Team
+site_url: https://visionforge-docs.example.com
+
+repo_name: devgunnu/visionforge
+repo_url: https://github.com/devgunnu/visionforge
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - Interface Overview: getting-started/interface.md
+  - Architecture Design:
+    - Creating Architecture Diagrams: architecture/creating-diagrams.md
+    - Layer Connection Rules: architecture/connection-rules.md
+    - Shape Inference: architecture/shape-inference.md
+    - Validation System: architecture/validation.md
+  - Layer Reference:
+    - Input Layers: layers/input.md
+    - Core Layers: layers/core.md
+    - Activation Functions: layers/activation.md
+    - Pooling Layers: layers/pooling.md
+    - Merge Operations: layers/merge.md
+    - Advanced Layers: layers/advanced.md
+  - Examples:
+    - Simple CNN: examples/simple-cnn.md
+    - ResNet Architecture: examples/resnet.md
+    - LSTM Networks: examples/lstm.md
+    - Custom Group Blocks: examples/group-blocks.md
+  - Code Generation:
+    - PyTorch Export: codegen/pytorch.md
+    - TensorFlow Export: codegen/tensorflow.md
+    - Custom Templates: codegen/custom-templates.md
+  - API Reference:
+    - REST API: api/rest-api.md
+    - Node Definitions: api/node-definitions.md
+  - Advanced Topics:
+    - Group Blocks: advanced/group-blocks.md
+    - AI Assistant: advanced/ai-assistant.md
+    - Project Sharing: advanced/sharing.md
+  - Troubleshooting:
+    - Common Issues: troubleshooting/common-issues.md
+    - Validation Errors: troubleshooting/validation-errors.md
+    - Performance Tips: troubleshooting/performance.md
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - search.highlight
+    - search.share
+  font:
+    text: Roboto
+    code: Roboto Mono
+
+plugins:
+  - search
+  - mermaid2
+  - mkdocs-video
+  - glightbox
+
+markdown_extensions:
+  - codehilite
+  - admonition
+  - toc:
+      permalink: true
+  - tables
+  - fenced_code
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.details
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/devgunnu/visionforge
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/visionforge
