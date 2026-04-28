@@ -144,7 +144,7 @@ const BlockNode = memo(({ data, selected, id }: BlockNodeProps) => {
         </div>
       )}
 
-      {data.blockType !== 'dataloader' && data.blockType !== 'loss' && data.blockType !== 'metrics' && (
+      {(data.blockType !== 'dataloader' && data.blockType !== 'loss' && data.blockType !== 'metrics') && (
         <>
           {/* Get input port ID from node definition */}
           {(() => {
